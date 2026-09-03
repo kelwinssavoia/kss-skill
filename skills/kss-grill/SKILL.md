@@ -21,6 +21,7 @@ into `CONTEXT.md` and `docs/adr/`, so the next phase inherits them.
 - The auto-decision **IDs** from `auto-decisions.md` (so you can spot a contradiction)
 - `CONTEXT.md` and the ADR index named in `domain_docs`
 - `.kss/config.md`
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 
 **Do not read:** the rest of `01-investigation.md`, `00-brief.md`, `03-spec.md`, `04-plan.md`, any
 ticket, any source file or test. The full body of an auto decision is not read — only its ID.
@@ -146,5 +147,6 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
 - On M the grill runs only when there are open items; on L it always runs.
 - Write only `02-decisions.md`, `auto-decisions.md` statuses, `CONTEXT.md`, `docs/adr/` and the
   Decisions block of `README.md`.
-- File names, headings and field names are English; the prose inside the documents follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

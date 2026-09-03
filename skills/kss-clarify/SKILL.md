@@ -18,6 +18,7 @@ You never read code here; guessing at the implementation is the investigation's 
 Read, in this order:
 
 - `.kss/config.md` — the project's KSS configuration.
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `CONTEXT.md` at the repository root, if it exists (domain glossary).
 - The argument: free text as given; a path → read that file; a URL → fetch it.
 
@@ -129,5 +130,6 @@ Next: /kss-<next> NNN-slug
 - `NNN` = highest existing under `features_root` + 1, or `next_number` when greater.
 - Write only `00-brief.md` and the Brief block of `README.md`; never another phase's file or block.
 - `README.md` stays under 4k chars; overflow goes to `notes/` and is linked.
-- File names, headings and field names are English; the prose inside the documents follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

@@ -1,7 +1,7 @@
 ---
 name: kss-init
 description: Set up KSS in this project — interview for .kss/config.md, copy the templates, the scripts and the agent matrix into the project, and install the statusline. Run once per project, before any other kss- skill.
-argument-hint: "[no arguments]"
+argument-hint: "[--preferences]"
 disable-model-invocation: true
 ---
 
@@ -9,11 +9,17 @@ Set this project up for the KSS workflow. Interactive: **one question per turn**
 showing its default. Write nothing until the interview is finished and the user has confirmed the
 plan.
 
+With `--preferences`, do **only** step 0 below — ask the conversation language, write
+`~/.kss/preferences.md`, print the value, and stop. No git repository is required, nothing in the
+project is read or written.
+
 ## Inputs
 
 - No arguments.
 - The repository root (`git rev-parse --show-toplevel`) — everything is written relative to it.
 - `templates/config.md` and `templates/` in this plugin, next to this skill's folder.
+- `~/.kss/preferences.md`, if it exists — the user-local `conversation_language`. It is **never**
+  part of any repository.
 - Existing signals to propose defaults from: `CONTEXT.md`, `CLAUDE.md`, `docs/adr/`, `docs/`,
   `specs/`, the current branch, `git symbolic-ref refs/remotes/origin/HEAD`.
 
@@ -44,6 +50,12 @@ plan.
 
 Ask these in order, one per turn. Accept a bare Enter as the default. Do not batch them.
 
+0. **Preferred language for conversation output? (blank = follow the user's messages)** — this is
+   `conversation_language`, and it is the one answer that does **not** go into the project: it is
+   written to the user-local `~/.kss/preferences.md`, shared by every project and never committed.
+   If that file already exists, show its current value and only rewrite it when the user confirms;
+   a bare Enter keeps it. Creating the file writes `~/.kss/` first.
+
 1. `features_root` — where feature folders live. Default: `docs/features` (propose `specs` if that
    directory already holds `NNN-slug` folders).
 2. `next_number` — the number the next feature gets, used only when it is greater than the highest
@@ -68,12 +80,18 @@ Ask these in order, one per turn. Accept a bare Enter as the default. Do not bat
 12. `tracker` — `none`, or a tracker to mirror tickets into. Default: `none`.
 13. `review_autopilot` — `fixes` | `all` | `none`. Default: `fixes`.
 14. `docs_root` / `docs_index` — where `kss-docs-*` writes. Defaults: `docs` and `docs/README.md`.
+15. **Language of generated documents in this project? (blank = follow the conversation)** — this
+    is `docs_language`. It governs the *content* of every artifact KSS writes into the repository
+    (feature `README.md`, `00-brief.md` … `06-execution.md`, `notes/`, ADRs, glossary entries,
+    `kss-docs-tech`, `kss-docs-product`, ticket files, the PR body). File names, headings, field
+    names and identifiers stay English either way. Default: empty. Propose the language the
+    existing docs under `features_root`/`docs_root` are written in, when there is an obvious one.
 
 Then, still one turn each:
 
-15. Print the full config as it will be written, plus the file list below, and ask for
+16. Print the full config as it will be written, plus the file list below, and ask for
     confirmation. Nothing is written before this answer.
-16. Ask whether to install the KSS statusline into the **user-level** `~/.claude/settings.json`.
+17. Ask whether to install the KSS statusline into the **user-level** `~/.claude/settings.json`.
     Show exactly what will change:
     - the existing `statusLine` value (if any) is copied to `<repo>/.kss/statusline.backup.json`;
     - `statusLine` becomes
@@ -87,6 +105,16 @@ Then, still one turn each:
     active, so nothing is lost. **Never edit `~/.claude/settings.json` without this yes.**
 
 On confirmation, write — in this order:
+
+0. `~/.kss/preferences.md` — only when step 0 produced a value or a confirmed change. Create `~/.kss/`
+   if it is missing. Same fenced `key: value` style as `.kss/config.md`, one key today:
+
+   ```
+   conversation_language: <answer>
+   ```
+
+   This file is **user-local**: it lives outside every repository, is never copied into one and is
+   never committed. Do not add it to the project, do not reference it from `.kss/config.md`.
 
 1. `.kss/config.md`, rendered from `<PLUGIN>/templates/config.md` with the answers substituted.
 2. `.kss/templates/` — copy every file and folder under `<PLUGIN>/templates/` into it. The skills
@@ -105,7 +133,7 @@ On confirmation, write — in this order:
    Both are live state, not history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each
    ticket's git worktree). Leave `.kss/config.md`, `.kss/templates/`, `.kss/scripts/` and the
    feature folders tracked.
-6. `~/.claude/settings.json` — only if step 16 was a yes. Back up `statusLine` first, preserving
+6. `~/.claude/settings.json` — only if step 17 was a yes. Back up `statusLine` first, preserving
    whatever shape it had, into `<repo>/.kss/statusline.backup.json`. Keep the rest of the file
    byte-identical apart from that key.
 
@@ -116,6 +144,7 @@ automatically while the plugin is enabled; say so in the summary.
 
 | Path | Contents |
 | --- | --- |
+| `~/.kss/preferences.md` | `conversation_language` — user-local, outside the repo, never committed |
 | `.kss/config.md` | the answers |
 | `.kss/templates/` | the project's copy of the KSS templates |
 | `.kss/scripts/` | `current.mjs`, `render-cost.mjs`, `statusline.mjs`, `kss-lib.mjs` — what the skills call |
@@ -132,6 +161,7 @@ Print exactly:
 ```
 KSS ready · <repo name>
 Config: .kss/config.md (features_root <features_root>, execution <execution>, base <base_branch>)
+Languages: conversation <conversation_language | follows you> · docs <docs_language | follows the conversation>
 Templates: .kss/templates/ (<n> files)
 Scripts: .kss/scripts/ (<n> files) — skills call node .kss/scripts/current.mjs
 Agents: .claude/agents/ (<n> written, <n> kept)
@@ -147,7 +177,11 @@ Next: /kss-clarify <what you want to build>
   yes.
 - Never overwrite a file the user did not agree to overwrite — that includes agents and templates.
 - Never invent a `layout_references` path. Empty is a valid answer with a stated consequence.
+- `~/.kss/preferences.md` is user-local: never write it inside the repository, never commit it, and
+  never overwrite an existing value without the user confirming the change.
 - Never invent the plugin path either — search for it, and ask when the search is not conclusive.
 - `${CLAUDE_PLUGIN_ROOT}` is for hooks only; the scripts go into `.kss/scripts/` so the skills can
   reach them without it.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language) — including the questions above, once the answer to step 0 is known.
 - Do not run any other `kss-` skill from here. End with the Next line and stop.

@@ -18,6 +18,7 @@ only what you actually fixed or answered. You never merge — that is the human'
 Read, in this order:
 
 - `.kss/config.md` — `review_autopilot`, `base_branch`, `features_root`, `execution`.
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `<features_root>/NNN-slug/README.md` — the index and the PR url.
 - `<features_root>/NNN-slug/06-execution.md` and `05-tickets/graph.md` — which ticket owns which
   file, and the last ticket number.
@@ -173,5 +174,6 @@ with `Watching PR <url> — next check in <n>m.`
   contradicts a `D-` or an `AD-`**; held items are reported by ID.
 - Hard cap of 10 rounds, then stop and report.
 - **Never merge.**
-- File names, headings and field names are English; the prose inside the documents follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

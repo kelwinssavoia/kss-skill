@@ -18,8 +18,23 @@ Context lives **on disk, never in the session**: a per-feature folder holds a sh
 KSS is project-agnostic. Everything project-specific comes from `.kss/config.md`.
 
 **Language.** The plugin itself is written in English — file names, headings, field names,
-skill instructions. The *content* written into the generated documents follows the language of
-the conversation, the way speckit does.
+identifiers, skill instructions. Two settings, on two levels, decide the rest.
+
+| Level | File | Key | Governs | Absent |
+| --- | --- | --- | --- | --- |
+| User, never committed | `~/.kss/preferences.md` | `conversation_language` | Everything a skill prints: boards, questions, summaries, progress, explanations | Follow the language the user writes in |
+| Project, committed | `.kss/config.md` | `docs_language` | The *content* of every artifact KSS writes into the repo: feature `README.md`, `00-brief.md` … `06-execution.md`, `notes/`, ADRs, glossary entries, `kss-docs-tech`/`kss-docs-product`, ticket files, PR body | Follow the conversation's language |
+
+The fallback chain for a document is therefore `docs_language` → `conversation_language` → the
+user's own language; for terminal output it is `conversation_language` → the user's own language.
+The two are independent: a user talking Portuguese to a repository whose `docs_language` is `en`
+gets Portuguese answers and English documents.
+
+`~/.kss/preferences.md` is **user-local by design**: it is a personal preference, shared by every
+project on the machine, and it must never be created inside a repository or committed. Only
+`kss-init` writes it — the full run asks for it as its first question, and `kss-init --preferences`
+updates only that file, without touching the project. An existing value is shown and rewritten
+only on confirmation. Same fenced `key: value` style as `.kss/config.md`.
 
 ### 1.1 Motivation (measured 2026-09-03 on a real repository)
 
@@ -236,6 +251,14 @@ tracker: none              # or trello / github / … — optional
 review_autopilot: fixes    # fixes | all | none
 docs_root: docs
 docs_index: docs/README.md
+docs_language: ""          # empty = generated documents follow the conversation
+```
+
+The language of what the skills *print* is deliberately **not** here: it is a personal preference,
+kept in the user-local `~/.kss/preferences.md` (§1) and never committed to a project.
+
+```
+conversation_language: pt-BR
 ```
 
 ---
@@ -243,10 +266,16 @@ docs_index: docs/README.md
 ## 5. `kss-init`
 
 Interactive, **one question per turn**. Asks for the config values (offering defaults), whether
-execution is multi-agent or single-session, the layout references and the standards files.
+execution is multi-agent or single-session, the layout references and the standards files. Its
+first question is the user-local one — "Preferred language for conversation output? (blank =
+follow the user's messages)" — and its last config question is "Language of generated documents in
+this project? (blank = follow the conversation)". `kss-init --preferences` asks only the first and
+writes only `~/.kss/preferences.md`, touching nothing in the project.
 
 It then:
 
+0. Writes `~/.kss/preferences.md` when the conversation language was given or changed, creating
+   `~/.kss/`. Outside the repository, always; an existing value is rewritten only on confirmation.
 1. Writes `.kss/config.md`.
 2. Copies `templates/` into the project's `.kss/templates/`, so the skills read templates from the
    project and a project can customise them.
@@ -793,8 +822,8 @@ one-sentence summary. If the index does not exist, create it with a 2–3 paragr
 proposed from `CONTEXT.md`/`README.md` and confirmed in one turn, plus the two sections.
 
 Rules: do not duplicate the feature folder — link to it; ≤12k per doc; re-running rewrites the
-whole doc, keeps the index line and appends `## Changelog`; the content language follows the
-conversation.
+whole doc, keeps the index line and appends `## Changelog`; the content language follows
+`docs_language` (§1).
 
 ---
 

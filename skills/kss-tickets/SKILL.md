@@ -16,6 +16,8 @@ mirrored card per ticket.
 
 ## Inputs
 
+Read `~/.kss/preferences.md` for `conversation_language` (everything printed in this session).
+
 Read `.kss/config.md` — `execution` (decides everything below), `features_root`, `standards`,
 `tracker`, `explorer_model`. Then in `<features_root>/NNN-slug/`:
 
@@ -229,5 +231,6 @@ tool displays.
 - Every ticket's Tests section demands a **red run before implementation**, and the report-back
   shape is fixed and ≤1.5k.
 - Write **only** `05-tickets/*`, `graph.md` and the Tickets block of `README.md`.
-- The documents' language follows the conversation; headings, field names and identifiers stay
-  English.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

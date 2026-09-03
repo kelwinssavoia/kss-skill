@@ -15,6 +15,8 @@ requirement someone invented, and this skill refuses it.
 
 ## Inputs
 
+Read `~/.kss/preferences.md` for `conversation_language` (everything printed in this session).
+
 Read `.kss/config.md` for `features_root`, `standards` and `layout_references`, then, in
 `<features_root>/NNN-slug/`:
 
@@ -149,6 +151,8 @@ turns and cumulative tokens. Never report the number the Agent tool displays.
 - Never schedule, size, or assign work here; no file paths as instructions, no code, no pseudo-code.
 - Write **only** `03-spec.md` and the Spec block of `README.md`. No other file is yours.
 - Do not read code, and do not spawn subagents: this phase synthesises recorded inputs only.
-- The document's language follows the conversation; headings and identifiers stay English.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.
 - Nothing is ever deleted on revision — old FRs are rewritten in place, changes recorded under
   `## Revision N`.

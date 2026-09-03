@@ -2,6 +2,9 @@
 
 Written by `/kss-init`. Edit by hand at any time; every skill re-reads this file.
 
+The language of what the skills *print* is not here — it is the user-local
+`~/.kss/preferences.md` (`conversation_language`), which never belongs to a repository.
+
 ```
 features_root: {{features_root}}
 next_number: {{next_number}}
@@ -18,6 +21,7 @@ tracker: {{tracker}}
 review_autopilot: {{review_autopilot}}
 docs_root: {{docs_root}}
 docs_index: {{docs_index}}
+docs_language: {{docs_language}}
 ```
 
 | Key | Meaning |
@@ -36,3 +40,4 @@ docs_index: {{docs_index}}
 | `tracker` | `none`, or a tracker to mirror tickets into |
 | `review_autopilot` | `fixes` \| `all` \| `none` |
 | `docs_root` / `docs_index` | Where `kss-docs-*` writes |
+| `docs_language` | Language of the *content* of generated documents; empty = follow the conversation. Names, headings and identifiers stay English |

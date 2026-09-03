@@ -17,6 +17,7 @@ line to the docs index.
 Read, in this order:
 
 - `.kss/config.md` — `docs_root`, `docs_index`, `features_root`, `layout_references`.
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `<features_root>/NNN-slug/README.md` — the index.
 - `<features_root>/NNN-slug/00-brief.md` — symptom, outcome, actors and surfaces, out of scope.
 - `<features_root>/NNN-slug/03-spec.md` — user stories, functional requirements, out of scope.
@@ -110,5 +111,6 @@ Print `Cost: n/a` when `metrics.jsonl` does not exist.
 - A re-run rewrites the whole doc, keeps the index line and appends `## Changelog`.
 - The index gets one line per feature under `## Product`; create the index with a 2–3 paragraph
   summary confirmed in one turn only when it is missing.
-- File names, headings and field names are English; the prose inside the document follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

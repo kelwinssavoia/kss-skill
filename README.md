@@ -119,6 +119,7 @@ until you confirm the plan. It asks for every key below (offering a default), pl
 | `tracker` | `none`, or a tracker to mirror tickets into | `none` |
 | `review_autopilot` | `fixes` \| `all` \| `none` | `fixes` |
 | `docs_root` / `docs_index` | Where `kss-docs-*` writes | `docs` / `docs/README.md` |
+| `docs_language` | Language of the *content* of generated documents | empty = follow the conversation |
 
 With no `layout_references`, `kss-spec` refuses to invent a layout and flags every layout
 question instead of guessing.
@@ -301,8 +302,18 @@ See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation.
 
 ## Conventions
 
-- **Language.** File names, headings and skill instructions are English; generated-document
-  *content* follows the conversation's language, the same way speckit does.
+- **Language — two levels.** *Terminal output* (boards, questions, summaries, progress,
+  explanations) follows `conversation_language` in `~/.kss/preferences.md`; absent, it follows the
+  language the user writes in. *Document content* (feature `README.md`, `00-brief.md` …
+  `06-execution.md`, notes, ADRs, glossary entries, `kss-docs-*`, ticket files, PR body) follows
+  `docs_language` in `.kss/config.md`; absent, it follows the conversation. File names, headings,
+  field names, identifiers and the skill instructions themselves stay English.
+  `~/.kss/preferences.md` is **user-local**: it lives outside every repository, is shared by all
+  of them, and is never committed. Write it with `/kss-init` or `/kss-init --preferences`:
+
+  ```
+  conversation_language: pt-BR
+  ```
 - **Size caps**, refusal not truncation: `README.md` 4k, `01-investigation.md` 12k, `03-spec.md`
   15k, `04-plan.md` 20k, ticket/helper return 1.5k, each `kss-docs-*` doc 12k. Excess moves to
   `notes/`, linked not inlined; a spec over cap is refused with "split the feature".

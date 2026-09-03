@@ -18,6 +18,7 @@ supersedes it.
 
 - `<features_root>/NNN-slug/auto-decisions.md` — **only this file.**
 - `.kss/config.md`, to resolve `features_root`.
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 
 **Do not read:** `01-investigation.md`, `00-brief.md`, `03-spec.md`, `04-plan.md`, any ticket, any
 source file, any test. Do not spawn explorers or any other agent. Everything you need — decision,
@@ -120,5 +121,6 @@ happened after the spec, `Next: /kss-spec NNN-slug` — it rewrites only the aff
 - The skill is optional and may run after the grill or the spec; then the README records
   `decisions changed after spec: AD-xx → D-yy` and only the affected FRs are rewritten later.
 - Write only `auto-decisions.md`, `02-decisions.md` and the Decisions block of `README.md`.
-- File names, headings and field names are English; the prose inside the documents follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

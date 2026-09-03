@@ -15,6 +15,8 @@ back to an FR or a decision, and the plan ends with one approval turn.
 
 ## Inputs
 
+Read `~/.kss/preferences.md` for `conversation_language` (everything printed in this session).
+
 Read `.kss/config.md` (`features_root`, `standards`, `layout_references`, `explorer_model`), then
 in `<features_root>/NNN-slug/`:
 
@@ -169,4 +171,6 @@ tokens for this phase. Never use the number the Agent tool displays.
 - Contracts are specified on **both** sides plus the audit spec — one-sided shapes are how fields
   vanish silently on the wire.
 - Write **only** `04-plan.md`, its `notes/` files and the Plan block of `README.md`.
-- The document's language follows the conversation; headings and identifiers stay English.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

@@ -1,6 +1,7 @@
 # {{NNN}}-{{slug}} — Product
 
-Cap 12k chars. Content language follows the conversation.
+Cap 12k chars. Content language follows `docs_language` in `.kss/config.md` (absent: the
+conversation's language).
 
 ## Who it is for
 {{audience}}

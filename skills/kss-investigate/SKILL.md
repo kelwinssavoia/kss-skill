@@ -20,6 +20,7 @@ go to the grill.
 - `<features_root>/NNN-slug/README.md`
 - `<features_root>/NNN-slug/00-brief.md`
 - `.kss/config.md`
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - The files listed in `domain_docs` (glossary, ADR index)
 
 **Do not read:** any source file, test, migration, proto or component — explorers read those and
@@ -160,5 +161,6 @@ the grill always follows.
 - `01-investigation.md` is ≤12k chars; overflow goes to `notes/` and is linked.
 - Write only `01-investigation.md`, `auto-decisions.md` and the Investigation block of `README.md`.
 - A size revision is recorded with its reason.
-- File names, headings and field names are English; the prose inside the documents follows the
-  language of the conversation.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Document content follows `docs_language` from `.kss/config.md` (absent: the
+  conversation's language). File names, headings, field names and identifiers stay English.

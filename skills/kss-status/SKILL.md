@@ -12,6 +12,7 @@ state, no git command that mutates. If something looks wrong, say so; do not rep
 
 - Optional argument: a feature id `NNN-slug` (accept a bare `NNN` and resolve it).
 - `.kss/config.md` — for `features_root`.
+- `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `.kss/current` — the live state, when a run is active.
 - `<features_root>/<NNN-slug>/README.md` — the index.
 - `<features_root>/<NNN-slug>/05-tickets/graph.md` and `06-execution.md`, only when the phase is
@@ -100,4 +101,6 @@ taken from `.kss/current.review` (`round`, `open`, `watching`, `last_check`).
 - Print numbers you actually read. A field with no source prints `—`, never a guess.
 - Do not summarise the feature's content — this is a status board, not a report.
 - Do not suggest the next command beyond echoing the README's own `Next` line.
+- Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
+  language). Field names and headings stay English.
 - Never run another `kss-` skill from here.
