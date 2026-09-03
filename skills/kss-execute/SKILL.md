@@ -35,7 +35,10 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 2. The feature folder and `05-tickets/graph.md` must exist. If not, stop with exactly:
    `No ticket graph for NNN-slug. Run /kss-tickets NNN-slug first.`
 3. The feature branch must be checked out and the worktree clean. If it is dirty, stop with
-   exactly: `Worktree is dirty. Commit or stash before executing.`
+   exactly: `Worktree is dirty. Commit or stash before executing.` The expected way to get clean
+   is to commit the phase artifacts on the feature branch (`git add <features_root>/NNN-slug
+   <domain_docs> .kss/config.md && git commit -m "docs(NNN): spec, plan and tickets for <slug>"`),
+   never to stash or discard them.
 4. The README must show the Tickets block as approved. If it does not, stop with exactly:
    `Ticket graph for NNN-slug is not approved. Run /kss-tickets NNN-slug and approve it.`
 5. Pick the sub-procedure from `execution` in `.kss/config.md`: `multi-agent` → §A,
@@ -97,7 +100,11 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    `<features_root>/NNN-slug/metrics.jsonl` with `git: { files, added, deleted, commits }` from
    `git diff --shortstat` and `git rev-list --count` on the merged range.
 10. **Finish.** When every ticket is `integrated`: if `full_suite: local`, run the full suite
-    **once** via a `kss-sonnet-low` agent; if `full_suite: ci`, skip it and say so. Then open a PR
+    **once** via a `kss-sonnet-low` agent; if `full_suite: ci`, skip it and say so. Then commit
+    `06-execution.md`, `metrics.jsonl`, the updated README and any other phase artifact on the
+    feature branch (`docs(NNN): execution log`), and verify `git status --porcelain` is empty
+    except `.kss/current`; if it is not, stop with `Uncommitted feature artifacts: <paths>. Commit
+    them before opening the PR.` The PR must carry every artifact of the feature. Then open a PR
     against `base_branch` with the feature `README.md` as the body
     (`gh pr create --base <base_branch> --body-file <features_root>/NNN-slug/README.md`).
     **Never merge — that is a human decision.**
@@ -218,5 +225,7 @@ when the file does not exist.
 - Never read `03-spec.md` or `04-plan.md`, and never write the feature's code yourself.
 - Never merge the PR.
 - The board is printed on every event; `06-execution.md` is append-only — never rewrite an entry.
+- Every phase artifact (`<features_root>/NNN-slug/`, ADRs, glossary edits, `.kss/config.md`) is
+  committed on the feature branch before the PR is opened; nothing is left behind in the worktree.
 - File names, headings and field names are English; the prose inside the documents follows the
   language of the conversation.
