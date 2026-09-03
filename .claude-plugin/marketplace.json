@@ -1,0 +1,27 @@
+{
+  "name": "kss-skill",
+  "owner": {
+    "name": "Kelwin Savoia",
+    "url": "https://github.com/kelwinssavoia"
+  },
+  "plugins": [
+    {
+      "name": "kss",
+      "source": "./",
+      "description": "Phase-based development workflow: clarify, investigate, grill, spec, plan, tickets, execute, review, docs — with /clear between phases and token metrics",
+      "author": {
+        "name": "Kelwin Savoia"
+      },
+      "repository": "https://github.com/kelwinssavoia/kss-skill",
+      "license": "MIT",
+      "keywords": [
+        "workflow",
+        "spec-driven",
+        "tdd",
+        "subagents",
+        "metrics",
+        "context-management"
+      ]
+    }
+  ]
+}
