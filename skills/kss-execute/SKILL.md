@@ -101,9 +101,11 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    `git diff --shortstat` and `git rev-list --count` on the merged range.
 10. **Finish.** When every ticket is `integrated`, **you run the whole suite yourself, exactly
     once** — no agent runs tests at any other moment (60 subagents once ran 250 test rounds in a
-    single feature and saturated the machine). The run is `npm run affected:test` with
+    single feature and saturated the machine). The run is **the project's own full-suite
+    command** — the one `standards` or the package manifest names — plus its lint, build and
+    type-check targets, each once. (In an Nx/npm monorepo that is `npm run affected:test` with
     `--base=origin/<base_branch>` when that ref is available, else `npm test`, plus
-    `npx nx affected -t lint build` once. On failures: map each failing spec to the ticket that
+    `npx nx affected -t lint build`.) On failures: map each failing spec to the ticket that
     owns the file (its Files section) and send the failure list back to that ticket's executor —
     same worktree if it was kept, otherwise a fresh worktree off the feature branch — with the
     failing output pasted in. The executor fixes it **without running anything**; re-integrate,

@@ -238,7 +238,9 @@ Prints the phase or execution board, or lists every feature with no argument. Wr
 
 ## Agents
 
-`kss-init` installs eight agents into the project's `.claude/agents/`:
+The plugin ships eight agents, registered as `kss:kss-*` while it is enabled. `kss-init` copies
+them into the project's `.claude/agents/` **only when the plugin is not available** (a vendored
+install) — a project copy stops following releases and drifts:
 
 | Agent | Model | Effort | Role |
 | --- | --- | --- | --- |

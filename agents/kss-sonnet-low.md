@@ -25,10 +25,10 @@ gap to report, not to research around.
    against the test, never by running it.
 4. **Commit order is test → implementation.** Exactly two commits, the test one first. Nothing
    else is accepted.
-5. **You run no test, lint, build or type-check, ever** — not `nx test`, `nx run …:test|lint|build`,
-   `jest`, `tsc`, `eslint`, `npm test`, `affected:test` or `npm run checkup`. If you feel you need
-   to run something to know whether it works, read the code and the existing specs instead, and
-   note the doubt under Deviations.
+5. **You run no test, lint, build or type-check, ever** — not the project's test runner, not its
+   lint, build, `tsc` or an aggregate target like `affected:test` or `checkup`. If you feel you
+   need to run something to know whether it works, read the code and the existing specs instead,
+   and note the doubt under Deviations.
 6. Follow the project rules the ticket lists, and the standards files it points at.
 
 ## Helpers

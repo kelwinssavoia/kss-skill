@@ -2,7 +2,7 @@
 
 <!-- multi-agent header -->
 **Layer:** {{layer}} · **Blocked by:** {{blocked_by}} · **Blocks:** {{blocks}} ·
-**Model:** {{opus|sonnet}} · **Effort:** {{low|medium|high}} · **Helpers:** {{explorer|runner|none}} ·
+**Model:** {{opus|sonnet}} · **Effort:** {{low|medium|high}} · **Helpers:** {{explorer|none}} ·
 **Est.:** {{turns}} turns · **Worktree:** yes
 
 <!-- single-session header
@@ -45,8 +45,8 @@
 ## Do not
 - Open `03-spec.md` or `04-plan.md` — everything you need is in this ticket.
 - Read whole files over 300 lines; use ranges.
-- Run any test, lint, build or tsc command (`nx test`, `jest`, `npm test`, `affected:test`,
-  `eslint`, `tsc`, `checkup`) — nobody but the coordinator runs them, once, at the end.
+- Run any test, lint, build or type-check command — nobody but the coordinator runs them, once,
+  at the end.
 
 ## Report back (≤1.5k chars, this exact shape)
 ```

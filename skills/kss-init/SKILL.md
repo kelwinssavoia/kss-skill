@@ -125,10 +125,14 @@ On confirmation, write — in this order:
    skills invoke them as `node .kss/scripts/current.mjs …` and
    `node .kss/scripts/render-cost.mjs …`. Verify with
    `node .kss/scripts/current.mjs get` — it must print `null` and exit 0.
-4. `.claude/agents/` — copy the eight files from `<PLUGIN>/agents/`
-   (`kss-sonnet-low`, `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`,
-   `kss-reviewer`, `kss-explorer`, `kss-runner`). Copy only the ones that are absent; for each one
-   that already exists, ask before overwriting and accept "keep mine".
+4. `.claude/agents/` — **only when the plugin's agents are not already available**. The plugin
+   ships the eight (`kss-sonnet-low`, `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`,
+   `kss-opus-high`, `kss-reviewer`, `kss-explorer`, `kss-runner`) and registers them as
+   `kss:kss-*` while it is enabled: when they are in the agent list, write nothing here and say
+   so in the summary. Copy them into the project only for a vendored, plugin-less install — the
+   ones that are absent, asking before overwriting any that exists and accepting "keep mine".
+   **A project copy is a fork**: it stops following plugin releases and has to be re-synced by
+   hand, which is how a project ends up running last month's rules.
 5. `.gitignore` — append `.kss/current` and `.kss/worktrees/` if they are not already ignored.
    Both are live state, not history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each
    ticket's git worktree). Leave `.kss/config.md`, `.kss/templates/`, `.kss/scripts/` and the

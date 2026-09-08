@@ -300,8 +300,10 @@ It then:
    The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) need **no installation**: they ship in
    the plugin's `hooks/hooks.json` and merge automatically while the plugin is enabled. Every hook
    script is a no-op when `.kss/current` is absent or names no feature.
-6. Creates the agent matrix in the project's `.claude/agents/` (only files that are absent; it asks
-   before overwriting one):
+6. Uses the agent matrix the plugin ships, registered as `kss:kss-*` while it is enabled. It
+   writes into the project's `.claude/agents/` **only when those agents are not available** — a
+   vendored, plugin-less install — copying only the files that are absent and asking before
+   overwriting one. A project copy is a fork that no longer follows plugin releases:
 
 | Agent | Model | Effort | Notes |
 | --- | --- | --- | --- |
@@ -643,7 +645,7 @@ and `config.execution`. **An FR blocked by a `DF-` is never scheduled.**
 | --- | --- |
 | Model | opus for contract, tenant, money, wire specs and design-deciding work; sonnet otherwise |
 | Effort | low = one layer, 1–2 files, copying an existing pattern · medium = one layer, several files, fitting the plan to the code · high = contract / wire / tenant / money / cross-service / debugging |
-| Helpers | `explorer`, `runner`, or none. Depth max 2; helpers never write code; ≤5 per ticket; helper return ≤1.5k |
+| Helpers | `explorer` or none — `runner` is the coordinator's alone. Depth max 2; helpers never write code or run commands; ≤5 per ticket; helper return ≤1.5k |
 | Worktree | yes |
 
 ### 13.2 Single-session mode
@@ -713,9 +715,9 @@ the plan.**
 - **Integration** by a sonnet-low agent: rebase, merge into the feature branch, remove the
   worktree, set the state to `integrated`, unblock the dependants. A rebase conflict goes to a
   sonnet-medium with both tickets' context, then to the reviewer again.
-- **Finish**: the **coordinator itself** runs the full suite once (`affected:test`, else
-  `npm test`, plus `nx affected -t lint build`), maps failures back to the owning tickets, and
-  runs it at most once more — a third failure stops and goes to the user. Open a PR against
+- **Finish**: the **coordinator itself** runs the project's full suite once, plus its lint,
+  build and type-check targets, maps failures back to the owning tickets, and runs it at most
+  once more — a third failure stops and goes to the user. Open a PR against
   `base_branch` with the feature README as the body. **Never merge** — that is a human decision.
 
 ### 14.2 Coordinator context
