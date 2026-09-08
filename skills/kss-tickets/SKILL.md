@@ -90,7 +90,7 @@ Everything below applies to M and L.
    | --- | --- |
    | Model | `opus` for contract, tenant/authorization, money, wire specs and design-deciding work; `sonnet` otherwise |
    | Effort | `low` = one layer, 1–2 files, copying an existing pattern · `medium` = one layer, several files, fitting the plan to the code · `high` = contract / wire / tenant / money / cross-service / debugging |
-   | Helpers | `explorer`, `runner`, or `none`. Depth max 2; helpers never write code; ≤5 per ticket; helper return ≤1.5k |
+   | Helpers | `explorer` or `none` (`runner` is coordinator-only). Depth max 2; helpers never write code or run commands; ≤5 per ticket; helper return ≤1.5k |
    | Worktree | yes |
 
 8. Write one file per ticket, `05-tickets/NN-<slug>.md`, from `.kss/templates/ticket.md`, using the **multi-agent header** and deleting
@@ -122,12 +122,13 @@ Every ticket carries all of these, self-contained:
   in from `04-plan.md`
 - **Files** — exact paths with line ranges to write, and the files to read for patterns, with
   ranges
-- **Tests** — spec files and case names, including the empty and forbidden cases; **a red run is
-  required before implementation**
+- **Tests** — spec files and case names, including the empty and forbidden cases; **write these
+  specs first and commit them before the implementation, and never run them** — the coordinator
+  runs the suite once, after integration
 - **Project rules that apply** — one line each, only the rules this ticket actually triggers,
   quoted from `standards`
-- **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run the full
-  suite mid-ticket
+- **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run any test,
+  lint, build or tsc command
 - **Report back** — the fixed shape, **≤1.5k chars**. It is exactly the shape the executor agents
   (`agents/kss-*.md`) are told to return, and exactly what `kss-execute`'s gates check; copy it
   verbatim from `.kss/templates/ticket.md` rather than paraphrasing it:
@@ -137,8 +138,7 @@ Every ticket carries all of these, self-contained:
   Branch: <branch> (worktree <path>)
   Commits: <sha> test: … / <sha> feat: …
   Files: <path>, <path>
-  Tests: <command> → <result>
-  Red run: <the failing assertion / first failure line>
+  Tests: <spec files written> · not run (coordinator runs the suite after integration)
   Deviations: <none, or one line each with why>
   Blocked on: <only when state is blocked>
   ```
@@ -225,11 +225,13 @@ tool displays.
 - **The contract ticket is first and smallest**, and everything downstream is blocked by it; the
   UI works against a mocked client until integration.
 - **An `integration` ticket is mandatory** whenever more than one ticket follows the contract.
-- **Helpers**: depth max 2, ≤5 per ticket, read-only, return ≤1.5k. Helpers never write code.
+- **Helpers**: `explorer` only, depth max 2, ≤5 per ticket, read-only, return ≤1.5k. Helpers
+  never write code and never run a command; `kss-runner` is the coordinator's alone.
 - Single-session tickets carry **no model, no effort, no worktree, no graph table** — inventing
   them there is a defect.
-- Every ticket's Tests section demands a **red run before implementation**, and the report-back
-  shape is fixed and ≤1.5k.
+- Every ticket's Tests section demands the **specs written and committed before the
+  implementation, and run by nobody** — the coordinator runs the suite once after integration —
+  and the report-back shape is fixed and ≤1.5k.
 - Write **only** `05-tickets/*`, `graph.md` and the Tickets block of `README.md`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the

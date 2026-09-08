@@ -36,7 +36,8 @@
 ## Tests
 - **Spec file:** {{spec_file}}
 - **Cases:** {{case_names}}
-- A **red run is required before implementation**; paste the failing output in the report.
+- **Write these specs first and commit them before the implementation. Never run them** — the
+  coordinator runs the suite once, after integration.
 
 ## Project rules that apply
 - {{rule}} — {{one_line}}
@@ -44,7 +45,8 @@
 ## Do not
 - Open `03-spec.md` or `04-plan.md` — everything you need is in this ticket.
 - Read whole files over 300 lines; use ranges.
-- Run the full test suite mid-ticket.
+- Run any test, lint, build or tsc command (`nx test`, `jest`, `npm test`, `affected:test`,
+  `eslint`, `tsc`, `checkup`) — nobody but the coordinator runs them, once, at the end.
 
 ## Report back (≤1.5k chars, this exact shape)
 ```
@@ -52,8 +54,7 @@ Ticket: {{NN}}-{{slug}} · <state: done | blocked>
 Branch: {{branch}} (worktree {{path}})
 Commits: {{sha}} test: … / {{sha}} feat: …
 Files: {{paths}}
-Tests: {{command}} → {{result}}
-Red run: {{the failing assertion / first failure line}}
+Tests: {{spec files written}} · not run (coordinator runs the suite after integration)
 Deviations: {{none | what and why}}
 Blocked on: {{only when state is blocked}}
 ```
