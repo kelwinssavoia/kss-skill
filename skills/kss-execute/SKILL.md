@@ -71,7 +71,10 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    resumed run whether a `running` ticket is still alive.
 4. **Spawn.** The agent type is Model + Effort from the graph: `kss-sonnet-low`,
    `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`. There is no
-   `kss-opus-low`. **The brief is the ticket file pasted in verbatim, plus the worktree path —
+   `kss-opus-low`. **Read the names from the agent list before the first spawn**: agents that
+   come from the plugin are namespaced `kss:kss-opus-high`, and only a vendored copy in
+   `.claude/agents/` answers to the bare name. Use whichever form the list shows; a wrong name
+   fails the spawn, not the ticket. **The brief is the ticket file pasted in verbatim, plus the worktree path —
    nothing else.** No summary of the spec, no extra context, no links to the plan. The ticket
    already forbids running any test, lint, build or tsc command; add nothing on the subject.
 5. **Gate the report.** A report is accepted only when all three hold:
