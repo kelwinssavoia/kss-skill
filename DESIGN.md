@@ -246,7 +246,7 @@ standards: [CLAUDE.md]     # files whose rules bind explorers and executors
 explorer_model: sonnet
 auto_decide: true          # false = every decision is asked
 execution: multi-agent     # or single-session
-full_suite: ci             # or local
+full_suite: local          # always local: the coordinator runs the suite once after integration
 tracker: none              # or trello / github / … — optional
 review_autopilot: fixes    # fixes | all | none
 docs_root: docs
@@ -312,7 +312,7 @@ It then:
 | `kss-opus-high` | opus | high | executor; may spawn helpers |
 | `kss-reviewer` | opus | high | read-only |
 | `kss-explorer` | sonnet | low | read-only |
-| `kss-runner` | sonnet | low | runs tests / lint / tsc; returns only summary lines and failures |
+| `kss-runner` | sonnet | low | coordinator-only, final run: runs tests / lint / tsc; returns only summary lines and failures |
 
 There is **no `kss-opus-low`** by design, and nothing above `high`.
 
@@ -670,12 +670,13 @@ The ticket is **self-contained — the ticket IS the brief**:
 - **Requirements covered** — the FR text pasted in, with its citations
 - **Plan excerpt** — the File map rows, the contract shapes and the Reuse entries, pasted in
 - **Files** — exact paths with line ranges; and the files to read for patterns, with ranges
-- **Tests** — spec files and case names; a red run is required before implementation
+- **Tests** — spec files and case names; written and committed before the implementation, and
+  run by nobody (the coordinator runs the suite once after integration)
 - **Project rules that apply** — one line each, only the rules this ticket triggers
-- **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run the full
-  suite mid-ticket
-- **Report back** — a fixed format, ≤1.5k: branch, commits, files, test command and result,
-  red-run evidence, deviations
+- **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run any test,
+  lint, build or tsc command
+- **Report back** — a fixed format, ≤1.5k: branch, commits, files, the spec files written (not
+  run), deviations
 
 One turn to approve the graph or the sequence. If `tracker` is configured, publish one card per
 ticket linking the file — the file stays the source of truth.
@@ -696,10 +697,11 @@ the plan.**
   `kss-init`.
 - The brief is the ticket file pasted in, plus the worktree path.
 - The agent type comes from Model + Effort (`kss-opus-high`, …).
-- **Gates before a report is accepted**: the format is respected and ≤1.5k; red-run evidence is
-  present; the commit order is test-before-implementation, or a single commit plus the red log;
-  the ticket's tests are green; deviations are justified. A failing gate sends the report back to
-  the same agent with the list of what is missing.
+- **Gates before a report is accepted**: the format is respected and ≤1.5k; the commit order is
+  test-before-implementation (two commits, the test one first); deviations are justified. A
+  failing gate sends the report back to the same agent with the list of what is missing.
+- **No subagent runs tests, lint, build or tsc**, at any point — the reason is load: 60 subagents
+  once ran 250 test rounds in one feature and saturated the machine.
 - A `kss-reviewer` reviews every finished ticket: it reads the diff and the report and returns
   `approve`, or `reject` with numbered findings (file, line, rule or FR). **The coordinator reads
   verdicts only — never diffs.**
@@ -711,9 +713,10 @@ the plan.**
 - **Integration** by a sonnet-low agent: rebase, merge into the feature branch, remove the
   worktree, set the state to `integrated`, unblock the dependants. A rebase conflict goes to a
   sonnet-medium with both tickets' context, then to the reviewer again.
-- **Finish**: run the full suite once via a sonnet-low agent, or skip to CI per config. Open a PR
-  against `base_branch` with the feature README as the body. **Never merge** — that is a human
-  decision.
+- **Finish**: the **coordinator itself** runs the full suite once (`affected:test`, else
+  `npm test`, plus `nx affected -t lint build`), maps failures back to the owning tickets, and
+  runs it at most once more — a third failure stops and goes to the user. Open a PR against
+  `base_branch` with the feature README as the body. **Never merge** — that is a human decision.
 
 ### 14.2 Coordinator context
 
@@ -749,7 +752,8 @@ The states are exactly: `blocked`, `ready`, `running`, `reviewing`, `rejected`, 
 header and footer lines come from in `execution` (§3.3).
 
 `06-execution.md` is an append-only log of timestamped events per ticket. The README gets an
-Execution block. TDD is enforced by the red-run gate and by the commit order.
+Execution block. TDD is enforced by the commit order — test committed before implementation —
+and by the reviewer reading the test against the diff, never by a run.
 
 ---
 

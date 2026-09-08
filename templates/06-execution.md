@@ -29,5 +29,5 @@ Last: {{event}}
 | {{NN}} | {{commits}} | {{files}} | {{added}} | {{deleted}} |
 
 ## Finish
-- Full suite: {{command}} — {{result|skipped to CI}}
+- Full suite: {{command}} — {{result}} (coordinator, run {{n}} of ≤2)
 - PR: {{url}} → {{base_branch}} — **not merged** (human decision)

@@ -115,7 +115,7 @@ until you confirm the plan. It asks for every key below (offering a default), pl
 | `explorer_model` | Default model for read-only explorers | `sonnet` |
 | `auto_decide` | `false` = every decision goes to the grill | `true` |
 | `execution` | `multi-agent` or `single-session` | `multi-agent` |
-| `full_suite` | `ci` or `local` — where the suite runs at execute's end | `ci` |
+| `full_suite` | Always `local` — the coordinator runs the suite once after integration | `local` |
 | `tracker` | `none`, or a tracker to mirror tickets into | `none` |
 | `review_autopilot` | `fixes` \| `all` \| `none` | `fixes` |
 | `docs_root` / `docs_index` | Where `kss-docs-*` writes | `docs` / `docs/README.md` |
@@ -242,18 +242,20 @@ Prints the phase or execution board, or lists every feature with no argument. Wr
 
 | Agent | Model | Effort | Role |
 | --- | --- | --- | --- |
-| `kss-sonnet-low` | sonnet | low | Executor — 1 layer, 1–2 files, copies a pattern; also integration/full-suite runs |
+| `kss-sonnet-low` | sonnet | low | Executor — 1 layer, 1–2 files, copies a pattern; also integration |
 | `kss-sonnet-medium` | sonnet | medium | Executor — 1 layer, several files, fits plan to code |
 | `kss-sonnet-high` | sonnet | high | Executor — demanding single-layer ticket, decided design |
 | `kss-opus-medium` | opus | medium | Executor — design judgement, or escalation from sonnet |
 | `kss-opus-high` | opus | high | Executor — contract, wire, tenant, money, cross-service, hard bugs |
 | `kss-reviewer` | opus | high | Read-only — reviews a finished ticket, approve/reject + findings |
 | `kss-explorer` | sonnet | low | Read-only — answers one bounded question, file:line evidence |
-| `kss-runner` | sonnet | low | Runs the given command, returns only summary lines and failures |
+| `kss-runner` | sonnet | low | Coordinator-only, final run — runs the given command, returns summary lines and failures |
 
 There is deliberately no `kss-opus-low`, nothing above `high`. Executors may spawn
-`kss-explorer`/`kss-runner` as helpers, under rules every executor enforces: **depth ≤2**,
-helpers **never write code**, **≤5 per ticket**, return **≤1.5k chars**.
+`kss-explorer` as a helper, under rules every executor enforces: **depth ≤2**, helpers **never
+write code**, **≤5 per ticket**, return **≤1.5k chars**. **No subagent runs tests, lint, build or
+tsc**: executors write the specs and commit them before the implementation, and the coordinator
+runs the whole suite once, after every ticket is integrated.
 
 ## Metrics and progress
 

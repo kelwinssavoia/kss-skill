@@ -36,7 +36,7 @@ docs_language: {{docs_language}}
 | `explorer_model` | Default model for read-only explorers |
 | `auto_decide` | `false` = every decision is asked in the grill |
 | `execution` | `multi-agent` or `single-session` |
-| `full_suite` | `ci` or `local` |
+| `full_suite` | Always `local`: the coordinator runs the suite once after integration (`ci` is no longer honoured) |
 | `tracker` | `none`, or a tracker to mirror tickets into |
 | `review_autopilot` | `fixes` \| `all` \| `none` |
 | `docs_root` / `docs_index` | Where `kss-docs-*` writes |

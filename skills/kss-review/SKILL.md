@@ -67,7 +67,8 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
    the spec marked for revision in the README.
 5. **Fix.** Write the fix tickets into `05-tickets/`, numbered after the last existing ticket,
    grouped by file, and run them through `/kss-execute NNN-slug --ticket NN`. Every gate applies
-   — red run, commit order, reviewer verdict, integration.
+   — report shape, commit order (test committed first), reviewer verdict, integration; the tests
+   themselves run only in the coordinator's single run after integration.
 6. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.

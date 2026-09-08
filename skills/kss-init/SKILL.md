@@ -75,8 +75,8 @@ Ask these in order, one per turn. Accept a bare Enter as the default. Do not bat
     asking: **multi-agent** slices by layer, runs one subagent per ticket in its own git worktree,
     reviews and integrates each; **single-session** runs vertical slices in this session with a
     `/clear` between them, no worktrees, no per-ticket model. Default: `multi-agent`.
-11. `full_suite` — `ci` or `local`: where the whole test suite runs at the end of execute.
-    Default: `ci`.
+11. `full_suite` — always `local`: the coordinator runs the suite once after integration (`ci`
+    is no longer honoured; no subagent ever runs tests, lint, build or tsc). Default: `local`.
 12. `tracker` — `none`, or a tracker to mirror tickets into. Default: `none`.
 13. `review_autopilot` — `fixes` | `all` | `none`. Default: `fixes`.
 14. `docs_root` / `docs_index` — where `kss-docs-*` writes. Defaults: `docs` and `docs/README.md`.

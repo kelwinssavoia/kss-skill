@@ -17,7 +17,7 @@ to survive the whole run; when it does not, you say so and let the user `/clear`
 
 Read, in this order:
 
-- `.kss/config.md` — `execution`, `base_branch`, `branch_prefix`, `features_root`, `full_suite`.
+- `.kss/config.md` — `execution`, `base_branch`, `branch_prefix`, `features_root`.
 - `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `<features_root>/NNN-slug/README.md` — the index.
 - `<features_root>/NNN-slug/05-tickets/graph.md` — the graph, the models, the estimates.
@@ -72,13 +72,12 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 4. **Spawn.** The agent type is Model + Effort from the graph: `kss-sonnet-low`,
    `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`. There is no
    `kss-opus-low`. **The brief is the ticket file pasted in verbatim, plus the worktree path —
-   nothing else.** No summary of the spec, no extra context, no links to the plan.
-5. **Gate the report.** A report is accepted only when all five hold:
+   nothing else.** No summary of the spec, no extra context, no links to the plan. The ticket
+   already forbids running any test, lint, build or tsc command; add nothing on the subject.
+5. **Gate the report.** A report is accepted only when all three hold:
    1. it follows the ticket's Report-back shape and is ≤1.5k chars;
-   2. red-run evidence is present;
-   3. the commit order is test-before-implementation, or a single commit plus the red log;
-   4. the ticket's own tests are green;
-   5. every deviation is justified.
+   2. the commit order is test-before-implementation — two commits, the test one first;
+   3. every deviation is justified.
    A failing gate goes **back to the same agent** (same worktree, same agent type) with the list
    of exactly what is missing. Never accept a report by filling the gap yourself.
 6. **Review.** Spawn `kss-reviewer` on every finished ticket. It reads the diff and the report and
@@ -100,8 +99,16 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 9. **Record git stats** for each integrated ticket: append a `kind: "git"` line to
    `<features_root>/NNN-slug/metrics.jsonl` with `git: { files, added, deleted, commits }` from
    `git diff --shortstat` and `git rev-list --count` on the merged range.
-10. **Finish.** When every ticket is `integrated`: if `full_suite: local`, run the full suite
-    **once** via a `kss-sonnet-low` agent; if `full_suite: ci`, skip it and say so. Then commit
+10. **Finish.** When every ticket is `integrated`, **you run the whole suite yourself, exactly
+    once** — no agent runs tests at any other moment (60 subagents once ran 250 test rounds in a
+    single feature and saturated the machine). The run is `npm run affected:test` with
+    `--base=origin/<base_branch>` when that ref is available, else `npm test`, plus
+    `npx nx affected -t lint build` once. On failures: map each failing spec to the ticket that
+    owns the file (its Files section) and send the failure list back to that ticket's executor —
+    same worktree if it was kept, otherwise a fresh worktree off the feature branch — with the
+    failing output pasted in. The executor fixes it **without running anything**; re-integrate,
+    then run the suite **once more**. **Cap: two full runs per feature**; a third failure stops
+    the run with a message to the user. Then commit
     `06-execution.md`, `metrics.jsonl`, the updated README and any other phase artifact on the
     feature branch (`docs(NNN): execution log`), and verify `git status --porcelain` is empty
     except `.kss/current`; if it is not, stop with `Uncommitted feature artifacts: <paths>. Commit
@@ -117,9 +124,10 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 2. Before a ticket whose header says `/clear before: yes`, **stop** and print exactly:
    `Next ticket NN needs a fresh context. Safe to /clear, then run /kss-execute NNN-slug --ticket NN.`
    Do not start that ticket in the current session.
-3. The **same five gates apply, self-applied**, to your own work: report shape, red-run evidence,
-   commit order, green tests, justified deviations. Write the report into `06-execution.md`
-   exactly as an agent would.
+3. The **same three gates apply, self-applied**, to your own work: report shape, commit order
+   (test first), justified deviations. You write the specs and do not run them; the suite runs
+   once at the end, as in §A.10. Write the report into `06-execution.md` exactly as an agent
+   would.
 4. Run a `kss-reviewer` subagent per ticket where the Agent tool exists; where it does not, write
    the reviewer's checklist and your answers into the log instead.
 5. Finish as in §A.10.
@@ -157,7 +165,8 @@ reset to `ready`.
   ```
 
   plus the **Git per integrated ticket** table (`# | Commits | Files | + | −`) and the **Finish**
-  block (full suite result or `skipped to CI`, and the PR url marked **not merged**).
+  block (the coordinator's full-suite result and which run it was, and the PR url marked
+  **not merged**).
 
 - The README **Execution** block, ≤10 lines: tickets integrated `n/N`, the critical path, the
   escalations, the full-suite result, the PR url, and `not merged`. Update the Cost table with
@@ -194,7 +203,7 @@ Print exactly:
 ```
 Execute done · NNN-slug
 Tickets: <n>/<N> integrated · escalations: <n> · rejects: <n>
-Full suite: <command — result | skipped to CI>
+Full suite: <command — result> (coordinator, run N of ≤2)
 PR: <url> → <base_branch> — not merged
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
@@ -217,12 +226,15 @@ when the file does not exist.
   the top-level `execution` key — never `session`, and never an array of tickets.
 - The brief is the ticket file pasted in plus the worktree path — nothing else.
 - The agent type is Model + Effort from the graph; there is no `kss-opus-low`.
-- All five report gates hold, or the report goes back to the same agent with the missing list.
+- All three report gates hold, or the report goes back to the same agent with the missing list.
 - Every finished ticket is reviewed by `kss-reviewer`; the coordinator reads verdicts, never diffs.
 - Escalation: execution error → effort +1 in the same worktree with the findings; reasoning error
   → model and effort up; never skip two levels.
 - Past 80 turns a ticket stops, keeps its worktree, and goes back to `/kss-tickets`.
 - Integration is a `kss-sonnet-low` job; conflicts go to `kss-sonnet-medium` and then the reviewer.
+- **No agent runs tests, lint, build or tsc — ever.** Executors write the specs and commit them
+  first; the coordinator runs the suite itself, once, after every ticket is `integrated`, and at
+  most once more after the fixes. A third failing run stops and goes to the user.
 - Never read `03-spec.md` or `04-plan.md`, and never write the feature's code yourself.
 - Never merge the PR.
 - The board is printed on every event; `06-execution.md` is append-only — never rewrite an entry.
