@@ -35,11 +35,20 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist. If not, stop with:
    `No .kss/config.md. Run /kss-init first.`
-2. The feature folder must exist and `README.md` must show the Decisions block filled (grill done),
-   or — M track, no open decisions — the Investigation block with `open: 0`. Otherwise stop with:
-   `NNN-slug is at phase <phase>. Run /kss-<expected> NNN-slug first.`
+2. The feature folder must exist and `README.md` must show the **Decisions block filled** — by the
+   grill on L, by the decision check inside `kss-investigate` (`Decided inline: yes`) on M. The
+   precondition is the same on every track. Otherwise stop with:
+   `NNN-slug is at phase <phase>. Run /kss-<expected> NNN-slug first.` where `<expected>` is the
+   phase named by `node .kss/scripts/next.mjs <features_root>/NNN-slug --after <phase>`.
 3. `03-spec.md` already present → this is a **revision**; follow Procedure step 8.
 
 ## Procedure
@@ -125,6 +134,13 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): spec"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
 End by printing exactly:
 
 ```
@@ -134,8 +150,12 @@ Open items: <DF- ids, or none>
 Warnings: <n>   Errors: <n>
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-plan NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after spec>
 ```
+
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after spec`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header.
 
 The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl` — the phase's agents,
 turns and cumulative tokens. Never report the number the Agent tool displays.

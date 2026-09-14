@@ -22,6 +22,9 @@ Read nothing else. Never read `03-spec.md`, `04-plan.md` or any ticket file.
 
 ## Preconditions
 
+When `.kss/current` has `phase: "done"` the run is closed (DESIGN.md §3.8): print the board with
+every phase that ran marked `done` and the line `Run closed — nothing left to run.` in place of Next.
+
 1. `.kss/config.md` must exist. If not: "KSS is not set up here — run /kss-init." and stop.
 2. With an argument, the feature folder must exist. If not, list the ids that do and stop.
 3. A missing or empty `.kss/current` is not an error: fall back to the README's state line.
@@ -53,8 +56,10 @@ Nothing. This skill only prints.
 
 ## Summary
 
-**Phase board** — the order is fixed; mark each phase `done`, `→ current`, `skipped (track S)` or
-blank, using the README blocks that exist:
+**Phase board** — the order is fixed; mark each phase `done`, `→ current`, `skipped (track <size>)`
+or blank, using the README blocks that exist. A phase is `skipped` when
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --check <phase>` prints `off-track`, or
+`optional` and the phase did not run (DESIGN.md §3.9):
 
 ```
 kss · NNN-slug · <size> · <track>

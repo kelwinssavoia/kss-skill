@@ -5,7 +5,9 @@
 
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { homedir } from 'node:os'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 // `kss-lib.mjs` sits next to this file when `kss-init` has copied the scripts into the project's
 // `.kss/scripts/`, and one directory up in `hooks/` when this file runs from the installed plugin.
 // Resolve whichever exists — `${CLAUDE_PLUGIN_ROOT}` is only set for hooks, so it cannot help here.
@@ -74,32 +76,110 @@ function shortId(feature) {
   return m ? m[1] : String(feature || '')
 }
 
-function fallback(payload, raw, cwd) {
-  const backup = (() => {
-    try {
-      const p = join(cwd, '.kss', 'statusline.backup.json')
-      if (!existsSync(p)) return null
-      const j = JSON.parse(readFileSync(p, 'utf8'))
-      const cmd = j && (j.command || (j.statusLine && j.statusLine.command))
-      return typeof cmd === 'string' && cmd.trim() ? cmd : null
-    } catch {
-      return null
-    }
-  })()
+// Recursion guard (see DESIGN.md §18 "Fallback safety"). The child spawned by `fallback()` runs
+// with this variable set; when it is present we are the child and must never spawn again.
+const CHILD_ENV = 'KSS_STATUSLINE_CHILD'
+const FALLBACK_TIMEOUT_MS = 2000
 
-  if (backup) {
-    try {
-      const r = spawnSync(backup, { shell: true, input: raw, encoding: 'utf8', cwd, timeout: 5000 })
-      const out = (r.stdout || '').trim()
-      if (out) return out
-    } catch {
-      /* fall through */
-    }
+/** True when `cmd` would run this statusline (any version, any copy) — running it would recurse. */
+export function isSelfReferencing(cmd) {
+  const c = String(cmd || '')
+  return /statusline\.mjs/.test(c) || /\bkss\b/i.test(c)
+}
+
+function readBackupCommand(path) {
+  try {
+    if (!existsSync(path)) return null
+    const j = JSON.parse(readFileSync(path, 'utf8'))
+    const cmd = j && (j.command || (j.statusLine && j.statusLine.command))
+    return typeof cmd === 'string' && cmd.trim() ? cmd : null
+  } catch {
+    return null
   }
+}
 
+/**
+ * The statusline that was configured before kss-init. It is user-level state, so it lives in
+ * `~/.kss/statusline.backup.json`; `<cwd>/.kss/statusline.backup.json` is the legacy location
+ * (kss ≤ 0.1.3 wrote it per project). A backup that points back at the KSS statusline is the
+ * artefact of running kss-init twice and is ignored — it is exactly what fork-bombed a machine.
+ */
+export function resolveBackupCommand(cwd, home = homedir()) {
+  const candidates = [join(home, '.kss', 'statusline.backup.json'), join(cwd, '.kss', 'statusline.backup.json')]
+  for (const p of candidates) {
+    const cmd = readBackupCommand(p)
+    if (cmd && !isSelfReferencing(cmd)) return cmd
+  }
+  return null
+}
+
+function plainLine(payload) {
   const name = (payload && payload.model && payload.model.display_name) || 'Claude'
   const pct = payload && payload.context_window && payload.context_window.used_percentage
   return Number.isFinite(pct) ? `${name} · ${Math.round(pct)}%` : name
+}
+
+/**
+ * Run the previous statusline in its own process group and kill the whole group on timeout, so a
+ * child that itself spawned something never leaves orphans behind (spawnSync's timeout only
+ * signals the direct child).
+ */
+function runBackup(cmd, raw, cwd) {
+  return new Promise((res) => {
+    let out = ''
+    let settled = false
+    const finish = (v) => {
+      if (settled) return
+      settled = true
+      res(v)
+    }
+    let child
+    try {
+      child = spawn(cmd, {
+        shell: true,
+        cwd,
+        detached: true,
+        stdio: ['pipe', 'pipe', 'ignore'],
+        env: { ...process.env, [CHILD_ENV]: '1' },
+      })
+    } catch {
+      return finish('')
+    }
+    const timer = setTimeout(() => {
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        /* already gone */
+      }
+      finish('')
+    }, FALLBACK_TIMEOUT_MS)
+    child.stdout.on('data', (d) => (out += d))
+    child.on('error', () => {
+      clearTimeout(timer)
+      finish('')
+    })
+    child.on('close', () => {
+      clearTimeout(timer)
+      finish(out.trim())
+    })
+    try {
+      child.stdin.end(raw)
+    } catch {
+      /* child may have exited */
+    }
+  })
+}
+
+async function fallback(payload, raw, cwd) {
+  // We are the child of another statusline: print the plain line and stop the chain here.
+  if (process.env[CHILD_ENV]) return plainLine(payload)
+
+  const backup = resolveBackupCommand(cwd)
+  if (backup) {
+    const out = await runBackup(backup, raw, cwd)
+    if (out) return out
+  }
+  return plainLine(payload)
 }
 
 /**
@@ -177,13 +257,16 @@ async function main() {
   const cwd = (payload.cwd || (payload.workspace && payload.workspace.current_dir) || process.cwd())
 
   const current = readCurrent(cwd)
-  if (!current || !current.feature) {
-    process.stdout.write(fallback(payload, raw, cwd) + '\n')
+  // `phase: "done"` (current.mjs end) is a closed run: back to the previous statusline.
+  if (!current || !current.feature || current.phase === 'done') {
+    process.stdout.write((await fallback(payload, raw, cwd)) + '\n')
     return
   }
   process.stdout.write(line(current, featureDir(cwd, current)) + '\n')
 }
 
-main()
-  .catch(() => {})
-  .finally(() => process.exit(0))
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main()
+    .catch(() => {})
+    .finally(() => process.exit(0))
+}

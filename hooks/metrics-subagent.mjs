@@ -2,7 +2,7 @@
 // SubagentStop → append one `kind: "subagent"` line to the feature's metrics.jsonl.
 // No-op (exit 0) whenever there is no active KSS run.
 
-import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summariseTranscript, readMeta, activeTicket } from './kss-lib.mjs'
+import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summariseTranscript, readMeta, activeTicket, isActive } from './kss-lib.mjs'
 
 async function main() {
   const payload = parseJson(await readStdin(), null)
@@ -10,7 +10,7 @@ async function main() {
   const cwd = typeof payload.cwd === 'string' && payload.cwd ? payload.cwd : process.cwd()
 
   const current = readCurrent(cwd)
-  if (!current || !current.feature) return
+  if (!isActive(current)) return
   const dir = featureDir(cwd, current)
   if (!dir) return
 

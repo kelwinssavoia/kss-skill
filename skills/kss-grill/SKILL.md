@@ -28,12 +28,22 @@ ticket, any source file or test. The full body of an auto decision is not read �
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
 2. `01-investigation.md` must exist with a `## Decisions` section, else stop with:
    `No investigation for NNN-slug. Run /kss-investigate first.`
 3. Count the open items — items marked `open`, plus every `AD-` with `status: reopened`.
-   - On an **M** track with zero open items, stop with exactly:
-     `No open decisions for NNN-slug on track M — the grill is not needed. Next: /kss-spec NNN-slug.`
+   - On an **M** track the grill is optional (`next.mjs --check grill` → `optional`): it runs only
+     when the user escalated to it from the decision check. With zero open items — or when the
+     README Decisions block already says `Decided inline: yes` — stop with exactly:
+     `No open decisions for NNN-slug on track M — the grill is not needed.` followed by the line
+     from `node .kss/scripts/next.mjs <features_root>/NNN-slug --after investigate`.
    - On an **L** track the grill always runs; with zero open items, say so and go straight to the
      closing turn.
 
@@ -112,6 +122,13 @@ ticket, any source file or test. The full body of an auto decision is not read �
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): grill"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
 Print exactly:
 
 ```
@@ -123,8 +140,12 @@ Terms: <terms written to CONTEXT.md, or none>
 ADRs: <paths, or none>
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-spec NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after grill>
 ```
+
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after grill`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header.
 
 The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
 

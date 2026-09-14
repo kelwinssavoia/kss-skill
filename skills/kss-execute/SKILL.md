@@ -31,15 +31,21 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
    `No .kss/config.md found. Run /kss-init first.`
 2. The feature folder and `05-tickets/graph.md` must exist. If not, stop with exactly:
    `No ticket graph for NNN-slug. Run /kss-tickets NNN-slug first.`
-3. The feature branch must be checked out and the worktree clean. If it is dirty, stop with
-   exactly: `Worktree is dirty. Commit or stash before executing.` The expected way to get clean
-   is to commit the phase artifacts on the feature branch (`git add <features_root>/NNN-slug
-   <domain_docs> .kss/config.md && git commit -m "docs(NNN): spec, plan and tickets for <slug>"`),
-   never to stash or discard them.
+3. The feature branch must be checked out and the worktree clean — after the sweep in step 0 has
+   committed the phase artifacts, anything still dirty is the user's own work. If so, stop with
+   exactly: `Worktree is dirty. Commit or stash before executing.` Never stash or discard it
+   yourself.
 4. The README must show the Tickets block as approved. If it does not, stop with exactly:
    `Ticket graph for NNN-slug is not approved. Run /kss-tickets NNN-slug and approve it.`
 5. Pick the sub-procedure from `execution` in `.kss/config.md`: `multi-agent` → §A,
@@ -95,7 +101,9 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    - A ticket still unfinished past **80 turns**: stop it, **keep the worktree**, and send it back
      to `/kss-tickets` to be re-sliced. The executor never splits a ticket on its own.
 8. **Integrate** with a `kss-sonnet-low` agent: rebase the ticket branch on the feature branch,
-   merge it into the feature branch, remove the worktree, set the state to `integrated`, and
+   merge it into the feature branch, remove the worktree (`git worktree remove --force
+   .kss/worktrees/NNN-slug/NN`, then `rm -rf` the directory if it is still there, then delete the
+   ticket branch), set the state to `integrated`, and
    unblock the dependants — then immediately spawn whatever that unblocked (step 2). A rebase
    conflict goes to `kss-sonnet-medium` with both tickets' context, and then to the reviewer
    again.
@@ -115,9 +123,10 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
     then run the suite **once more**. **Cap: two full runs per feature**; a third failure stops
     the run with a message to the user. Then commit
     `06-execution.md`, `metrics.jsonl`, the updated README and any other phase artifact on the
-    feature branch (`docs(NNN): execution log`), and verify `git status --porcelain` is empty
-    except `.kss/current`; if it is not, stop with `Uncommitted feature artifacts: <paths>. Commit
-    them before opening the PR.` The PR must carry every artifact of the feature. Then open a PR
+    feature branch (`docs(NNN): execute`), run `git worktree prune` and remove anything left under
+    `.kss/worktrees/NNN-slug/`, and verify `git status --porcelain` is empty except `.kss/current`;
+    if it is not, stop with `Uncommitted feature artifacts: <paths>. Commit them before opening the
+    PR.` The PR must carry every artifact of the feature. Then open a PR
     against `base_branch` with the feature `README.md` as the body
     (`gh pr create --base <base_branch> --body-file <features_root>/NNN-slug/README.md`).
     **Never merge — that is a human decision.**
@@ -203,6 +212,13 @@ reset to `ready`.
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): execute"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
 Print exactly:
 
 ```
@@ -212,15 +228,16 @@ Full suite: <command — result> (coordinator, run N of ≤2)
 PR: <url> → <base_branch> — not merged
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-review NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after execute>
 ```
 
 The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`; print `Cost: n/a`
 when the file does not exist.
 
-`Next` is `/kss-review NNN-slug` on the **M and L** tracks. An **S** track ends at execute
-(`clarify → tickets → execute`), so print
-`Next: /kss-review NNN-slug (optional on an S track) — or /kss-docs-product NNN-slug`.
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after execute`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On M and L it is `/kss-review`; an S track ends here and the line lists
+review and docs as optional.
 
 ## Rules
 

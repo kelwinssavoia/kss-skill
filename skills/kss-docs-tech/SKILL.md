@@ -29,6 +29,13 @@ explorer confirms the code; you write from what it returns.
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
    `No .kss/config.md found. Run /kss-init first.`
 2. The feature folder must exist. If it does not, stop with exactly:
@@ -88,6 +95,19 @@ explorer confirms the code; you write from what it returns.
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): docs-tech"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
+**Close the run** when nothing is left to do for this feature:
+`node .kss/scripts/current.mjs end`. It sets `phase: "done"` so the hooks stop appending to
+`metrics.jsonl` and the statusline hands back to the previous one. Running any later `kss-` skill on
+this feature re-opens it automatically. The main session's own cost for this last phase is not
+recorded — that is the price of a clean tree (DESIGN.md §6).
+
 Print exactly:
 
 ```
@@ -97,8 +117,12 @@ As-built: <n> paths confirmed · <n> deviations from plan
 Index: <docs_index> — line added under ## Technical
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-docs-product NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after docs-tech>
 ```
+
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after docs-tech`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header.
 
 Print `Cost: n/a` when `metrics.jsonl` does not exist.
 

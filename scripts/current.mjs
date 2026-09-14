@@ -3,6 +3,12 @@
 //
 //   node .kss/scripts/current.mjs get [dot.path]     print the file, or one value
 //   node .kss/scripts/current.mjs set '<json>'       deep-merge the patch into the file
+//   node .kss/scripts/current.mjs end                close the run: phase "done", live keys dropped
+//   node .kss/scripts/current.mjs clear              delete the file (no run at all)
+//
+// `end` keeps `feature` so kss-status can still find the folder, but sets `phase: "done"`, which
+// every hook and the statusline read as "no active run" (DESIGN.md §3.8) — so nothing is appended
+// to metrics.jsonl after the closing commit. The next kss- skill re-opens it by setting `phase`.
 //
 // Merge semantics: objects merge recursively, everything else is replaced.
 // `null` as a value deletes the key. Runs against $PWD unless --cwd is given.
@@ -18,6 +24,9 @@ const lib = await (async () => {
   }
 })()
 const { readCurrent, currentPath, writeJsonFile } = lib
+import { rmSync } from 'node:fs'
+
+const END_PATCH = { phase: 'done', ticket: null, tickets: null, execution: null, review: null, explorers: null }
 
 function argCwd(argv) {
   const i = argv.indexOf('--cwd')
@@ -72,5 +81,30 @@ if (cmd === 'set') {
   process.exit(0)
 }
 
-console.error('usage: node .kss/scripts/current.mjs get [dot.path] | set <json-patch> [--cwd <dir>]')
+if (cmd === 'end') {
+  if (!current.feature) {
+    console.error('current.mjs end: no active run (.kss/current names no feature)')
+    process.exit(1)
+  }
+  const next = merge(current, { ...END_PATCH, phase_started_at: new Date().toISOString() })
+  if (!writeJsonFile(currentPath(cwd), next)) {
+    console.error('current.mjs end: could not write .kss/current')
+    process.exit(1)
+  }
+  process.stdout.write(JSON.stringify(next, null, 2) + '\n')
+  process.exit(0)
+}
+
+if (cmd === 'clear') {
+  try {
+    rmSync(currentPath(cwd), { force: true })
+  } catch {
+    console.error('current.mjs clear: could not remove .kss/current')
+    process.exit(1)
+  }
+  process.stdout.write('null\n')
+  process.exit(0)
+}
+
+console.error('usage: node .kss/scripts/current.mjs get [dot.path] | set <json-patch> | end | clear [--cwd <dir>]')
 process.exit(1)

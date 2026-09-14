@@ -64,9 +64,9 @@ of one of these measurements.
 | --- | --- | --- |
 | `kss-init` | once per project | Writes `.kss/config.md`, installs hooks, statusline and the agent matrix |
 | `kss-clarify` | yes | Turns a vague request into a brief; picks size and track; creates folder and branch |
-| `kss-investigate` | M, L | Read-only explorers map the code; classifies decisions auto vs open |
+| `kss-investigate` | M, L | Read-only explorers map the code; classifies decisions auto vs open; on M, settles them with the user in the decision check (§8.4) |
 | `kss-review-decisions` | optional | Review, accept, reopen or override the auto decisions |
-| `kss-grill` | L (M if open items) | Interviews the user on every open decision |
+| `kss-grill` | L (M only if the decision check escalates) | Interviews the user on every open decision |
 | `kss-spec` | M, L | Writes the functional specification |
 | `kss-plan` | M, L | Writes the implementation plan — shape, not code |
 | `kss-tickets` | M, L | Slices the plan into self-contained tickets and a dependency graph |
@@ -77,7 +77,8 @@ of one of these measurements.
 | `kss-status` | anytime | Prints the board; writes nothing |
 
 **Order:** clarify → investigate → [review-decisions] → grill → spec → plan → tickets → execute
-→ review → [docs-tech, docs-product].
+→ review → [docs-tech, docs-product]. Which of these a feature actually runs is its **track**,
+fixed by its size (§3.9); every skill ends by pointing at the next phase *of that track*.
 
 Every skill can also be run on its own, given a feature id `NNN-<slug>`.
 
@@ -114,7 +115,7 @@ Rules:
 
 ### 3.2 End-of-phase summary
 
-Every phase ends by printing a fixed summary:
+Every phase ends by **committing its artifacts** (§3.8) and then printing a fixed summary:
 
 ```
 <Phase> done · NNN-slug
@@ -191,6 +192,11 @@ merges objects, so one ticket can be updated on its own
 every event. `null` as a value deletes a key, so a phase that owns none of these clears them with
 `{"tickets":null,"execution":null,"review":null}`.
 
+`phase: "done"` is the closed run, written by `node .kss/scripts/current.mjs end` at the end of the
+last skill (§3.8): `feature` stays, the live keys (`ticket`, `tickets`, `execution`, `review`,
+`explorers`) are dropped, and `isActive()` in `kss-lib.mjs` is false — every hook is a no-op and
+the statusline falls back, exactly as with no file. `current.mjs clear` deletes the file outright.
+
 ### 3.4 Identifiers
 
 | Prefix | Meaning |
@@ -228,6 +234,68 @@ turns is re-sliced — never written and shipped with a warning.
 Explorers are read-only. They grep first, read ranges, never read a whole file over 300 lines,
 never touch `node_modules`, and are never told to read `CLAUDE.md` (it is already in their
 system prompt).
+
+---
+
+### 3.8 Nothing left in the tree
+
+Measured 2026-09-14: after every feature, `metrics.jsonl`, a re-rendered `README.md`, an ADR or
+`CONTEXT.md` were sitting uncommitted on the feature branch, and `.kss/worktrees/` kept the
+directories of integrated tickets. Two causes, both structural:
+
+- the `SessionEnd` hook appends the main session's cost **after** the skill has finished — it runs
+  on the `/clear` between phases — so the phase that committed is dirty again a second later;
+- no skill ever closed the run: `.kss/current` kept naming the feature after the PR, so every later
+  `/clear` and every subagent kept appending, and `render-cost` in review/docs rewrote the README
+  with nobody committing it.
+
+The rule, applied by every phase skill through two fixed steps:
+
+1. **Sweep on entry** (precondition 0 of every skill). If
+   `git status --porcelain -- <features_root> <domain_docs> <docs_root> .kss/config.md` lists
+   anything, commit it as `docs(NNN): <previous phase> artifacts` before doing anything else. This
+   is where the previous phase's `SessionEnd` line lands. Never stash, never discard, never fold
+   it into the new phase's commit.
+2. **Commit on exit** (first step of every Summary). `docs(NNN): <phase>` covering the same paths;
+   the summary is printed only when those paths are clean. `.kss/current` and `.kss/worktrees/`
+   are gitignored and never part of it.
+
+And one closing step for the skills that can be the last one of a feature (`kss-review`,
+`kss-docs-tech`, `kss-docs-product`): after their commit, `node .kss/scripts/current.mjs end`. From
+then on the hooks write nothing and the statusline is the previous one; any later `kss-` skill on
+the feature re-opens the run by writing `phase`. The one thing given up is the main session's own
+cost for that last phase (§6) — a metrics line that would otherwise be the eternal leftover.
+
+`kss-execute` additionally removes each ticket's worktree directory at integration and runs
+`git worktree prune` before opening the PR, so `.kss/worktrees/NNN-slug/` is empty when the feature
+is done.
+
+### 3.9 Tracks and the Next line
+
+The size chosen in `kss-clarify` fixes the track, and the track fixes what every skill suggests
+next. Measured 2026-09-14: skills hard-coded their own `Next:` and an M feature was sent to the
+grill it does not have, then to `review-decisions`, before anyone reached the spec. The table below
+is the only source of truth, encoded once in `scripts/next.mjs` and read by every skill:
+
+| Size | Track | Optional along the way | After the last phase |
+| --- | --- | --- | --- |
+| S | clarify → tickets → execute | review, docs-tech, docs-product | `nothing on track S — … optional` |
+| M | clarify → investigate → spec → plan → tickets → execute → review | review-decisions, grill (only by escalation from the decision check, §8.4), docs-tech, docs-product | `nothing on track M — … optional` |
+| L | clarify → investigate → grill → spec → plan → tickets → execute → review → docs-tech → docs-product | review-decisions (offered before the grill when auto decisions exist) | `documented — nothing left to run` |
+
+Rules:
+
+- A skill prints `Next:` **only** as the output of
+  `node .kss/scripts/next.mjs <features_root>/NNN-slug --after <phase>` — never typed by hand —
+  and writes the same text into the README header. `--auto <n>` adds the review-decisions offer on
+  L; `--escalate grill` is what `kss-investigate` passes on M when the user asked for the grill.
+- A skill asked to run a phase that is **off-track** for the size (`next.mjs --check <phase>` →
+  `off-track`, e.g. `kss-investigate` on S) stops and prints the on-track Next. An **optional**
+  phase runs normally and, when done, resumes the track at the first phase after its canonical
+  position. `review-decisions` re-run after the spec goes back to `spec` (a revision).
+- The size can be revised by `kss-investigate` (§8.3); from then on `next.mjs` reads the new size
+  from the README header, so the suggestions follow the revision automatically.
+- `kss-status` marks the phases a track does not contain as `skipped (track <S|M|L>)`.
 
 ---
 
@@ -284,8 +352,9 @@ It then:
    `node .kss/scripts/render-cost.mjs …` and never `${CLAUDE_PLUGIN_ROOT}`**: that variable is
    only guaranteed to be set inside hook commands, not in the shell a skill runs. Re-running
    `kss-init` refreshes the copies.
-4. Adds `.kss/current` and `.kss/worktrees/` to the project's `.gitignore` — both are live state,
-   not history. `.kss/config.md`, `.kss/templates/` and `.kss/scripts/` stay tracked.
+4. Adds `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` to the project's
+   `.gitignore` — the first two are live state, the third is a legacy per-user file that must
+   never be committed. `.kss/config.md`, `.kss/templates/` and `.kss/scripts/` stay tracked.
 5. Installs the statusline into the user-level `~/.claude/settings.json` —
    `statusLine: {type: command, command: node <plugin>/scripts/statusline.mjs}` — after asking.
    The statusline is a *user-level* setting shared by every project, so it is the one place that
@@ -294,8 +363,18 @@ It then:
    `find ~/.claude/plugins -type f -path '*/kss/*/scripts/statusline.mjs'`) and, when that finds
    nothing or more than one, **asks the user for the path** rather than guessing. The script reads
    `<cwd>/.kss/current`, so one installed copy serves every project.
-   Any existing statusline configuration is backed up to `<project>/.kss/statusline.backup.json`;
-   the KSS statusline script shows the previous statusline's output whenever no KSS run is active.
+   Any existing statusline configuration is backed up to the **user-level**
+   `~/.kss/statusline.backup.json` — next to `preferences.md`, because `statusLine` is a user
+   setting and its backup is too. The KSS statusline script shows the previous statusline's output
+   whenever no KSS run is active. Two rules keep this safe (§18 "Fallback safety"):
+   - if the existing `statusLine` already *is* the KSS statusline (any version, any path), nothing
+     is backed up — the command is merely updated to the current plugin path;
+   - an existing `~/.kss/statusline.backup.json` is never overwritten.
+
+   Versions ≤ 0.1.3 wrote the backup per project, to `<project>/.kss/statusline.backup.json`. The
+   second project initialised on a machine therefore got a backup of the KSS statusline itself,
+   and the fallback spawned itself without end. `kss-init` now removes such a self-referencing
+   file when it finds one and moves a genuine one to `~/.kss/`.
 
    The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) need **no installation**: they ship in
    the plugin's `hooks/hooks.json` and merge automatically while the plugin is enabled. Every hook
@@ -349,6 +428,9 @@ Rules:
 - `kss-execute` records git statistics per integrated ticket.
 - `README.md` gets a rendered `## Cost` table, one row per phase: agents, turns, cumulative
   tokens split by type, wall time, files, +/−.
+- Hooks write **only while the run is active** (`isActive()`: a feature is named and `phase` is not
+  `done`). The `SessionEnd` line of a phase is committed by the next phase's sweep (§3.8); the
+  `SessionEnd` line of the *last* phase is deliberately not recorded — the run is already closed.
 
 ---
 
@@ -371,7 +453,7 @@ It then proposes a **Size** and a **Track**:
 | Size | Criteria | Track |
 | --- | --- | --- |
 | S | one layer, one surface, no new data or contract | clarify → ticket → execute |
-| M | two layers, or one new endpoint, no new entity | clarify → investigate → spec → plan → tickets → execute → review |
+| M | two layers, or one new endpoint, no new entity | clarify → investigate → spec → plan → tickets → execute → review — the open decisions are settled with the user at the end of investigate (§8.4), no grill |
 | L | new entity, contract change, cross-service flow, or any "confirm" on data | all phases, grill included |
 
 The user confirms the size. The final question asks for the feature name.
@@ -454,8 +536,47 @@ The skill may revise the size, recording `Size revised: S → L, reason: …`.
 README block: layers confirmed, decisions auto/open per category.
 
 End summary shows: Found (3 lines), Size, Decisions (the auto IDs as a list; the open ones with
-one line each, per category), Cost, and Next — `/kss-review-decisions` (optional), then
-`/kss-grill`, or `/kss-spec` when there are no open items on an M track.
+one line each, per category — on M, the `D-` ids the decision check produced instead), Cost, and
+Next from `next.mjs` (§3.9): on L `/kss-grill` (with `/kss-review-decisions` offered first when
+there are auto decisions); on M `/kss-spec`, or `/kss-grill` when the user escalated.
+
+### 8.4 Decision check — tracks without a grill
+
+On a track with no grill (M), the investigation is the **last moment a human sees the decisions
+before the spec is written from them**. So `kss-investigate` does not end with a list of ids: after
+writing its outputs, and before the commit and the summary, it runs one closing turn.
+
+1. Print **one table** with every decision, auto and open, sorted business → layout → technical
+   and, inside a category, open first then confidence ascending:
+
+   ```
+   ID | Type | Verdict | Question | Decision / proposed | Confidence + evidence
+   ```
+
+   Open items get a provisional id `O-N` and a **proposed** answer: the lean the explorers found,
+   or `no lean — needs you`.
+2. Ask for **one answer**, stating the accepted forms:
+
+   ```
+   ok                                       accept every auto decision and every proposal
+   O-2: <decision>, AD-04: <override>       decide or override by id; anything not named is accepted
+   defer O-3: <owner>, <date>               park an open item as a DF-
+   grill                                    stop here and run /kss-grill instead
+   ```
+3. Apply it exactly as `kss-review-decisions` and `kss-grill` would: accepted `AD-` → `reviewed:
+   yes`; an override → `status: overridden` plus a `D-` in `02-decisions.md` linking back; every
+   `O-` decided (by proposal or by the user) → a `D-` in `02-decisions.md` with the user's or the
+   proposed text as Decision and the investigation evidence as Why; `defer` → a `DF-` with owner
+   and date. **No open item may be left undecided**: if the answer leaves one without a `D-` or a
+   `DF-`, ask again for those ids only — still one turn, still one table. Business decisions are
+   proposed but never accepted silently: `ok` accepts them because the user typed it.
+4. Fill the **Decisions** block of the README in the grill's shape (`Decided: … · Overrode: … ·
+   Deferred: …`, plus `Decided inline: yes`), so `kss-spec`'s precondition is the same on every
+   track: a filled Decisions block.
+5. `grill` as the answer skips 3–4, leaves everything as classified and makes Next
+   `/kss-grill NNN-slug` (`next.mjs --escalate grill`).
+
+On L the check does not run — the grill is the interview, one decision per turn.
 
 ---
 
@@ -477,7 +598,8 @@ Nothing is ever deleted.
 
 It can also run after the grill or the spec. In that case `README.md` records
 `decisions changed after spec: AD-03 → D-06`, and re-running `kss-spec` rewrites only the
-affected FRs.
+affected FRs. On M it is redundant with the decision check (§8.4) but allowed; its Next is
+`/kss-spec` there, `/kss-grill` on L (§3.9).
 
 One turn. No interview.
 
@@ -783,7 +905,9 @@ After integrating: reply on each thread with the resolving commit or the approve
 only the threads that were fixed or answered.
 
 Rounds are numbered in `07-review.md` — a table `ID | Where | Class | Resolution | Ticket/Reply`,
-plus "Open after round". The skill ends with "Ready for merge decision". **It never merges.**
+plus "Open after round". The skill commits `07-review.md`, `metrics.jsonl` and the re-rendered
+README (`docs(NNN): review`), closes the run with `current.mjs end` (§3.8) and ends with "Ready for
+merge decision". **It never merges.**
 
 ### 15.1 `--watch`
 
@@ -853,4 +977,27 @@ kss 012 · review · round 2 done · watching PR #61 · last check 3m ago
 ```
 
 When no KSS run is active, it delegates to the backed-up previous statusline command, if there is
-one.
+one — read from `~/.kss/statusline.backup.json`, or from the legacy `<cwd>/.kss/statusline.backup.json`.
+
+### 18.1 Fallback safety
+
+The fallback runs an arbitrary shell command with the same stdin. The 2026-09-14 incident — 400
+concurrent `statusline.mjs` processes and a load average of 430 on an 8-core machine — came from
+a backup that pointed back at the KSS statusline: each invocation spawned itself, `spawnSync`'s
+timeout killed only the direct child, and the grandchildren lived on as orphans of launchd. Every
+layer below is required; none is redundant.
+
+1. **Self-reference is never run.** A backup command matching `statusline.mjs` or the word `kss`
+   is ignored (`isSelfReferencing`), whichever file it came from.
+2. **The child cannot spawn.** The fallback child runs with `KSS_STATUSLINE_CHILD=1` in its
+   environment. A statusline that starts with that variable set prints the plain
+   `<model> · <ctx%>` line and never reaches the fallback.
+3. **Timeouts kill the group.** The child is started `detached` in its own process group and the
+   whole group gets `SIGKILL` after 2 s, so a child that forked cannot leave orphans. Claude Code
+   does not wait longer than that for a statusline anyway.
+4. **Only `~/.kss/` is written.** `kss-init` never writes the backup inside a project again, and
+   never backs up a `statusLine` that is already KSS.
+
+`scripts/statusline.test.mjs` (`node --test scripts/`) pins all of this: a self-referencing backup
+in the project and in `$HOME`, a hanging backup, the child guard, and a genuine backup that is
+honoured.

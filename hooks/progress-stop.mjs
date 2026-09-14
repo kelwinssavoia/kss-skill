@@ -7,7 +7,7 @@
 // the transcript — the file is never parsed whole.
 
 import { openSync, fstatSync, readSync, closeSync, existsSync } from 'node:fs'
-import { readStdin, parseJson, readCurrent, currentPath, writeJsonFile } from './kss-lib.mjs'
+import { readStdin, parseJson, readCurrent, currentPath, writeJsonFile, isActive } from './kss-lib.mjs'
 
 const TAIL_BYTES = 256 * 1024
 
@@ -55,7 +55,7 @@ async function main() {
   const cwd = typeof payload.cwd === 'string' && payload.cwd ? payload.cwd : process.cwd()
 
   const current = readCurrent(cwd)
-  if (!current || !current.feature) return
+  if (!isActive(current)) return
 
   const prev = current.session && typeof current.session === 'object' ? current.session : {}
   const ctx = tailCtx(payload.transcript_path)

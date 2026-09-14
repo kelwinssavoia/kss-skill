@@ -85,6 +85,10 @@ Enable it per project via `enabledPlugins` in `.claude/settings.json` (project o
 The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) ship in `hooks/hooks.json` and merge in
 automatically while the plugin is enabled — nothing to install for them.
 
+Every phase commits the artifacts it wrote (`docs(NNN): <phase>`), the next phase commits what the
+hooks appended after that, and the last phase closes the run — the feature branch is clean when a
+skill says `done` (DESIGN.md §3.8).
+
 Then, inside the project, run `/kss-init`: interactive, one question per turn, writing nothing
 until you confirm the plan. It asks for every key below (offering a default), plus execution mode
 (multi-agent/single-session), layout references and standards files, then:
@@ -94,12 +98,13 @@ until you confirm the plan. It asks for every key below (offering a default), pl
    read the project's own copy and it can be customised.
 3. Asks whether to install the statusline into **user-level** `~/.claude/settings.json`
    (`statusLine: {type: command, command: node <plugin>/scripts/statusline.mjs}`), backing up any
-   existing one to `.kss/statusline.backup.json` — KSS falls back to printing that output when no
-   run is active.
+   existing one to the user-level `~/.kss/statusline.backup.json` — KSS falls back to printing
+   that output when no run is active. If the statusline is already KSS (a second project on the
+   same machine, or an upgrade) nothing is backed up; the path is just refreshed.
 4. Creates the eight-agent matrix in `.claude/agents/`, skipping files that already exist (asks
    before overwriting).
-5. Adds `.kss/current` and `.kss/worktrees/` to `.gitignore` (live state); config, templates and
-   feature folders stay tracked.
+5. Adds `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` to `.gitignore`;
+   config, templates and feature folders stay tracked.
 
 ### `.kss/config.md` keys
 

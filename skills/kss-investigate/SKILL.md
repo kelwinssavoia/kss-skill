@@ -30,14 +30,23 @@ system prompt.
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
 2. The feature folder must exist with a `00-brief.md`, else stop with:
    `No brief for NNN-slug. Run /kss-clarify first.`
 3. `README.md` must show the Brief block filled and State `clarify` (or a later phase, when
    re-running). If the Brief block is empty, stop with:
    `NNN-slug has no brief block. Run /kss-clarify first.`
-4. On an S track, stop with:
-   `NNN-slug is size S — investigation is not part of its track. Next: /kss-tickets NNN-slug.`
+4. Run `node .kss/scripts/next.mjs <features_root>/NNN-slug --check investigate`. On `off-track`
+   (an S feature) stop with:
+   `NNN-slug is size S — investigation is not part of its track.` followed by the line from
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --after clarify`.
 
 ## Procedure
 
@@ -91,6 +100,48 @@ system prompt.
 8. Revise the size if the evidence demands it, recording in `01-investigation.md`:
    `Size revised: S → L, reason: …`, and updating the README header.
 
+9. **Decision check — M track only** (DESIGN.md §8.4). Run
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --check grill`: when it prints `optional`
+   this feature has no grill, and this is the last time a human sees the decisions before the spec
+   is written from them. On L (`on-track`) skip this step — the grill is the interview.
+
+   a. Print **one table** with every decision, auto and open, business → layout → technical and,
+      inside a category, open first then confidence ascending:
+
+      ```
+      ID | Type | Verdict | Question | Decision / proposed | Confidence + evidence
+      ```
+
+      Open items get a provisional id `O-N` and a **proposed** answer — the lean the explorers
+      found, or `no lean — needs you`.
+   b. Ask for **one answer** and wait, stating the accepted forms verbatim:
+
+      ```
+      ok                                   accept every auto decision and every proposal
+      O-2: <decision>, AD-04: <override>   decide or override by id; anything not named is accepted
+      defer O-3: <owner>, <date>           park an open item as a DF-
+      grill                                stop here and run /kss-grill instead
+      ```
+   c. Apply it as `kss-review-decisions` and `kss-grill` would: accepted `AD-` → `reviewed: yes`;
+      an override → `status: overridden` plus a `D-` in `02-decisions.md` (create it from
+      `.kss/templates/02-decisions.md`) linking back; every `O-` decided — by proposal or by the
+      user — → a `D-` whose Decision is the chosen text and whose Why cites the investigation
+      evidence; `defer` → a `DF-` with owner and date. Number `D-`/`DF-` after the highest
+      existing one. **No open item may be left without a `D-` or a `DF-`**: if the answer leaves
+      one, ask again for those ids only — one turn, one table. Business decisions are proposed
+      but never accepted silently; `ok` accepts them because the user typed it.
+   d. Fill the **Decisions** block of `README.md` in the grill's shape, ≤10 lines:
+
+      ```
+      Decided inline: yes
+      Decided: D-01…D-NN (business <n> · layout <n> · technical <n>)
+      Overrode: <AD-id → D-id, …, or none>
+      Deferred: <DF-ids with owners, or none>
+      ```
+   e. `grill` skips c–d, leaves everything as classified, and the summary's Next comes from
+      `next.mjs --after investigate --escalate grill`.
+
+
 ## Outputs
 
 - `<features_root>/NNN-slug/01-investigation.md` from `.kss/templates/01-investigation.md`, ≤12k
@@ -108,8 +159,12 @@ system prompt.
   Confidence:
   Status: auto · reviewed: no
   ```
-- The **Investigation** block of `README.md` only, ≤10 lines: the layers confirmed, and the count
-  of auto and open decisions per category.
+- The **Investigation** block of `README.md`, ≤10 lines: the layers confirmed, and the count of
+  auto and open decisions per category.
+- **M only**, from the decision check: `02-decisions.md` (`D-`/`DF-` entries), the `reviewed` /
+  `overridden` statuses in `auto-decisions.md`, and the **Decisions** block of `README.md`.
+- The README header `**Next:**` — the output of `node .kss/scripts/next.mjs … --after investigate`
+  (with `--escalate grill` when the user chose the grill).
 - `.kss/current` (DESIGN.md §3.3) — on spawn:
 
   ```bash
@@ -122,6 +177,13 @@ system prompt.
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): investigate"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
 Print exactly:
 
 ```
@@ -133,17 +195,21 @@ Found:
 Size: <S|M|L><, revised from X> · Track: <track>
 Decisions:
   Auto: AD-01, AD-02, …
-  Open · business: <one line each>
+  Open · business: <one line each>          (L — these go to the grill)
   Open · layout: <one line each>
   Open · technical: <one line each>
+  Decided inline: D-01…D-NN · deferred: <DF-ids or none>   (M — from the decision check)
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-<next> NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after investigate [--auto <n>] [--escalate grill]>
 ```
 
-`Next` is `/kss-review-decisions NNN-slug` when there are auto decisions (say `(optional)`),
-then `/kss-grill NNN-slug`. On an M track with no open items, `Next: /kss-spec NNN-slug`. On L,
-the grill always follows.
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after investigate`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. Pass `--auto <n>`
+(the number of `AD-` entries) so L gets the `/kss-review-decisions` offer, and `--escalate grill`
+when the user answered `grill` in the decision check. On L the result is `/kss-grill`; on M it is
+`/kss-spec` — never `/kss-grill` unless escalated, never `/kss-review-decisions`.
 
 ## Rules
 

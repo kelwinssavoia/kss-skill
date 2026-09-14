@@ -60,6 +60,15 @@ export function readCurrent(cwd) {
   return cur
 }
 
+/**
+ * True while a run is live. `phase: "done"` is what `current.mjs end` writes when the last skill of
+ * a feature finishes: the feature stays named (kss-status still reads it) but every hook is a no-op,
+ * so nothing lands in metrics.jsonl after the closing commit (DESIGN.md §3.8).
+ */
+export function isActive(current) {
+  return !!(current && typeof current === 'object' && current.feature && current.phase !== 'done')
+}
+
 export function currentPath(cwd) {
   return join(cwd, '.kss', 'current')
 }

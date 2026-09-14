@@ -26,11 +26,19 @@ alternatives, evidence, confidence — is already in `auto-decisions.md`.
 
 ## Preconditions
 
+0. **Sweep** (DESIGN.md §3.8). Run
+   `git status --porcelain -- <features_root> <every path in domain_docs> <docs_root> .kss/config.md`.
+   If it lists anything, the previous phase's `SessionEnd` metrics line (written by the hook
+   *after* that phase committed) or a forgotten artifact is sitting in the tree: commit it now,
+   `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
+   in one line. Never stash or discard it, never mix it into this phase's commit.
+
 1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
 2. The feature folder must exist, else stop with: `No feature NNN-slug under <features_root>.`
 3. `auto-decisions.md` must exist and hold at least one `AD-` entry. If it is missing or empty,
    stop with exactly:
-   `No auto decisions for NNN-slug — nothing to review. Next: /kss-grill NNN-slug.`
+   `No auto decisions for NNN-slug — nothing to review.` followed by the line from
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review-decisions`.
 4. `README.md` must show the Investigation block filled. If it does not, stop with:
    `NNN-slug has not been investigated yet. Run /kss-investigate first.`
 
@@ -92,6 +100,13 @@ alternatives, evidence, confidence — is already in `auto-decisions.md`.
 
 ## Summary
 
+**Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
+branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
+.kss/config.md && git commit -m "docs(NNN): review-decisions"`. Then
+`git status --porcelain -- <those paths>` must be empty; if it is not, stop with
+`Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
+gitignored and never part of this.
+
 Print exactly:
 
 ```
@@ -102,11 +117,13 @@ Overridden: <AD-id → D-id, …, or none>
 Open for the grill: <n>
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
-Next: /kss-<next> NNN-slug
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after review-decisions>
 ```
 
-`Next` is `/kss-grill` when there is at least one open item, `/kss-spec` otherwise. When the run
-happened after the spec, `Next: /kss-spec NNN-slug` — it rewrites only the affected FRs.
+The `Next:` line is **never written by hand**: it is the output of
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after review-decisions`, which knows the track of the
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On L it points at the grill; on M at the
+spec; run after the spec, at the spec again — it rewrites only the affected FRs.
 
 ## Rules
 

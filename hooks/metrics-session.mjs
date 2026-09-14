@@ -2,7 +2,7 @@
 // SessionEnd → append one `kind: "session"` line, attributing the main session's
 // cost to the phase named in `.kss/current`. Every `reason` is recorded.
 
-import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summariseTranscript, activeTicket } from './kss-lib.mjs'
+import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summariseTranscript, activeTicket, isActive } from './kss-lib.mjs'
 
 async function main() {
   const payload = parseJson(await readStdin(), null)
@@ -10,7 +10,7 @@ async function main() {
   const cwd = typeof payload.cwd === 'string' && payload.cwd ? payload.cwd : process.cwd()
 
   const current = readCurrent(cwd)
-  if (!current || !current.feature) return
+  if (!isActive(current)) return
   const dir = featureDir(cwd, current)
   if (!dir) return
 

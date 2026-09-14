@@ -92,8 +92,18 @@ Then, still one turn each:
 16. Print the full config as it will be written, plus the file list below, and ask for
     confirmation. Nothing is written before this answer.
 17. Ask whether to install the KSS statusline into the **user-level** `~/.claude/settings.json`.
+    First read the current `statusLine.command` and classify it:
+    - **absent** — nothing to back up;
+    - **already KSS** — the command contains `statusline.mjs` or the word `kss`. Nothing is backed
+      up (backing it up is how the fallback ends up calling itself — see DESIGN.md §18.1). Say
+      "statusline is already KSS at `<old path>`; it will be pointed at `<PLUGIN>`" and only
+      refresh the path;
+    - **something else** — it is copied to the **user-level** `~/.kss/statusline.backup.json`,
+      **unless that file already exists**, in which case the existing backup is kept and the user
+      is told so. The backup is never written inside the repository.
+
     Show exactly what will change:
-    - the existing `statusLine` value (if any) is copied to `<repo>/.kss/statusline.backup.json`;
+    - the backup action decided above;
     - `statusLine` becomes
       `{"type": "command", "command": "node <PLUGIN>/scripts/statusline.mjs"}`.
     This is the **one** absolute plugin path KSS writes anywhere, and it is resolved now, at init
@@ -120,10 +130,10 @@ On confirmation, write — in this order:
 2. `.kss/templates/` — copy every file and folder under `<PLUGIN>/templates/` into it. The skills
    read templates from here, so the project can customise them. If `.kss/templates/` already
    exists, ask before overwriting; never merge silently.
-3. `.kss/scripts/` — copy every `<PLUGIN>/scripts/*.mjs` plus `<PLUGIN>/hooks/kss-lib.mjs` (the
+3. `.kss/scripts/` — copy every `<PLUGIN>/scripts/*.mjs` **except `*.test.mjs`** plus `<PLUGIN>/hooks/kss-lib.mjs` (the
    scripts import it) into it, overwriting freely: these are plugin copies, not user content. The
    skills invoke them as `node .kss/scripts/current.mjs …` and
-   `node .kss/scripts/render-cost.mjs …`. Verify with
+   `node .kss/scripts/render-cost.mjs …` and `node .kss/scripts/next.mjs …`. Verify with
    `node .kss/scripts/current.mjs get` — it must print `null` and exit 0.
 4. `.claude/agents/` — **only when the plugin's agents are not already available**. The plugin
    ships the eight (`kss-sonnet-low`, `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`,
@@ -133,13 +143,24 @@ On confirmation, write — in this order:
    ones that are absent, asking before overwriting any that exists and accepting "keep mine".
    **A project copy is a fork**: it stops following plugin releases and has to be re-synced by
    hand, which is how a project ends up running last month's rules.
-5. `.gitignore` — append `.kss/current` and `.kss/worktrees/` if they are not already ignored.
-   Both are live state, not history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each
-   ticket's git worktree). Leave `.kss/config.md`, `.kss/templates/`, `.kss/scripts/` and the
-   feature folders tracked.
-6. `~/.claude/settings.json` — only if step 17 was a yes. Back up `statusLine` first, preserving
-   whatever shape it had, into `<repo>/.kss/statusline.backup.json`. Keep the rest of the file
-   byte-identical apart from that key.
+5. `.gitignore` — append `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` if
+   they are not already ignored. The first two are live state, not history
+   (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each ticket's git worktree); the third
+   is the legacy per-project backup, a user setting that must never be committed. Leave
+   `.kss/config.md`, `.kss/templates/`, `.kss/scripts/` and the feature folders tracked.
+
+5b. **Legacy backup migration** — always, whether or not step 17 was a yes. If
+   `<repo>/.kss/statusline.backup.json` exists:
+   - when its command contains `statusline.mjs` or `kss`, **delete it** and say
+     "removed self-referencing .kss/statusline.backup.json (kss ≤ 0.1.3 bug)". Also remove it from
+     git (`git rm --cached -q .kss/statusline.backup.json`) if it is tracked;
+   - otherwise **move** it to `~/.kss/statusline.backup.json` when that file does not exist yet,
+     or delete the project copy when a user-level backup is already there. Say which.
+6. `~/.claude/settings.json` — only if step 17 was a yes. Apply the backup action decided in
+   step 17 first: write `~/.kss/statusline.backup.json` (creating `~/.kss/`) preserving whatever
+   shape the old value had, or write nothing when the old value was already KSS or a backup
+   exists. **Never write a backup whose command contains `statusline.mjs` or `kss`.** Then set
+   `statusLine`. Keep the rest of the file byte-identical apart from that key.
 
 Do **not** write hooks into any settings file. The plugin's `hooks/hooks.json` is merged
 automatically while the plugin is enabled; say so in the summary.
@@ -151,10 +172,10 @@ automatically while the plugin is enabled; say so in the summary.
 | `~/.kss/preferences.md` | `conversation_language` — user-local, outside the repo, never committed |
 | `.kss/config.md` | the answers |
 | `.kss/templates/` | the project's copy of the KSS templates |
-| `.kss/scripts/` | `current.mjs`, `render-cost.mjs`, `statusline.mjs`, `kss-lib.mjs` — what the skills call |
+| `.kss/scripts/` | `current.mjs`, `next.mjs`, `render-cost.mjs`, `statusline.mjs`, `kss-lib.mjs` — what the skills call |
 | `.claude/agents/kss-*.md` | the eight-agent matrix |
-| `.kss/statusline.backup.json` | the previous statusline, when one was replaced |
-| `.gitignore` | `.kss/current` and `.kss/worktrees/` added |
+| `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — user-local, never in the repo |
+| `.gitignore` | `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` added |
 
 `.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
 
@@ -169,7 +190,8 @@ Languages: conversation <conversation_language | follows you> · docs <docs_lang
 Templates: .kss/templates/ (<n> files)
 Scripts: .kss/scripts/ (<n> files) — skills call node .kss/scripts/current.mjs
 Agents: .claude/agents/ (<n> written, <n> kept)
-Statusline: installed | skipped (previous backed up to .kss/statusline.backup.json)
+Statusline: installed (previous backed up to ~/.kss/statusline.backup.json) | installed (already KSS, path refreshed) | skipped
+Legacy backup: none | removed self-referencing .kss/statusline.backup.json | moved to ~/.kss/
 Hooks: come with the plugin — SubagentStop, SessionEnd, Stop. Nothing to install.
 Next: /kss-clarify <what you want to build>
 ```
@@ -184,6 +206,9 @@ Next: /kss-clarify <what you want to build>
 - `~/.kss/preferences.md` is user-local: never write it inside the repository, never commit it, and
   never overwrite an existing value without the user confirming the change.
 - Never invent the plugin path either — search for it, and ask when the search is not conclusive.
+- Never back up a `statusLine` that is already KSS, and never write `statusline.backup.json` inside
+  the repository. A backup that points at the KSS statusline makes the fallback spawn itself
+  (DESIGN.md §18.1).
 - `${CLAUDE_PLUGIN_ROOT}` is for hooks only; the scripts go into `.kss/scripts/` so the skills can
   reach them without it.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's

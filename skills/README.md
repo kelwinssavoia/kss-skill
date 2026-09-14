@@ -7,9 +7,9 @@ normative spec for every one of them.
 | --- | --- | --- |
 | `kss-init` | Sets KSS up in a project: writes `.kss/config.md`, copies the templates and scripts, installs the agent matrix and the statusline. Once per project. | *(no arguments)* |
 | `kss-clarify` | Turns a vague request into a brief, picks size and track, creates the feature folder and branch. | `<free text \| path \| url>` |
-| `kss-investigate` | Read-only explorers map where the feature lives and what to reuse; every decision is classified auto or open. | `NNN-<slug> [--model opus]` |
+| `kss-investigate` | Read-only explorers map where the feature lives and what to reuse; every decision is classified auto or open. On M (no grill) it ends with the decision check: one table, one answer, every open item decided or deferred. | `NNN-<slug> [--model opus]` |
 | `kss-review-decisions` | Shows the auto decisions in one table and accepts, reopens or overrides them in a single turn. Optional. | `NNN-<slug>` |
-| `kss-grill` | Interviews the user on every open decision, one per turn, business → layout → technical. | `NNN-<slug>` |
+| `kss-grill` | Interviews the user on every open decision, one per turn, business → layout → technical. L only, unless the M decision check escalates. | `NNN-<slug>` |
 | `kss-spec` | Writes `03-spec.md`: the functional specification, every FR cited to a recorded decision. | `NNN-<slug>` |
 | `kss-plan` | Writes `04-plan.md`: the implementation shape — models, contracts, flows, UI, reuse, file map, test plan. | `NNN-<slug>` |
 | `kss-tickets` | Slices the plan into self-contained tickets plus the dependency graph. | `NNN-<slug>` |
