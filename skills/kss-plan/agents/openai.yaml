@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Plan"
+  short_description: "Design the implementation shape"
+  default_prompt: "Use $kss-plan to design the implementation shape for this feature."
+policy:
+  allow_implicit_invocation: false

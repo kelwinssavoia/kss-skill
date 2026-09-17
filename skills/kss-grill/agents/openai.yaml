@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Grill"
+  short_description: "Interview every open decision"
+  default_prompt: "Use $kss-grill to settle the open decisions one question at a time."
+policy:
+  allow_implicit_invocation: false

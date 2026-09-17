@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Review"
+  short_description: "Work the PR review rounds"
+  default_prompt: "Use $kss-review to work the review round on this feature's PR."
+policy:
+  allow_implicit_invocation: false

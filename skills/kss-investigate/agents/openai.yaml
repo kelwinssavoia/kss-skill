@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Investigate"
+  short_description: "Map where a feature lives"
+  default_prompt: "Use $kss-investigate to map where this feature lives and what to reuse."
+policy:
+  allow_implicit_invocation: false

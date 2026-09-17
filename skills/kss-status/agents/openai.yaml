@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Status"
+  short_description: "Print the KSS board for this project"
+  default_prompt: "Use $kss-status to show where my KSS features stand."
+policy:
+  allow_implicit_invocation: false

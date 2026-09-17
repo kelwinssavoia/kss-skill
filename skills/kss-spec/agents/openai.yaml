@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Spec"
+  short_description: "Write the functional specification"
+  default_prompt: "Use $kss-spec to write the functional specification for this feature."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Review Decisions"
+  short_description: "Accept or reopen auto decisions"
+  default_prompt: "Use $kss-review-decisions to review the decisions taken without me."
+policy:
+  allow_implicit_invocation: false

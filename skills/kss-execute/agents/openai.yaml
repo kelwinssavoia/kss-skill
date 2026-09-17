@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Execute"
+  short_description: "Run the tickets to a pull request"
+  default_prompt: "Use $kss-execute to run this feature's tickets and open the PR."
+policy:
+  allow_implicit_invocation: false
