@@ -1,6 +1,6 @@
 ---
 name: kss-tickets
-description: Slice a KSS plan into self-contained tickets plus a dependency graph — layer-sliced parallel tickets in multi-agent mode, vertical tracer-bullet slices in single-session mode. Use after /kss-plan, before /kss-execute.
+description: Slice a KSS plan into self-contained tickets plus a dependency graph — layer-sliced parallel tickets in multi-agent mode, vertical tracer-bullet slices in single-session mode. Use after kss-plan, before kss-execute.
 argument-hint: NNN-<slug>
 disable-model-invocation: true
 ---
@@ -19,7 +19,7 @@ mirrored card per ticket.
 Read `~/.kss/preferences.md` for `conversation_language` (everything printed in this session).
 
 Read `.kss/config.md` — `execution` (decides everything below), `features_root`, `standards`,
-`tracker`, `explorer_model`. Then in `<features_root>/NNN-slug/`:
+`tracker`, `explorer_tier`. Then in `<features_root>/NNN-slug/`:
 
 - `README.md` — whole file.
 - `04-plan.md` — **File map, Test plan, Contracts, Reuse** (and Approach for context).
@@ -27,8 +27,19 @@ Read `.kss/config.md` — `execution` (decides everything below), `features_root
   `blocked by DF-` markers.
 
 **Do not read:** application source code, `01-investigation.md`, `06-execution.md`, `notes/`
-beyond a note a File map row links, or `node_modules`. You may spawn a `kss-explorer` only to
+beyond a note a File map row links, or `node_modules`. You may spawn an `explorer` only to
 resolve a line range a ticket must cite.
+
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
 
 ## Preconditions
 
@@ -39,14 +50,14 @@ resolve a line range a ticket must cite.
    `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
-1. `.kss/config.md` missing → stop: `No .kss/config.md. Run /kss-init first.`
+1. `.kss/config.md` missing → stop: `No .kss/config.md. Run kss-init first.`
 2. `04-plan.md` missing → it depends on the track in the README header:
    - **S track** (`clarify → tickets → execute`): there is no plan and no spec by design. Slice
      from `00-brief.md` alone — see *S track* below. If `00-brief.md` is also missing, stop:
-     `No brief for NNN-slug. Run /kss-clarify first.`
-   - **M or L track** → stop: `No 04-plan.md for NNN-slug. Run /kss-plan NNN-slug first.`
+     `No brief for NNN-slug. Run kss-clarify first.`
+   - **M or L track** → stop: `No 04-plan.md for NNN-slug. Run kss-plan NNN-slug first.`
 3. `04-plan.md` has an unconfirmed new dependency (`Confirmed: pending`) → stop:
-   `04-plan.md has unconfirmed dependencies: <names>. Re-run /kss-plan NNN-slug.`
+   `04-plan.md has unconfirmed dependencies: <names>. Re-run kss-plan NNN-slug.`
 4. `05-tickets/` already populated → say so and ask whether to re-slice (replacing) or stop.
    Never silently overwrite tickets that `06-execution.md` shows as started.
 5. `execution` is neither `multi-agent` nor `single-session` → stop:
@@ -62,16 +73,16 @@ resolve a line range a ticket must cite.
 
 ### S track — no spec, no plan
 
-An S feature reaches this skill straight from `/kss-clarify`, so there is nothing to read but
+An S feature reaches this skill straight from `kss-clarify`, so there is nothing to read but
 `00-brief.md` and `README.md`. It is **one ticket**, always: one layer, one surface, no new data
 and no contract — that is what made it an S. Fill the ticket from the brief (the expected outcome
 becomes the Goal; the brief's own sentences stand in for the *Requirements covered* section, cited
-as `brief`), leave *Plan excerpt* out, and spawn a `kss-explorer` for the file paths, line ranges
+as `brief`), leave *Plan excerpt* out, and spawn an `explorer` for the file paths, line ranges
 and existing spec file the ticket must name — the executor gets no other source. Mode fields still
-apply: multi-agent gets a header, a model and an effort; single-session gets an order. `graph.md`
+apply: multi-agent gets a header and a tier; single-session gets an order. `graph.md`
 holds that single entry, with no critical path. If the work does not fit one ticket, it was not an
 S: say so and stop with
-`NNN-slug is larger than one ticket. Re-run /kss-clarify NNN-slug and raise the size to M.`
+`NNN-slug is larger than one ticket. Re-run kss-clarify NNN-slug and raise the size to M.`
 
 Everything below applies to M and L.
 
@@ -91,14 +102,24 @@ Everything below applies to M and L.
 6. **A final `integration` ticket is mandatory whenever more than one ticket follows the
    contract**: wire the parts together, replace the UI's mocked client with the real one, and run
    the seams end to end. It is blocked by all of them and is small.
-7. **Assign Model and Effort from this rubric**, per ticket:
+7. **Assign a Tier from this rubric**, per ticket. The tier says how much agent the work deserves;
+   which model that is belongs to the harness, not to the ticket (`.kss/references/tiers.md`).
+
+   | Tier | The ticket it belongs to |
+   | --- | --- |
+   | `T1` | one layer, 1–2 files, copying an existing pattern |
+   | `T2` | one layer, several files, fitting the plan to the code |
+   | `T3` | a demanding single layer that still follows a decided design |
+   | `T4` | work with design judgement in it |
+   | `T5` | contract, wire spec, tenant/authorization, money, cross-service flow, debugging |
 
    | Field | Rule |
    | --- | --- |
-   | Model | `opus` for contract, tenant/authorization, money, wire specs and design-deciding work; `sonnet` otherwise |
-   | Effort | `low` = one layer, 1–2 files, copying an existing pattern · `medium` = one layer, several files, fitting the plan to the code · `high` = contract / wire / tenant / money / cross-service / debugging |
    | Helpers | `explorer` or `none` (`runner` is coordinator-only). Depth max 2; helpers never write code or run commands; ≤5 per ticket; helper return ≤1.5k |
    | Worktree | yes |
+
+   **Never write a model name into a ticket or the graph.** A ticket that says `opus` cannot be
+   executed from the other harness, which is the whole reason tiers exist.
 
 8. Write one file per ticket, `05-tickets/NN-<slug>.md`, from `.kss/templates/ticket.md`, using the **multi-agent header** and deleting
    the single-session header comment.
@@ -137,7 +158,7 @@ Every ticket carries all of these, self-contained:
 - **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run any test,
   lint, build or tsc command
 - **Report back** — the fixed shape, **≤1.5k chars**. It is exactly the shape the executor agents
-  (`agents/kss-*.md`) are told to return, and exactly what `kss-execute`'s gates check; copy it
+  (the executor preamble in the harness adapter) are told to return, and exactly what `kss-execute`'s gates check; copy it
   verbatim from `.kss/templates/ticket.md` rather than paraphrasing it:
 
   ```
@@ -154,8 +175,8 @@ Every ticket carries all of these, self-contained:
 
 From `.kss/templates/graph.md`, keeping **only the section for the configured mode**.
 
-- **Multi-agent** — the table `# | Ticket | Layer | Blocked by | Model | Effort | Est. turns |
-  Worktree`, then `Critical path`, `Parallel after contract`, `Total estimate`.
+- **Multi-agent** — the table `# | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree`,
+  then `Critical path`, `Parallel after contract`, `Total estimate`.
 - **Single-session** — the ordered list, each entry with Files, Est. context and `/clear before`.
 
 Footer either way: the FRs excluded because a `DF-` blocks them, with owner and date.
@@ -196,7 +217,7 @@ Record the card ids in the Tickets block. If publishing fails, say so and contin
   Files: 05-tickets/ · graph.md<tracker cards>
   ```
 
-  Update the header `**State:**` to `tickets` and `**Next:**` to `/kss-execute NNN-slug`.
+  Update the header `**State:**` to `tickets` and `**Next:**` to `kss-execute NNN-slug`.
 - State (DESIGN.md §3.3):
   `node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"tickets","phase_started_at":"<ISO-8601>","explorers":null}'`
   — or edit `.kss/current` directly so it holds `feature` and `phase`.
@@ -235,7 +256,7 @@ tool displays.
 - **The ticket is the brief.** Everything the executor needs is pasted in; it never opens the spec
   or the plan. A ticket that only cites `FR-07` instead of quoting it is incomplete.
 - **An S feature has no plan and no spec** — it is sliced into exactly one ticket from
-  `00-brief.md`. Never send an S track back to `/kss-plan`; that is not part of its track.
+  `00-brief.md`. Never send an S track back to `kss-plan`; that is not part of its track.
 - **Never schedule an FR blocked by a `DF-`.** It waits for its owner; it is listed, not sliced.
 - **Above 80 estimated turns, re-slice.** Never ship an oversized ticket with a warning.
 - **One layer per ticket** in multi-agent mode; **one vertical whole per slice** in single-session
@@ -244,9 +265,11 @@ tool displays.
   UI works against a mocked client until integration.
 - **An `integration` ticket is mandatory** whenever more than one ticket follows the contract.
 - **Helpers**: `explorer` only, depth max 2, ≤5 per ticket, read-only, return ≤1.5k. Helpers
-  never write code and never run a command; `kss-runner` is the coordinator's alone.
-- Single-session tickets carry **no model, no effort, no worktree, no graph table** — inventing
-  them there is a defect.
+  never write code and never run a command; the `runner` role is the coordinator's alone.
+- Single-session tickets carry **no tier, no worktree, no graph table** — inventing them there is a
+  defect.
+- **A ticket names a tier, never a model or an agent type.** The harness adapter turns `T3` into
+  whatever it spawns; the ticket stays executable from either one.
 - Every ticket's Tests section demands the **specs written and committed before the
   implementation, and run by nobody** — the coordinator runs the suite once after integration —
   and the report-back shape is fixed and ≤1.5k.

@@ -2,8 +2,11 @@
 
 <!-- multi-agent header -->
 **Layer:** {{layer}} · **Blocked by:** {{blocked_by}} · **Blocks:** {{blocks}} ·
-**Model:** {{opus|sonnet}} · **Effort:** {{low|medium|high}} · **Helpers:** {{explorer|none}} ·
+**Tier:** {{T1|T2|T3|T4|T5}} · **Helpers:** {{explorer|none}} ·
 **Est.:** {{turns}} turns · **Worktree:** yes
+
+<!-- The tier says how much agent this ticket deserves, never which model: the same ticket may be
+     executed from either harness. `.kss/references/tiers.md` maps it. -->
 
 <!-- single-session header
 **Order:** {{n}} · **Est. context:** {{k}}k · **/clear before:** {{yes|no}}

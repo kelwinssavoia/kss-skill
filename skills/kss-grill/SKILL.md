@@ -26,6 +26,17 @@ into `CONTEXT.md` and `docs/adr/`, so the next phase inherits them.
 **Do not read:** the rest of `01-investigation.md`, `00-brief.md`, `03-spec.md`, `04-plan.md`, any
 ticket, any source file or test. The full body of an auto decision is not read — only its ID.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -35,9 +46,9 @@ ticket, any source file or test. The full body of an auto decision is not read �
    `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
-1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
+1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run kss-init first.`
 2. `01-investigation.md` must exist with a `## Decisions` section, else stop with:
-   `No investigation for NNN-slug. Run /kss-investigate first.`
+   `No investigation for NNN-slug. Run kss-investigate first.`
 3. Count the open items — items marked `open`, plus every `AD-` with `status: reopened`.
    - On an **M** track the grill is optional (`next.mjs --check grill` → `optional`): it runs only
      when the user escalated to it from the decision check. With zero open items — or when the
@@ -67,14 +78,14 @@ ticket, any source file or test. The full body of an auto decision is not read �
    question** — business options are consequences, not recommendations; state the consequence of
    each option instead. Omit the `Lean:` line entirely when there is no lean.
 3. **Never ask about a `settled` or `default` item.** Those were decided by the investigation and
-   are reviewed with `/kss-review-decisions`, not here.
-4. If an answer needs a repository fact that was not fetched, spawn **one** `kss-explorer`
-   (sonnet, read-only) for it and continue. **Never ask the user for a repo fact.** The grill
+   are reviewed with `kss-review-decisions`, not here.
+4. If an answer needs a repository fact that was not fetched, spawn **one** `explorer` for it and
+   continue. **Never ask the user for a repo fact.** The grill
    spawns nothing else.
 5. If an answer contradicts an auto decision, mark that `AD-NN` `status: overridden` in
    `auto-decisions.md`, link it forward to the new `D-NN`, and record the `D-NN` normally.
 6. **At most one derived question per answer.** A second branch becomes a `## Deferred` entry, or
-   goes back to `/kss-investigate` — say which, and move on.
+   goes back to `kss-investigate` — say which, and move on.
 7. "Don't know", "later", "we'll see" → a `## Deferred` entry `DF-NN` with an **owner** and a
    **date**, both asked for in the same turn. A `DF-` without both is not recorded.
 8. Domain modeling is part of the interview, not a separate pass:
@@ -155,7 +166,7 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
 - Order is business → layout → technical, one question per turn, no cap on the count.
 - The question format is fixed, `something else` is always an option, and `Lean:` is never offered
   for a business question.
-- Never ask the user for a repository fact — spawn one sonnet `kss-explorer` for it. The grill
+- Never ask the user for a repository fact — spawn one `explorer` for it. The grill
   spawns nothing else.
 - At most one derived question per answer; further branches go to Deferred or back to
   investigation.

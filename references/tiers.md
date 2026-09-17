@@ -20,6 +20,7 @@ Plus three fixed roles, which are not a ladder and are never assigned to a ticke
 | Role | What it does |
 | --- | --- |
 | `explorer` | answers **one** bounded, read-only question about the code, with `file:line` evidence |
+| `explorer-deep` | the same job on a question that touches a contract, tenant isolation or money — the questions where a cheap wrong answer is expensive. `kss-investigate` and `kss-plan` escalate to it on their own, saying so before they spawn |
 | `reviewer` | reads one finished ticket's diff and report, returns approve or reject with numbered findings; read-only |
 | `runner` | runs exactly the command it is given and returns the summary and the failures; **coordinator-only**, and only for the single final run |
 
@@ -40,6 +41,7 @@ folder can see the equivalence without opening either adapter.
 | `T4` | `kss-opus-medium` | `gpt-6-astra` · `medium` |
 | `T5` | `kss-opus-high` | `gpt-6-astra` · `high` |
 | `explorer` | `kss-explorer` | `gpt-5.4-mini` · `low`, read-only |
+| `explorer-deep` | `kss-opus-medium`, prompted read-only | `gpt-6-astra` · `medium`, read-only |
 | `reviewer` | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |
 | `runner` | `kss-runner` | `gpt-5.4-mini` · `low` |
 
@@ -61,3 +63,7 @@ instead of a tier. Translate on the fly; do not rewrite the ticket:
 
 There was never an `opus` + `low`. A ticket carrying it is a defect: read it as `T4`, and say so in
 the execution log.
+
+The config key moved with it: `explorer_model: sonnet|opus` became
+`explorer_tier: explorer|explorer-deep`. A project still carrying the old key reads `opus` as
+`explorer-deep` and anything else as `explorer`; `kss-init` rewrites it on its next run.

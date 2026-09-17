@@ -6,12 +6,12 @@ Append-only. One timestamped line per event. States: `blocked`, `ready`, `runnin
 ## Board (last render)
 
 ```
-kss · {{NNN}}-{{slug}} · execute
+kss · {{NNN}}-{{slug}} · execute · {{harness}}
 {{bar}}  {{n}}/{{N}} integrated · {{pct}}% of estimated turns
 
-| # | Ticket | State | Agent | Turns used/est | Since |
+| # | Ticket | State | Tier | Turns used/est | Since |
 | --- | --- | --- | --- | --- | --- |
-| {{NN}} | {{title}} | {{state}} | {{agent}} | {{used}}/{{est}} | {{since}} |
+| {{NN}} | {{title}} | {{state}} | {{tier}} | {{used}}/{{est}} | {{since}} |
 
 Critical path: {{path}}
 Elapsed: {{elapsed}}   Tokens: {{tokens}}

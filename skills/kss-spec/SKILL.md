@@ -10,7 +10,7 @@ disable-model-invocation: true
 Write `03-spec.md` for feature `NNN-<slug>`: the functional specification. You audit the inputs
 first, take exactly one confirmation turn on the test seams, then write the file. The spec says
 **what the system must do and how it is proven**, never how it is coded — shape and design belong
-to `/kss-plan`. Every requirement is traceable to a recorded decision; an uncited requirement is a
+to `kss-plan`. Every requirement is traceable to a recorded decision; an uncited requirement is a
 requirement someone invented, and this skill refuses it.
 
 ## Inputs
@@ -33,6 +33,17 @@ Read `.kss/config.md` for `features_root`, `standards` and `layout_references`, 
 `01-investigation.md`, `node_modules`, or any layout file the brief does not name. You do not
 explore the repository in this phase; if a fact is missing it is an Open item, not a search.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -43,11 +54,11 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
 1. `.kss/config.md` must exist. If not, stop with:
-   `No .kss/config.md. Run /kss-init first.`
+   `No .kss/config.md. Run kss-init first.`
 2. The feature folder must exist and `README.md` must show the **Decisions block filled** — by the
    grill on L, by the decision check inside `kss-investigate` (`Decided inline: yes`) on M. The
    precondition is the same on every track. Otherwise stop with:
-   `NNN-slug is at phase <phase>. Run /kss-<expected> NNN-slug first.` where `<expected>` is the
+   `NNN-slug is at phase <phase>. Run kss-<expected> NNN-slug first.` where `<expected>` is the
    phase named by `node .kss/scripts/next.mjs <features_root>/NNN-slug --after <phase>`.
 3. `03-spec.md` already present → this is a **revision**; follow Procedure step 8.
 
@@ -63,7 +74,7 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
    | The layout view exists | ok / missing: … |
 
    - An undecided question that is not a `D-`, `AD-` or `DF-` → **stop**:
-     `Undecided: <list>. Run /kss-grill NNN-slug — the spec cannot cite what was never decided.`
+     `Undecided: <list>. Run kss-grill NNN-slug — the spec cannot cite what was never decided.`
    - A `DF-` without an owner or a date → **stop** with the same instruction, naming the entries.
    - An actor or surface with no coverage → do not stop; record it under **Open items**.
    - The layout view is missing → do not stop; record it under **Open items** and leave the Layout
@@ -105,7 +116,7 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
 
 7. **Check the cap.** `wc -c` the file. Over 15k → do not ship it:
    `03-spec.md is <n>k, over the 15k cap. This feature is too large for one spec — split it into
-   <suggested split> and re-run /kss-clarify for the second part.`
+   <suggested split> and re-run kss-clarify for the second part.`
    Move genuinely secondary detail to `notes/` and link it only when that alone brings it under cap.
 
 8. **Revision.** When `03-spec.md` exists, re-read the decisions, find the FRs citing decisions that
@@ -127,7 +138,7 @@ explore the repository in this phase; if a fact is missing it is an Open item, n
   File: 03-spec.md (<n>k / 15k)
   ```
 
-  Also update the header `**State:**` to `spec` and `**Next:**` to `/kss-plan NNN-slug`.
+  Also update the header `**State:**` to `spec` and `**Next:**` to `kss-plan NNN-slug`.
 - State (DESIGN.md §3.3):
   `node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"spec","phase_started_at":"<ISO-8601>","explorers":null}'`
   — or edit `.kss/current` directly so it holds `feature` and `phase`. This phase spawns nothing.
@@ -158,7 +169,8 @@ The `Next:` line is **never written by hand**: it is the output of
 feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header.
 
 The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl` — the phase's agents,
-turns and cumulative tokens. Never report the number the Agent tool displays.
+turns and cumulative tokens. Never report the number the harness displays for a subagent — that is its final context size, not
+what it consumed.
 
 ## Rules
 

@@ -1,7 +1,7 @@
 ---
 name: kss-investigate
 description: Second KSS phase — read-only explorers map where the feature lives and what to reuse, and every decision is classified auto or open. Run it after kss-clarify on an M or L track.
-argument-hint: NNN-<slug> [--model opus]
+argument-hint: NNN-<slug> [--deep]
 disable-model-invocation: true
 ---
 
@@ -28,6 +28,17 @@ report back. Do not read `03-spec.md`, `04-plan.md` or any later phase file. Nev
 explorer to read the files in `standards` (`CLAUDE.md` and friends): they are already in its
 system prompt.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -37,12 +48,12 @@ system prompt.
    `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
-1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
+1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run kss-init first.`
 2. The feature folder must exist with a `00-brief.md`, else stop with:
-   `No brief for NNN-slug. Run /kss-clarify first.`
+   `No brief for NNN-slug. Run kss-clarify first.`
 3. `README.md` must show the Brief block filled and State `clarify` (or a later phase, when
    re-running). If the Brief block is empty, stop with:
-   `NNN-slug has no brief block. Run /kss-clarify first.`
+   `NNN-slug has no brief block. Run kss-clarify first.`
 4. Run `node .kss/scripts/next.mjs <features_root>/NNN-slug --check investigate`. On `off-track`
    (an S feature) stop with:
    `NNN-slug is size S — investigation is not part of its track.` followed by the line from
@@ -60,14 +71,15 @@ system prompt.
    | `domain_docs` present | the glossary terms and the ADRs in force for this area |
 
 2. Group the questions into **1–5 explorers** — never more than 5; group the questions when there
-   are more. Each explorer is spawned with the agent type **`kss-explorer`**, model
-   `explorer_model` from the config. **Spawn them all in parallel, in one message.**
-3. **Escalate to opus** any question touching a contract, tenant/authorization, or money. Before
-   spawning, print verbatim:
+   are more. Each one is spawned in the **`explorer`** role, at the tier `explorer_tier` names in
+   the config (default `explorer`); the adapter says what that is here. **Spawn them all in
+   parallel, in one turn.**
+3. **Escalate to `explorer-deep`** for any question touching a contract, tenant/authorization, or
+   money. Before spawning, print verbatim:
 
-   > This question touches `<area>`; spawning an Opus explorer for it.
+   > This question touches `<area>`; reading it with a deep explorer.
 
-   `--model opus` in the argument forces opus for every explorer, with no per-question warning.
+   `--deep` in the argument uses `explorer-deep` for every explorer, with no per-question warning.
 4. Every explorer brief states the question, the layers in scope, and this return format, ≤2k chars:
 
    ```
@@ -79,8 +91,8 @@ system prompt.
 
    It also states: read-only; grep first, then read ranges; never read a whole file over 300
    lines; never touch `node_modules`.
-5. Update `.kss/current` when the explorers are spawned and again as they return, so the
-   statusline can show `N explorers running · x/N returned`. `explorers` is always the object
+5. Update `.kss/current` when the explorers are spawned and again as they return, so the board
+   can show `N explorers running · x/N returned`. `explorers` is always the object
    `{"running": <fan-out size>, "returned": <how many are back>}` — never a bare number.
 6. **Synthesize only.** Write `01-investigation.md` from the returns. If a return is thin, spawn
    one more explorer for the gap — still within the cap of 5 at a time. Do not open the files
@@ -120,7 +132,7 @@ system prompt.
       ok                                   accept every auto decision and every proposal
       O-2: <decision>, AD-04: <override>   decide or override by id; anything not named is accepted
       defer O-3: <owner>, <date>           park an open item as a DF-
-      grill                                stop here and run /kss-grill instead
+      grill                                stop here and run kss-grill instead
       ```
    c. Apply it as `kss-review-decisions` and `kss-grill` would: accepted `AD-` → `reviewed: yes`;
       an override → `status: overridden` plus a `D-` in `02-decisions.md` (create it from
@@ -207,16 +219,16 @@ Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after inv
 The `Next:` line is **never written by hand**: it is the output of
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --after investigate`, which knows the track of the
 feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. Pass `--auto <n>`
-(the number of `AD-` entries) so L gets the `/kss-review-decisions` offer, and `--escalate grill`
-when the user answered `grill` in the decision check. On L the result is `/kss-grill`; on M it is
-`/kss-spec` — never `/kss-grill` unless escalated, never `/kss-review-decisions`.
+(the number of `AD-` entries) so L gets the `kss-review-decisions` offer, and `--escalate grill`
+when the user answered `grill` in the decision check. On L the result is `kss-grill`; on M it is
+`kss-spec` — never `kss-grill` unless escalated, never `kss-review-decisions`.
 
 ## Rules
 
 - The main session synthesizes; it never reads code. Explorers read.
-- 1–5 explorers, in parallel, agent type `kss-explorer`, cap 5 — group questions beyond that.
-- Opus is auto-escalated for contract, tenant/authorization and money questions, with the warning
-  printed before the spawn. `--model opus` forces opus for all.
+- 1–5 explorers, in parallel, in the `explorer` role, cap 5 — group questions beyond that.
+- `explorer-deep` is auto-escalated for contract, tenant/authorization and money questions, with
+  the warning printed before the spawn. `--deep` uses it for all.
 - Explorers are read-only: grep first, read ranges, never a whole file over 300 lines, never
   `node_modules`, never told to read the `standards` files.
 - Explorer returns are ≤2k chars in the Answer / Evidence / Reuse / Unknown format, max 8 evidence

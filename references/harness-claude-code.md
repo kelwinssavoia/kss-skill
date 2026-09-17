@@ -28,6 +28,7 @@ concurrently — that is how the continuous frontier spawns everything that just
 | `T4` | `kss-opus-medium` |
 | `T5` | `kss-opus-high` |
 | `explorer` | `kss-explorer` |
+| `explorer-deep` | `kss-opus-medium`, with the read-only instruction in the prompt |
 | `reviewer` | `kss-reviewer` |
 | `runner` | `kss-runner` |
 

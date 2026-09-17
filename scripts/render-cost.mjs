@@ -43,6 +43,7 @@ function wall(ms) {
 function blank(label) {
   return {
     label,
+    harnesses: new Set(),
     agents: 0,
     turns: 0,
     fresh_in: 0,
@@ -59,6 +60,7 @@ function blank(label) {
 }
 
 function add(acc, o) {
+  if (typeof o.harness === 'string' && o.harness) acc.harnesses.add(o.harness)
   acc.agents += 1
   acc.turns += num(o.turns)
   const t = o.tokens || {}
@@ -83,8 +85,13 @@ function num(x) {
   return typeof x === 'number' && Number.isFinite(x) ? x : 0
 }
 
+/** Phases run from more than one harness print both — that is the handoff, visible in the table. */
+function harnesses(a) {
+  return a.harnesses.size ? [...a.harnesses].sort().join(' + ') : '—'
+}
+
 function row(a) {
-  return `| ${a.label} | ${a.agents} | ${a.turns} | ${human(a.fresh_in)} | ${human(a.cache_write)} | ${human(
+  return `| ${a.label} | ${harnesses(a)} | ${a.agents} | ${a.turns} | ${human(a.fresh_in)} | ${human(a.cache_write)} | ${human(
     a.cache_read
   )} | ${human(a.out)} | ${human(a.cumulative)} | ${wall(a.first !== null && a.last !== null ? a.last - a.first : 0)} | ${
     a.files
@@ -132,8 +139,8 @@ function main() {
   })
 
   const lines = [
-    '| Phase | Agents | Turns | Fresh in | Cache write | Cache read | Out | Cumulative | Wall | Files | +/− |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| Phase | Harness | Agents | Turns | Fresh in | Cache write | Cache read | Out | Cumulative | Wall | Files | +/− |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   ]
   for (const p of ordered) {
     lines.push(row(phases.get(p)))

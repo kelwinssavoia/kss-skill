@@ -20,6 +20,7 @@ async function main() {
   appendMetric(dir, {
     ts: new Date().toISOString(),
     phase: current.phase || null,
+    harness: current.harness || null,
     ticket: current.ticket || activeTicket(current),
     kind: 'session',
     agent_type: 'main-session',

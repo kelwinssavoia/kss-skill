@@ -53,6 +53,7 @@ authorisation to *spawn at all*, which is what invoking the phase gives it.
 | `T4` | `gpt-6-astra` | `medium` |
 | `T5` | `gpt-6-astra` | `high` |
 | `explorer` | `gpt-5.4-mini` | `low` |
+| `explorer-deep` | `gpt-6-astra` | `medium` |
 | `reviewer` | `gpt-6-astra` | `high` |
 | `runner` | `gpt-5.4-mini` | `low` |
 

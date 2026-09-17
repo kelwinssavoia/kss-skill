@@ -20,12 +20,23 @@ state, no git command that mutates. If something looks wrong, say so; do not rep
 
 Read nothing else. Never read `03-spec.md`, `04-plan.md` or any ticket file.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 When `.kss/current` has `phase: "done"` the run is closed (DESIGN.md §3.8): print the board with
 every phase that ran marked `done` and the line `Run closed — nothing left to run.` in place of Next.
 
-1. `.kss/config.md` must exist. If not: "KSS is not set up here — run /kss-init." and stop.
+1. `.kss/config.md` must exist. If not: "KSS is not set up here — run kss-init." and stop.
 2. With an argument, the feature folder must exist. If not, list the ids that do and stop.
 3. A missing or empty `.kss/current` is not an error: fall back to the README's state line.
 
@@ -47,7 +58,7 @@ every phase that ran marked `done` and the line `Run closed — nothing left to 
    README alone and add a line: `Note: the active run is <other feature>.`
 6. If a ticket is `running` but its `worktree` path (normally `.kss/worktrees/NNN-slug/NN`) does
    not exist, add a line
-   `Stale: ticket NN is marked running with no worktree — /kss-execute will reset it to ready.`
+   `Stale: ticket NN is marked running with no worktree — kss-execute will reset it to ready.`
    Do not change anything.
 
 ## Outputs
@@ -84,7 +95,7 @@ Last: <event>
 
 States are exactly `blocked`, `ready`, `running`, `reviewing`, `rejected`, `integrated`. Take them
 from `.kss/current.tickets` — a **map keyed by `NN`**, each value
-`{state, agent_type, started_at, turns, est_turns, worktree}` (DESIGN.md §3.3). Take
+`{state, tier, started_at, turns, est_turns, worktree}` (DESIGN.md §3.3). Take
 `n/N integrated`, `Critical path` and `Last` from `.kss/current.execution`
 (`integrated`, `total`, `critical_path`, `last`), falling back to `graph.md` for the critical path
 and the final line of `06-execution.md` for the last event when that key is absent. `Tokens` is the
