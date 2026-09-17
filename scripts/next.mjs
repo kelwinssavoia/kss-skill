@@ -2,9 +2,13 @@
 // next.mjs — the one place that knows the tracks (DESIGN.md §3.9).
 //
 //   node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill]
+//                                            [--harness claude-code|codex]
 //       print the `Next:` line a skill ends with, for the feature's size (read from README.md)
 //   node .kss/scripts/next.mjs <feature-dir> --check <phase>
 //       print `on-track`, `optional` or `off-track` for running <phase> on this feature
+//
+// How a phase is invoked is the one harness-specific thing in the line: `/kss-spec` in Claude Code,
+// `$kss-spec` in Codex (DESIGN.md §19). `--harness` forces it; otherwise it is detected.
 //
 // Sizes and tracks:
 //   S  clarify → tickets → execute                                   (review, docs optional after)
@@ -82,19 +86,23 @@ export function nextPhase(size, after, opts = {}) {
   return TRACKS[size].find((p) => ORDER.indexOf(p) > pos) || null
 }
 
+/** How a phase is typed, per harness: `/kss-spec` here, `$kss-spec` there (DESIGN.md §19). */
+export const PREFIX = { 'claude-code': '/', codex: '$' }
+
 export function nextLine(size, after, feature, opts = {}) {
   const next = nextPhase(size, after, opts)
   const id = feature || 'NNN-slug'
+  const p = PREFIX[opts.harness] || '/'
   if (next) {
-    let line = `Next: /kss-${next} ${id}`
+    let line = `Next: ${p}kss-${next} ${id}`
     if (next === 'grill' && size === 'L' && Number(opts.auto) > 0) {
-      line += ` (optional first: /kss-review-decisions ${id})`
+      line += ` (optional first: ${p}kss-review-decisions ${id})`
     }
     return line
   }
-  const rest = OPTIONAL[size].filter((p) => ORDER.indexOf(p) > ORDER.indexOf(after))
+  const rest = OPTIONAL[size].filter((p2) => ORDER.indexOf(p2) > ORDER.indexOf(after))
   if (!rest.length) return `Next: feature ${id} is documented — nothing left to run.`
-  const opt = rest.map((p) => `/kss-${p} ${id}`).join(' or ')
+  const opt = rest.map((p2) => `${p}kss-${p2} ${id}`).join(' or ')
   return `Next: nothing on track ${size} — ${opt} ${rest.length > 1 ? 'are' : 'is'} optional.`
 }
 
@@ -103,11 +111,28 @@ function arg(argv, name) {
   return i !== -1 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : null
 }
 
-function main() {
+async function resolveHarness(argv) {
+  const forced = arg(argv, '--harness')
+  if (forced) {
+    if (!PREFIX[forced]) {
+      console.error(`next.mjs: --harness must be one of ${Object.keys(PREFIX).join(', ')}`)
+      process.exit(1)
+    }
+    return forced
+  }
+  try {
+    const { detect } = await import('./harness.mjs')
+    return detect().name
+  } catch {
+    return 'claude-code'
+  }
+}
+
+async function main() {
   const argv = process.argv.slice(2)
   const dir = argv[0] && !argv[0].startsWith('--') ? argv[0] : null
   if (!dir) {
-    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] | --check <phase>')
+    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] [--harness <name>] | --check <phase>')
     process.exit(1)
   }
   const h = readHeader(dir)
@@ -129,8 +154,13 @@ function main() {
     console.error(`next.mjs: --after must be one of ${ORDER.join(', ')}`)
     process.exit(1)
   }
-  const opts = { auto: arg(argv, '--auto'), escalate: arg(argv, '--escalate'), state: h.state }
+  const opts = {
+    auto: arg(argv, '--auto'),
+    escalate: arg(argv, '--escalate'),
+    state: h.state,
+    harness: await resolveHarness(argv),
+  }
   process.stdout.write(nextLine(h.size, after, h.feature, opts) + '\n')
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main()
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main()

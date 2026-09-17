@@ -2,7 +2,7 @@
 // No dependencies. Nothing here may throw: every entry point is wrapped by the
 // caller, but these helpers already return safe defaults on any failure.
 
-import { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, openSync, readSync, closeSync, fstatSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 export function readStdin() {
@@ -223,6 +223,188 @@ export function summariseTranscript(path) {
     },
     first_ts: firstTs,
     last_ts: lastTs,
+  }
+}
+
+/**
+ * Which harness wrote a transcript. Claude Code writes one assistant message per line with a
+ * `usage` object; Codex writes a rollout whose lines are `{timestamp, type, payload}` and whose
+ * first line is a `session_meta`. Sniffing the head is enough and costs nothing.
+ */
+export function detectTranscriptFormat(path) {
+  try {
+    if (!path || !existsSync(path)) return null
+    const fd = openSync(path, 'r')
+    try {
+      const buf = Buffer.alloc(8192)
+      const n = readSync(fd, buf, 0, 8192, 0)
+      const head = buf.toString('utf8', 0, n)
+      if (/"type"\s*:\s*"(session_meta|token_usage_record|turn_context|response_item)"/.test(head)) return 'codex'
+      return 'claude-code'
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    return null
+  }
+}
+
+const EMPTY_SUMMARY = {
+  turns: 0,
+  tool_uses: 0,
+  duration_ms: 0,
+  model: null,
+  effort: null,
+  tokens: { fresh_in: 0, cache_write: 0, cache_read: 0, out: 0, cumulative: 0, ctx_end: 0 },
+  first_ts: null,
+  last_ts: null,
+}
+
+const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0)
+
+/**
+ * Summarise a Codex rollout JSONL into the same shape `summariseTranscript` returns.
+ *
+ * A counted turn is one `token_usage_record` — one model response — deduplicated by `response_id`,
+ * which is the analogue of deduplicating Claude Code's lines by `message.id`. Codex's
+ * `usage.input_tokens` *includes* the cached and cache-written tokens, unlike Claude's, so the
+ * fresh count subtracts them instead of adding.
+ */
+export function summariseRollout(path) {
+  const empty = { ...EMPTY_SUMMARY, tokens: { ...EMPTY_SUMMARY.tokens } }
+  let text
+  try {
+    if (!path || !existsSync(path)) return empty
+    text = readFileSync(path, 'utf8')
+  } catch {
+    return empty
+  }
+
+  const seen = new Set()
+  let turns = 0
+  let toolUses = 0
+  let fresh = 0
+  let cw = 0
+  let cr = 0
+  let out = 0
+  let ctxEnd = 0
+  let model = null
+  let effort = null
+  let firstTs = null
+  let lastTs = null
+
+  for (const raw of text.split('\n')) {
+    if (!raw) continue
+    let o
+    try {
+      o = JSON.parse(raw)
+    } catch {
+      continue
+    }
+    if (!o || typeof o !== 'object') continue
+
+    const ts = typeof o.timestamp === 'string' ? Date.parse(o.timestamp) : NaN
+    if (Number.isFinite(ts)) {
+      if (firstTs === null || ts < firstTs) firstTs = ts
+      if (lastTs === null || ts > lastTs) lastTs = ts
+    }
+
+    const p = o.payload
+    if (!p || typeof p !== 'object') continue
+
+    if (o.type === 'turn_context') {
+      if (typeof p.model === 'string') model = p.model
+      if (typeof p.effort === 'string') effort = p.effort
+      continue
+    }
+
+    if (o.type === 'response_item') {
+      if (p.type === 'function_call' || p.type === 'custom_tool_call' || p.type === 'local_shell_call') toolUses++
+      continue
+    }
+
+    if (o.type !== 'token_usage_record') continue
+    const u = p.usage
+    if (!u || typeof u !== 'object') continue
+
+    const key = p.response_id || (p.turn_id && o.ordinal !== undefined ? `${p.turn_id}:${o.ordinal}` : null)
+    if (key) {
+      if (seen.has(key)) continue
+      seen.add(key)
+    }
+
+    const inTok = num(u.input_tokens)
+    const crTok = num(u.cached_input_tokens)
+    const cwTok = num(u.cache_write_input_tokens)
+
+    turns++
+    fresh += Math.max(0, inTok - crTok - cwTok)
+    cr += crTok
+    cw += cwTok
+    out += num(u.output_tokens)
+    ctxEnd = inTok
+  }
+
+  return {
+    turns,
+    tool_uses: toolUses,
+    duration_ms: firstTs !== null && lastTs !== null ? Math.max(0, lastTs - firstTs) : 0,
+    model,
+    effort,
+    tokens: { fresh_in: fresh, cache_write: cw, cache_read: cr, out, cumulative: fresh + cw + cr + out, ctx_end: ctxEnd },
+    first_ts: firstTs,
+    last_ts: lastTs,
+  }
+}
+
+/** Summarise a transcript whichever harness wrote it (DESIGN.md §19). */
+export function summarise(path) {
+  return detectTranscriptFormat(path) === 'codex' ? summariseRollout(path) : summariseTranscript(path)
+}
+
+/**
+ * Context size of the last model request, read from the tail of a transcript in either format —
+ * the file is never parsed whole. Returns null when the tail holds no usage record.
+ */
+export function tailContext(path, tailBytes = 256 * 1024) {
+  let fd
+  try {
+    if (!path || !existsSync(path)) return null
+    fd = openSync(path, 'r')
+    const size = fstatSync(fd).size
+    const len = Math.min(size, tailBytes)
+    const buf = Buffer.alloc(len)
+    readSync(fd, buf, 0, len, size - len)
+    const lines = buf.toString('utf8').split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i]
+      if (!raw || raw.indexOf('usage') === -1) continue
+      let o
+      try {
+        o = JSON.parse(raw)
+      } catch {
+        continue
+      }
+      if (!o || typeof o !== 'object') continue
+
+      // Codex: the request's own input count already includes what came from the cache.
+      if (o.type === 'token_usage_record' && o.payload && o.payload.usage) return num(o.payload.usage.input_tokens)
+
+      // Claude Code: the three input counters are disjoint and add up to the context.
+      const u = o.message && o.message.role === 'assistant' ? o.message.usage : null
+      if (u) return num(u.input_tokens) + num(u.cache_creation_input_tokens) + num(u.cache_read_input_tokens)
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
