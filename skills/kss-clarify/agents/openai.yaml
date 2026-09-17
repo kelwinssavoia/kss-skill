@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Clarify"
+  short_description: "Turn a request into a brief"
+  default_prompt: "Use $kss-clarify to turn what I just described into a brief."
+policy:
+  allow_implicit_invocation: false

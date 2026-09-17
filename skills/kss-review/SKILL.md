@@ -1,6 +1,6 @@
 ---
 name: kss-review
-description: Work a feature's PR review round — collect comments and CI findings, triage them, fix, dispute, answer or defer, reply on the threads; optionally watch the PR and run rounds automatically. Run it after /kss-execute has opened the PR.
+description: Work a feature's PR review round — collect comments and CI findings, triage them, fix, dispute, answer or defer, reply on the threads; optionally watch the PR and run rounds automatically. Run it after kss-execute has opened the PR.
 argument-hint: NNN-<slug> [--watch]
 disable-model-invocation: true
 ---
@@ -27,8 +27,19 @@ Read, in this order:
   `gh pr checks`).
 - `.kss/current` — the cursor: the last comment timestamp and the last CI conclusion handled.
 
-**Do not read:** source files or diffs yourself — a `kss-explorer` maps findings to tickets and
+**Do not read:** source files or diffs yourself — an `explorer` maps findings to tickets and
 FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never to plan a fix.
+
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
 
 ## Preconditions
 
@@ -40,9 +51,9 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
-   `No .kss/config.md found. Run /kss-init first.`
+   `No .kss/config.md found. Run kss-init first.`
 2. The feature must have an open PR. If it does not, stop with exactly:
-   `No PR for NNN-slug. Run /kss-execute NNN-slug to open one.`
+   `No PR for NNN-slug. Run kss-execute NNN-slug to open one.`
 3. `gh` must be authenticated. If it is not, stop with exactly:
    `gh is not authenticated. Run gh auth login, then retry.`
 4. If the PR is already merged or closed, stop with exactly:
@@ -54,7 +65,7 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
    and CI conclusion — **CI failures are findings too**. Number them `RV-NN`, continuing from the
    last round, each with file, line, author and text. Nothing new → print
    `No new findings since <cursor>.` and go to the summary (or re-arm the watcher).
-2. **Map.** Spawn one `kss-explorer` (read-only) to map each finding back to the ticket and the
+2. **Map.** Spawn one `explorer` (read-only) to map each finding back to the ticket and the
    FRs it came from. Return ≤1.5k chars.
 3. **Triage.** Print the table and take **one turn** to confirm it:
 
@@ -70,10 +81,10 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
    | `defer` | a `DF-`, replied to as out of scope, thread left open |
 
 4. **A finding that contradicts a decision is never a silent fix.** Either dispute it citing the
-   `D-`/`AD-`, or have the user override it via `/kss-review-decisions` and *then* fix it, with
+   `D-`/`AD-`, or have the user override it via `kss-review-decisions` and *then* fix it, with
    the spec marked for revision in the README.
 5. **Fix.** Write the fix tickets into `05-tickets/`, numbered after the last existing ticket,
-   grouped by file, and run them through `/kss-execute NNN-slug --ticket NN`. Every gate applies
+   grouped by file, and run them through `kss-execute NNN-slug --ticket NN`. Every gate applies
    — report shape, commit order (test committed first), reviewer verdict, integration; the tests
    themselves run only in the coordinator's single run after integration.
 6. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
@@ -84,9 +95,10 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
 
 ### `--watch`
 
-1. Arm the **`Monitor` tool** — never a polling subagent — on a `gh` command that reports new
-   comment count, CI conclusions and the PR state, polling every **5 minutes** by default
-   (configurable). The session sleeps until that output changes.
+1. Watch the PR **the way the harness adapter says** — a background monitor where there is one,
+   never a polling subagent — on a `gh` command that reports new comment count, CI conclusions and
+   the PR state, every **5 minutes** by default (configurable). Say once, in one line, what that
+   costs the session here: a harness with a real monitor frees it, a harness without one holds it.
 2. On a change: wake, run one round (steps 1–8), push to the PR branch, reply, and **re-arm**.
 3. **Autopilot per `review_autopilot`** (DESIGN.md §15.1). It governs what a round may do
    *without asking*; it never changes the triage itself:
@@ -100,11 +112,11 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
 
    **In every mode, a fix that contradicts a `D-` or an `AD-` is held** — `all` does not relax it.
    Such a finding goes back through step 4: dispute it, or have the user override the decision via
-   `/kss-review-decisions` first. Held items are listed by ID on every wake and wait for the user.
+   `kss-review-decisions` first. Held items are listed by ID on every wake and wait for the user.
 4. It stops when the PR is **merged or closed**, when the user stops it, or after **10 rounds** —
-   then it stops and reports. The watcher **dies with the session**; re-running `/kss-review
+   then it stops and reports. The watcher **dies with the session**; re-running `kss-review
    NNN-slug --watch` resumes from the cursor.
-5. The board and the statusline show `watching`.
+5. The board shows `watching`, and so does the status line where the harness has one.
 
 ## Outputs
 
@@ -129,14 +141,14 @@ FRs. Read `03-spec.md`/`04-plan.md` only to quote a decision in a dispute, never
              "open":["RV-04"],"held":["RV-07"],
              "cursor":{"last_comment_at":"ISO-8601","last_ci_at":"ISO-8601"},
              "last_check":"ISO-8601"},
-   "tickets":{"NN":{"state":"integrated","agent_type":"kss-sonnet-medium","turns":12,
+   "tickets":{"NN":{"state":"integrated","tier":"T2","turns":12,
                     "est_turns":15,"started_at":"ISO-8601"}},
    "execution":{"integrated":6,"total":6,"last":"<event>"}}
   ```
 
   - `cursor` field names are exactly `last_comment_at` and `last_ci_at` — that is what the next
     round reads from.
-  - `watching` is the human-readable watch target the statusline prints (`PR #61`); set it only
+  - `watching` is the human-readable watch target the board prints (`PR #61`); set it only
     while `--watch` is armed and clear it (`null`) when it stops. `state` is `idle`, `running` or
     `watching`.
   - `tickets` is a **map keyed by the ticket number** (fix tickets included), with the fields
@@ -155,7 +167,7 @@ gitignored and never part of this.
 
 **Close the run** when nothing is left to do for this feature (Ready for merge decision, or the watch stopped because the PR was merged or closed):
 `node .kss/scripts/current.mjs end`. It sets `phase: "done"` so the hooks stop appending to
-`metrics.jsonl` and the statusline hands back to the previous one. Running any later `kss-` skill on
+`metrics.jsonl`, and a harness with a status line hands it back to the previous one. Running any later `kss-` skill on
 this feature re-opens it automatically. The main session's own cost for this last phase is not
 recorded — that is the price of a clean tree (DESIGN.md §6).
 
@@ -175,7 +187,7 @@ Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after rev
 
 The `Next:` line is **never written by hand**: it is the output of
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review`, which knows the track of the
-feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On L it is `/kss-docs-tech`; on S and M the track ends here and docs are listed as optional.
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On L it is `kss-docs-tech`; on S and M the track ends here and docs are listed as optional.
 
 Print `Cost: n/a` when `metrics.jsonl` does not exist. While watching, replace the last two lines
 with `Watching PR <url> — next check in <n>m.`
@@ -192,7 +204,7 @@ with `Watching PR <url> — next check in <n>m.`
   with all the gates.
 - Resolve only the threads that were fixed or answered; disputes and deferrals stay open.
 - Push only to the PR branch, never to `base_branch`.
-- `--watch` uses the `Monitor` tool, never a polling subagent; it dies with the session and
+- `--watch` uses whatever the adapter names, never a polling subagent; it dies with the session and
   resumes from the cursor.
 - Autopilot: `fixes` executes uncontested fixes and CI failures and holds the drafted replies;
   `all` also posts those replies; `none` stops at the triage table. **No mode ever ships a fix that

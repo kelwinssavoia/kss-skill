@@ -1,0 +1,39 @@
+{
+  "name": "kss",
+  "version": "0.2.0",
+  "description": "Phase-based development workflow: clarify, investigate, grill, spec, plan, tickets, execute, review, docs — with a fresh thread between phases and token metrics",
+  "author": {
+    "name": "Kelwin Savoia",
+    "url": "https://github.com/kelwinssavoia"
+  },
+  "homepage": "https://github.com/kelwinssavoia/kss-skill",
+  "repository": "https://github.com/kelwinssavoia/kss-skill",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "spec-driven",
+    "tdd",
+    "subagents",
+    "metrics",
+    "context-management"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "KSS",
+    "shortDescription": "Phase-based development, one phase per thread",
+    "longDescription": "KSS carries a software task from a vague request to a reviewed pull request, one phase at a time: clarify, investigate, grill, spec, plan, tickets, execute, review, docs. Context lives on disk rather than in the thread, every phase ends with a cost line and a fresh-thread point, and execution runs one subagent per ticket in its own git worktree. The same feature folder can be specified in one harness and executed in the other.",
+    "developerName": "Kelwin Savoia",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/kelwinssavoia/kss-skill",
+    "defaultPrompt": [
+      "Use $kss-clarify to turn this request into a brief.",
+      "Use $kss-status to show where my features stand.",
+      "Use $kss-execute to run this feature's tickets."
+    ]
+  }
+}

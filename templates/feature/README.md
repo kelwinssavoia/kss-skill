@@ -2,7 +2,7 @@
 
 **State:** {{phase}} · **Size:** {{size}} · **Track:** {{track}}
 **Branch:** {{branch}} → {{base_branch}}
-**Next:** `/kss-{{next_skill}} {{NNN}}-{{slug}}`
+**Next:** `{{next_line}}`  <!-- from scripts/next.mjs, never typed by hand -->
 
 > Index only. Cap 4k chars, one block per phase, at most 10 lines each.
 > Detail lives in the phase files; anything longer goes to `notes/` and is linked.
@@ -41,7 +41,7 @@
 
 <!-- kss:cost:start -->
 
-| Phase | Agents | Turns | Fresh in | Cache write | Cache read | Out | Cumulative | Wall | Files | +/− |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Phase | Harness | Agents | Turns | Fresh in | Cache write | Cache read | Out | Cumulative | Wall | Files | +/− |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 <!-- kss:cost:end -->

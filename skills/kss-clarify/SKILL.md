@@ -24,8 +24,19 @@ Read, in this order:
 
 **Do not read:** any source file, `README.md` of the repository, `docs/adr/`, tests, `package.json`,
 the existing feature folders' phase files, or anything under `node_modules`. No `grep` over the
-codebase, no `Explore`/`kss-explorer` agents. If a fact about the code is needed, it becomes an
+codebase, no `explorer` agents. If a fact about the code is needed, it becomes an
 **Open fact** in the brief — the investigation answers it.
+
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
 
 ## Preconditions
 
@@ -37,9 +48,9 @@ codebase, no `Explore`/`kss-explorer` agents. If a fact about the code is needed
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
-   `No .kss/config.md found. Run /kss-init first.`
+   `No .kss/config.md found. Run kss-init first.`
 2. The argument must be non-empty. If it is, stop with exactly:
-   `kss-clarify needs a request. Usage: /kss-clarify <free text | path | url>`
+   `kss-clarify needs a request. Usage: kss-clarify <free text | path | url>`
 3. The worktree must be clean (`git status --porcelain` is empty). If it is not, stop with exactly:
    `Worktree is dirty. Commit or stash before starting a feature.`
    Check this before the interview, and again before creating anything.

@@ -20,12 +20,23 @@ state, no git command that mutates. If something looks wrong, say so; do not rep
 
 Read nothing else. Never read `03-spec.md`, `04-plan.md` or any ticket file.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 When `.kss/current` has `phase: "done"` the run is closed (DESIGN.md §3.8): print the board with
 every phase that ran marked `done` and the line `Run closed — nothing left to run.` in place of Next.
 
-1. `.kss/config.md` must exist. If not: "KSS is not set up here — run /kss-init." and stop.
+1. `.kss/config.md` must exist. If not: "KSS is not set up here — run kss-init." and stop.
 2. With an argument, the feature folder must exist. If not, list the ids that do and stop.
 3. A missing or empty `.kss/current` is not an error: fall back to the README's state line.
 
@@ -47,7 +58,7 @@ every phase that ran marked `done` and the line `Run closed — nothing left to 
    README alone and add a line: `Note: the active run is <other feature>.`
 6. If a ticket is `running` but its `worktree` path (normally `.kss/worktrees/NNN-slug/NN`) does
    not exist, add a line
-   `Stale: ticket NN is marked running with no worktree — /kss-execute will reset it to ready.`
+   `Stale: ticket NN is marked running with no worktree — kss-execute will reset it to ready.`
    Do not change anything.
 
 ## Outputs
@@ -62,7 +73,7 @@ or blank, using the README blocks that exist. A phase is `skipped` when
 `optional` and the phase did not run (DESIGN.md §3.9):
 
 ```
-kss · NNN-slug · <size> · <track>
+kss · NNN-slug · <size> · <track> · <harness>
 clarify ✓ · investigate ✓ · decisions ✓ · grill ✓ · spec ✓ · plan → · tickets · execute · review · docs
 Branch: <branch> → <base>
 State: <the README State line>
@@ -74,9 +85,9 @@ Next: <the README Next line>
 **Execution board** — exactly the shape in DESIGN.md §14.4:
 
 ```
-kss · NNN-slug · execute
+kss · NNN-slug · execute · <harness>
 ███████░░░  n/N integrated · x% of estimated turns
-# | Ticket | State | Agent | Turns used/est | Since
+# | Ticket | State | Tier | Turns used/est | Since
 Critical path: …
 Elapsed: …    Tokens: …
 Last: <event>
@@ -84,12 +95,16 @@ Last: <event>
 
 States are exactly `blocked`, `ready`, `running`, `reviewing`, `rejected`, `integrated`. Take them
 from `.kss/current.tickets` — a **map keyed by `NN`**, each value
-`{state, agent_type, started_at, turns, est_turns, worktree}` (DESIGN.md §3.3). Take
+`{state, tier, started_at, turns, est_turns, worktree}` (DESIGN.md §3.3). Take
 `n/N integrated`, `Critical path` and `Last` from `.kss/current.execution`
 (`integrated`, `total`, `critical_path`, `last`), falling back to `graph.md` for the critical path
 and the final line of `06-execution.md` for the last event when that key is absent. `Tokens` is the
 cumulative sum from `metrics.jsonl`. Read `.kss/current` with
 `node .kss/scripts/current.mjs get` when the scripts are installed.
+
+`<harness>` is what `node .kss/scripts/harness.mjs --name` prints — the harness this board is being
+printed from, which is not necessarily the one that ran the phases. When `.kss/current` recorded a
+different one, print both: `codex → claude-code`. Omit the field entirely when neither is known.
 
 **Review phase** adds, after the State line:
 

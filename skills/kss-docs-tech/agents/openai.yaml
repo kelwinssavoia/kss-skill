@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Docs Tech"
+  short_description: "Document the feature as built"
+  default_prompt: "Use $kss-docs-tech to document this feature as it was actually built."
+policy:
+  allow_implicit_invocation: false

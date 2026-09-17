@@ -5,9 +5,9 @@ normative spec for every one of them.
 
 | Skill | Purpose | Argument hint |
 | --- | --- | --- |
-| `kss-init` | Sets KSS up in a project: writes `.kss/config.md`, copies the templates and scripts, installs the agent matrix and the statusline. Once per project. | *(no arguments)* |
+| `kss-init` | Sets KSS up in a project: writes `.kss/config.md`, copies the templates, scripts and both harness adapters, and installs whatever the current harness needs. Once per project. | *(no arguments)* |
 | `kss-clarify` | Turns a vague request into a brief, picks size and track, creates the feature folder and branch. | `<free text \| path \| url>` |
-| `kss-investigate` | Read-only explorers map where the feature lives and what to reuse; every decision is classified auto or open. On M (no grill) it ends with the decision check: one table, one answer, every open item decided or deferred. | `NNN-<slug> [--model opus]` |
+| `kss-investigate` | Read-only explorers map where the feature lives and what to reuse; every decision is classified auto or open. On M (no grill) it ends with the decision check: one table, one answer, every open item decided or deferred. | `NNN-<slug> [--deep]` |
 | `kss-review-decisions` | Shows the auto decisions in one table and accepts, reopens or overrides them in a single turn. Optional. | `NNN-<slug>` |
 | `kss-grill` | Interviews the user on every open decision, one per turn, business → layout → technical. L only, unless the M decision check escalates. | `NNN-<slug>` |
 | `kss-spec` | Writes `03-spec.md`: the functional specification, every FR cited to a recorded decision. | `NNN-<slug>` |

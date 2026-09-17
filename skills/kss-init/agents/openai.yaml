@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Init"
+  short_description: "Set KSS up in this project"
+  default_prompt: "Use $kss-init to set KSS up in this repository."
+policy:
+  allow_implicit_invocation: false

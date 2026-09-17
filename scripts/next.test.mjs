@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { nextPhase, nextLine, check, TRACKS, ORDER } from './next.mjs'
+import { nextPhase, nextLine, check, TRACKS, ORDER, PREFIX } from './next.mjs'
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'next.mjs')
 
@@ -51,15 +51,32 @@ test('L: grill always, review-decisions offered first when there are auto decisi
   assert.equal(nextLine('L', 'docs-product', '001-x'), 'Next: feature 001-x is documented — nothing left to run.')
 })
 
+test('the invocation prefix follows the harness, the track does not', () => {
+  assert.equal(nextLine('M', 'investigate', '001-x', { harness: 'codex' }), 'Next: $kss-spec 001-x')
+  assert.equal(nextLine('M', 'investigate', '001-x', { harness: 'claude-code' }), 'Next: /kss-spec 001-x')
+  assert.equal(nextLine('M', 'investigate', '001-x'), 'Next: /kss-spec 001-x', 'unknown harness falls back to the slash form')
+  assert.equal(
+    nextLine('L', 'investigate', '001-x', { auto: 3, harness: 'codex' }),
+    'Next: $kss-grill 001-x (optional first: $kss-review-decisions 001-x)',
+  )
+  assert.equal(
+    nextLine('S', 'execute', '001-x', { harness: 'codex' }),
+    'Next: nothing on track S — $kss-review 001-x or $kss-docs-tech 001-x or $kss-docs-product 001-x are optional.',
+  )
+  assert.deepEqual(Object.keys(PREFIX).sort(), ['claude-code', 'codex'])
+})
+
 test('CLI reads size, state and id from the README header', () => {
   const dir = mkdtempSync(join(tmpdir(), 'kss-next-'))
   try {
     writeFileSync(join(dir, 'README.md'), '# 007-thing\n\n**State:** investigate · **Size:** M · **Track:** clarify → …\n')
     const run = (...a) => spawnSync(process.execPath, [SCRIPT, dir, ...a], { encoding: 'utf8' })
-    assert.equal(run('--after', 'investigate').stdout.trim(), 'Next: /kss-spec 007-thing')
-    assert.equal(run('--after', 'investigate', '--escalate', 'grill').stdout.trim(), 'Next: /kss-grill 007-thing')
+    assert.equal(run('--after', 'investigate', '--harness', 'claude-code').stdout.trim(), 'Next: /kss-spec 007-thing')
+    assert.equal(run('--after', 'investigate', '--harness', 'codex').stdout.trim(), 'Next: $kss-spec 007-thing')
+    assert.equal(run('--after', 'investigate', '--escalate', 'grill', '--harness', 'claude-code').stdout.trim(), 'Next: /kss-grill 007-thing')
     assert.equal(run('--check', 'grill').stdout.trim(), 'optional')
     assert.equal(run('--check', 'docs-tech').stdout.trim(), 'optional')
+    assert.equal(run('--after', 'spec', '--harness', 'nope').status, 1)
     const bad = run('--after', 'nope')
     assert.equal(bad.status, 1)
     writeFileSync(join(dir, 'README.md'), '# 007-thing\n\nno header\n')

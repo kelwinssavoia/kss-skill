@@ -13,7 +13,7 @@ branch_prefix: "{{branch_prefix}}"
 domain_docs: [{{domain_docs}}]
 layout_references: [{{layout_references}}]
 standards: [{{standards}}]
-explorer_model: {{explorer_model}}
+explorer_tier: {{explorer_tier}}
 auto_decide: {{auto_decide}}
 execution: {{execution}}
 full_suite: {{full_suite}}
@@ -33,7 +33,7 @@ docs_language: {{docs_language}}
 | `domain_docs` | Glossary and ADR locations |
 | `layout_references` | Design exports, design-system docs — the only source of layout truth |
 | `standards` | Files whose rules bind explorers and executors |
-| `explorer_model` | Default model for read-only explorers |
+| `explorer_tier` | Default tier for read-only explorers: `explorer`, or `explorer-deep` to read every question deeply |
 | `auto_decide` | `false` = every decision is asked in the grill |
 | `execution` | `multi-agent` or `single-session` |
 | `full_suite` | Always `local`: the coordinator runs the suite once after integration (`ci` is no longer honoured) |

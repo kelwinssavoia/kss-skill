@@ -24,6 +24,17 @@ supersedes it.
 source file, any test. Do not spawn explorers or any other agent. Everything you need — decision,
 alternatives, evidence, confidence — is already in `auto-decisions.md`.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -33,14 +44,14 @@ alternatives, evidence, confidence — is already in `auto-decisions.md`.
    `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
-1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run /kss-init first.`
+1. `.kss/config.md` must exist, else stop with: `No .kss/config.md found. Run kss-init first.`
 2. The feature folder must exist, else stop with: `No feature NNN-slug under <features_root>.`
 3. `auto-decisions.md` must exist and hold at least one `AD-` entry. If it is missing or empty,
    stop with exactly:
    `No auto decisions for NNN-slug — nothing to review.` followed by the line from
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review-decisions`.
 4. `README.md` must show the Investigation block filled. If it does not, stop with:
-   `NNN-slug has not been investigated yet. Run /kss-investigate first.`
+   `NNN-slug has not been investigated yet. Run kss-investigate first.`
 
 ## Procedure
 
@@ -77,7 +88,7 @@ alternatives, evidence, confidence — is already in `auto-decisions.md`.
    decision, alternatives and evidence stay readable.
 6. If this run happens **after the grill or the spec**, record in `README.md`
    `decisions changed after spec: AD-03 → D-06` for each override or reopen, and say in the
-   summary that re-running `/kss-spec NNN-slug` rewrites only the affected FRs.
+   summary that re-running `kss-spec NNN-slug` rewrites only the affected FRs.
 7. Do not ask anything else. One turn, then the summary.
 
 ## Outputs

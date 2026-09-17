@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Tickets"
+  short_description: "Slice a plan into tickets"
+  default_prompt: "Use $kss-tickets to slice this plan into self-contained tickets."
+policy:
+  allow_implicit_invocation: false

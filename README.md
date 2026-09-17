@@ -1,8 +1,10 @@
-# KSS — Phase-based development for Claude Code
+# KSS — Phase-based development for Claude Code and Codex
 
-KSS is a family of thirteen Claude Code skills, prefixed `kss-`, that carry a software task from
-a vague request to merged-and-documented, one phase at a time, each its own skill invocation with
-a `/clear` suggested at the end. The problem it solves: a single long-lived session doing
+KSS is a family of thirteen skills, prefixed `kss-`, that carry a software task from a vague request
+to merged-and-documented, one phase at a time, each its own skill invocation with a `/clear`
+suggested at the end. It installs on **Claude Code** and on **Codex**, from one source tree and one
+version, and a single feature can be specified in one and executed in the other — see
+[Two harnesses, one feature folder](#two-harnesses-one-feature-folder). The problem it solves: a single long-lived session doing
 clarification, investigation, interview and execution together grows without bound and re-reads
 its own output constantly. KSS instead keeps context **on disk, never in the session** — a
 per-feature folder holds a short index (`README.md`, ≤4k) plus detail files read only by whoever
@@ -74,7 +76,43 @@ Next: /kss-<next> NNN-slug
 
 The next phase reads the folder, not your scrollback.
 
+## Two harnesses, one feature folder
+
+KSS installs on **Claude Code** and on **Codex**, and a feature does not have to stay in one of
+them. The spec side in one, the execution in the other, is a supported flow, not a workaround:
+
+```
+$kss-clarify … → $kss-investigate → $kss-spec → $kss-plan → $kss-tickets      (Codex)
+                                                            /kss-execute → /kss-review   (Claude Code)
+```
+
+There is no export, no sync and no handoff file. Both apps open the same working copy, every phase
+commits its own artifacts before it prints its summary, and **no artifact names a harness, a model
+or an agent type** — a ticket says `Tier: T5`, never `Model: opus`. So the handoff is: finish the
+phase, read its `Next:` line, open the other app in the same directory, type the same phase with
+that app's prefix.
+
+What differs between the two — how a phase is invoked, how a subagent is spawned, what a tier maps
+to, how a read-only role is enforced, how a PR is watched — lives in one adapter file each,
+`.kss/references/harness-claude-code.md` and `.kss/references/harness-codex.md`. `kss-init` installs
+**both**, whichever harness you ran it from; `scripts/harness.mjs` decides which one applies at
+runtime (environment, then the parent-process chain, then what `.kss/current` recorded), and asks
+once if it cannot tell. `KSS_HARNESS=codex` forces it.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Invoke a phase | `/kss-spec 012-x` | `$kss-spec 012-x` |
+| Subagents | the `Agent` tool, one agent definition per tier | `spawn_agent` with `fork_turns: "none"` + per-tier `model`/`reasoning_effort` |
+| Read-only roles | enforced by the agent's tool list | enforced by the preamble in the brief |
+| Watch a PR | the `Monitor` tool, in the background | a foreground poll loop |
+| Status line | installed by `kss-init` | none — `$kss-status` prints the board |
+| Standards file | `CLAUDE.md` | `AGENTS.md` (both, when the repo has both) |
+
+The full contract is [DESIGN.md §19](DESIGN.md#19-harnesses).
+
 ## Installation
+
+### Claude Code
 
 ```
 /plugin marketplace add kelwinssavoia/kss-skill
@@ -82,29 +120,59 @@ The next phase reads the folder, not your scrollback.
 ```
 
 Enable it per project via `enabledPlugins` in `.claude/settings.json` (project or user level).
-The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) ship in `hooks/hooks.json` and merge in
-automatically while the plugin is enabled — nothing to install for them.
+
+### Codex
+
+Add the repository as a marketplace and install the same plugin — the manifest Codex reads is
+`.codex-plugin/plugin.json`, next to the Claude one:
+
+```
+codex plugin marketplace add kelwinssavoia/kss-skill
+codex plugin install kss
+```
+
+`$kss-init` then offers to install the three metrics hooks into the user-level
+`$CODEX_HOME/hooks.json` — a Codex plugin manifest may not declare hooks, so they are a user-level
+file here, exactly as the statusline is on Claude Code. Codex asks to **trust** a hook the first
+time; until you grant it (`/hooks`), every phase still works and `metrics.jsonl` simply stays empty.
+If you already run KSS in Claude Code on this machine, `/import` migrates the setup instead.
+
+Two notes on the Codex packaging, both in [DESIGN.md §19.4](DESIGN.md#194-packaging): the skills
+keep `disable-model-invocation: true` in their frontmatter, because that is what stops Claude Code
+from invoking a phase on its own — Codex's runtime loads them fine and honours
+`allow_implicit_invocation: false` for the same purpose, but its *ingestion* validator wants that
+key absent, so the plugin is meant to be installed from this repository rather than submitted to
+OpenAI's curated marketplace.
+
+### Both
+
+The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) live in `hooks/hooks.json` — the event
+names are the same on both harnesses. Claude Code merges them in automatically while the plugin is
+enabled; Codex takes them from the user-level file `kss-init` offers to write.
 
 Every phase commits the artifacts it wrote (`docs(NNN): <phase>`), the next phase commits what the
 hooks appended after that, and the last phase closes the run — the feature branch is clean when a
 skill says `done` (DESIGN.md §3.8).
 
-Then, inside the project, run `/kss-init`: interactive, one question per turn, writing nothing
-until you confirm the plan. It asks for every key below (offering a default), plus execution mode
-(multi-agent/single-session), layout references and standards files, then:
+Then, inside the project, run `/kss-init` (`$kss-init` in Codex): interactive, one question per
+turn, writing nothing until you confirm the plan. It asks for every key below (offering a default),
+plus execution mode (multi-agent/single-session), layout references and standards files, then:
 
 1. Writes `.kss/config.md`.
-2. Copies `templates/` into `.kss/templates/` and `scripts/` into `.kss/scripts/`, so the skills
-   read the project's own copy and it can be customised.
-3. Asks whether to install the statusline into **user-level** `~/.claude/settings.json`
-   (`statusLine: {type: command, command: node <plugin>/scripts/statusline.mjs}`), backing up any
-   existing one to the user-level `~/.kss/statusline.backup.json` — KSS falls back to printing
-   that output when no run is active. If the statusline is already KSS (a second project on the
-   same machine, or an upgrade) nothing is backed up; the path is just refreshed.
-4. Creates the eight-agent matrix in `.claude/agents/`, skipping files that already exist (asks
-   before overwriting).
+2. Copies `templates/` into `.kss/templates/`, `scripts/` into `.kss/scripts/` and `references/`
+   into `.kss/references/`, so the skills read the project's own copy and it can be customised.
+   **Both harness adapters are installed, whichever harness you ran it from** — that is what makes
+   the handoff below work without re-running anything.
+3. *(Claude Code)* Asks whether to install the statusline into **user-level**
+   `~/.claude/settings.json` (`statusLine: {type: command, command: node
+   <plugin>/scripts/statusline.mjs}`), backing up any existing one to the user-level
+   `~/.kss/statusline.backup.json` — KSS falls back to printing that output when no run is active.
+   If the statusline is already KSS (a second project on the same machine, or an upgrade) nothing
+   is backed up; the path is just refreshed. On Codex this step is skipped.
+4. *(Claude Code)* Creates the eight-agent matrix in `.claude/agents/`, skipping files that already
+   exist (asks before overwriting). On Codex there is no agent registry and nothing is written.
 5. Adds `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` to `.gitignore`;
-   config, templates and feature folders stay tracked.
+   config, templates, references and feature folders stay tracked.
 
 ### `.kss/config.md` keys
 
@@ -116,8 +184,8 @@ until you confirm the plan. It asks for every key below (offering a default), pl
 | `branch_prefix` | Prepended to `NNN-slug` in the branch name | empty |
 | `domain_docs` | Glossary and ADR locations | `CONTEXT.md`, `docs/adr/` if present |
 | `layout_references` | Design exports/design-system docs — the only layout truth | empty |
-| `standards` | Files whose rules bind explorers and executors | `CLAUDE.md` if present |
-| `explorer_model` | Default model for read-only explorers | `sonnet` |
+| `standards` | Files whose rules bind explorers and executors | `AGENTS.md` and/or `CLAUDE.md` if present |
+| `explorer_tier` | Tier read-only explorers run at: `explorer` or `explorer-deep` | `explorer` |
 | `auto_decide` | `false` = every decision goes to the grill | `true` |
 | `execution` | `multi-agent` or `single-session` | `multi-agent` |
 | `full_suite` | Always `local` — the coordinator runs the suite once after integration | `local` |
@@ -130,15 +198,21 @@ With no `layout_references`, `kss-spec` refuses to invent a layout and flags eve
 question instead of guessing.
 
 **Requirements:** Node ≥ 18 (`hooks/*.mjs`, `scripts/*.mjs`), `gh` CLI (`kss-review` reads/polls
-PR threads/CI), git (every feature is a branch; each ticket gets its own worktree).
+PR threads/CI), git (every feature is a branch; each ticket gets its own worktree). Tests:
+`node --test hooks/ scripts/`.
 
 ## Skills
+
+Written `/kss-name` below, which is how a phase is invoked in Claude Code. In Codex the same phase
+is `$kss-name`, with the arguments typed after it. Nothing else about a phase differs, and you never
+type the prefix into an artifact: `scripts/next.mjs` prints the right one.
 
 ### `kss-init` — `/kss-init` (no arguments)
 Sets the project up for the workflow. Run once, first.
 - **Reads/writes:** reads `templates/`, `CONTEXT.md`/`CLAUDE.md`/`docs/adr/`/`specs/` for
-  defaults; writes `.kss/config.md`, `.kss/templates/`, `.kss/scripts/`, `.claude/agents/kss-*.md`,
-  `.gitignore`, and, on its own yes, `~/.claude/settings.json` (statusline).
+  defaults; writes `.kss/config.md`, `.kss/templates/`, `.kss/scripts/`, `.kss/references/`
+  (both harness adapters), `.gitignore`, and — Claude Code only — `.claude/agents/kss-*.md` and,
+  on its own yes, `~/.claude/settings.json` (statusline).
 - **Confirmation:** one turn/key, a final turn with config + file list before writing, a separate
   yes/no for the statusline.
 - **Next:** `/kss-clarify <what you want to build>`
@@ -153,12 +227,12 @@ Never reads code.
   asked; `Creating <folder> and branch … from <base>. Confirm?` before anything exists.
 - **Next:** `/kss-investigate NNN-slug` (M/L) or `/kss-tickets NNN-slug` (S)
 
-### `kss-investigate` — `/kss-investigate NNN-<slug> [--model opus]`
+### `kss-investigate` — `/kss-investigate NNN-<slug> [--deep]`
 Maps where the feature lives and what to reuse via parallel read-only explorers; the main session
 only synthesizes. Classifies every decision the feature needs.
 - **Reads/writes:** reads `README.md`, `00-brief.md`, `.kss/config.md`, `domain_docs`; writes
   `01-investigation.md`, `auto-decisions.md`, the Investigation block.
-- **Confirmation:** none mid-phase — 1–5 explorers spawn, escalating to opus for
+- **Confirmation:** none mid-phase — 1–5 explorers spawn, escalating to `explorer-deep` for
   contract/tenant/money questions (printed notice); the summary lists decisions.
 - **Next:** `/kss-review-decisions` (optional), then `/kss-grill`, or `/kss-spec` on M with no
   open items.
@@ -241,68 +315,83 @@ Prints the phase or execution board, or lists every feature with no argument. Wr
 - **Confirmation:** none — a single print.
 - **Next:** echoes `README.md`'s `Next:` line; never suggests beyond it.
 
-## Agents
+## Tiers
 
-The plugin ships eight agents, registered as `kss:kss-*` while it is enabled — that prefix is
-the name to spawn them by. `kss-init` copies them into the project's `.claude/agents/` **only
-when the plugin is not available** (a vendored install, where they answer to the bare name) — a
-project copy stops following releases and drifts:
+A ticket says how much agent it deserves, never which model — that is what lets the same ticket be
+executed from either harness. The tier is the portable name; each harness adapter maps it:
 
-| Agent | Model | Effort | Role |
+| Tier | The ticket it belongs to | Claude Code | Codex |
 | --- | --- | --- | --- |
-| `kss-sonnet-low` | sonnet | low | Executor — 1 layer, 1–2 files, copies a pattern; also integration |
-| `kss-sonnet-medium` | sonnet | medium | Executor — 1 layer, several files, fits plan to code |
-| `kss-sonnet-high` | sonnet | high | Executor — demanding single-layer ticket, decided design |
-| `kss-opus-medium` | opus | medium | Executor — design judgement, or escalation from sonnet |
-| `kss-opus-high` | opus | high | Executor — contract, wire, tenant, money, cross-service, hard bugs |
-| `kss-reviewer` | opus | high | Read-only — reviews a finished ticket, approve/reject + findings |
-| `kss-explorer` | sonnet | low | Read-only — answers one bounded question, file:line evidence |
-| `kss-runner` | sonnet | low | Coordinator-only, final run — runs the given command, returns summary lines and failures |
+| `T1` | 1 layer, 1–2 files, copies a pattern; also integration | `kss-sonnet-low` | `gpt-5.6-luna` · low |
+| `T2` | 1 layer, several files, fits the plan to the code | `kss-sonnet-medium` | `gpt-5.6-terra` · medium |
+| `T3` | a demanding single layer on a decided design | `kss-sonnet-high` | `gpt-5.6-terra` · high |
+| `T4` | design judgement, or an escalation | `kss-opus-medium` | `gpt-6-astra` · medium |
+| `T5` | contract, wire, tenant, money, cross-service, hard bugs | `kss-opus-high` | `gpt-6-astra` · high |
+| `explorer` | one bounded read-only question, `file:line` evidence | `kss-explorer` | `gpt-5.4-mini` · low |
+| `explorer-deep` | the same, on a contract / tenant / money question | `kss-opus-medium` | `gpt-6-astra` · medium |
+| `reviewer` | one finished ticket's diff — approve or reject + findings | `kss-reviewer` | `gpt-6-astra` · high |
+| `runner` | coordinator-only, final run — the given command, summarised | `kss-runner` | `gpt-5.4-mini` · low |
 
-There is deliberately no `kss-opus-low`, nothing above `high`. Executors may spawn
-`kss-explorer` as a helper, under rules every executor enforces: **depth ≤2**, helpers **never
-write code**, **≤5 per ticket**, return **≤1.5k chars**. **No subagent runs tests, lint, build or
-tsc**: executors write the specs and commit them before the implementation, and the coordinator
-runs the whole suite once, after every ticket is integrated.
+Escalation is **one tier at a time**, `T1 → T5`, never past it. Tickets written before tiers carry
+`Model` + `Effort`; they are translated on the fly, never rewritten
+([`references/tiers.md`](references/tiers.md)).
+
+On Claude Code the plugin ships those eight agents, registered as `kss:kss-*` while it is enabled —
+that prefix is the name to spawn them by. `kss-init` copies them into the project's
+`.claude/agents/` **only when the plugin is not available** (a vendored install, where they answer
+to the bare name); a project copy stops following releases and drifts. On Codex there is no agent
+registry: the role preambles live in the Codex adapter and the coordinator pastes them into the
+brief.
+
+Executors may spawn an `explorer` as a helper, under rules every executor enforces: **depth ≤2**,
+helpers **never write code**, **≤5 per ticket**, return **≤1.5k chars**. **No subagent runs tests,
+lint, build or tsc**: executors write the specs and commit them before the implementation, and the
+coordinator runs the whole suite once, after every ticket is integrated.
 
 ## Metrics and progress
 
 `metrics.jsonl` lives in the feature folder, one appended line per event:
 
 ```json
-{ "ts": "…", "phase": "execute", "ticket": "04", "kind": "subagent", "agent_type": "kss-opus-high",
-  "model": "opus", "effort": "high", "depth": 1, "turns": 31,
+{ "ts": "…", "phase": "execute", "harness": "codex", "ticket": "04", "kind": "subagent",
+  "agent_type": "T5", "model": "gpt-6-astra", "effort": "high", "depth": 1, "turns": 31,
   "tokens": { "fresh_in": 12000, "cache_write": 9000, "cache_read": 41000, "out": 6000,
               "cumulative": 6200000, "ctx_end": 148000 },
   "git": { "files": 4, "added": 210, "deleted": 35, "commits": 3 } }
 ```
 
-Tokens are summed from the transcript JSONL `usage` field per assistant turn — **never** the
-number the Agent tool displays, which is the final context size, not consumption. `SubagentStop`
-records subagents; `SessionEnd` records the main session's phase cost; `kss-execute` records git
-stats per integrated ticket.
+Tokens are summed from the transcript per model response — **never** the number the harness
+displays for a subagent, which is its final context size, not consumption. Claude Code writes one
+assistant message per line with a `usage` object, Codex writes a rollout whose `token_usage_record`
+items carry the same figures, and the hooks read both. `SubagentStop` records subagents;
+`SessionEnd` records the main session's phase cost; `kss-execute` records git stats per integrated
+ticket.
 
 `README.md` renders a `## Cost` table from it, one row per phase — agents, turns, cumulative
 tokens split by type, wall time, files, +/−:
 
-| Phase | Agents | Turns | Tokens (fresh/cache-w/cache-r/out) | Wall time | Files | +/− |
-| --- | --- | --- | --- | --- | --- | --- |
-| execute | 9 | 214 | 108k/81k/369k/54k | 41m | 17 | +842/−118 |
+| Phase | Harness | Agents | Turns | Tokens (fresh/cache-w/cache-r/out) | Wall time | Files | +/− |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| spec | codex | 1 | 6 | 22k/4k/61k/9k | 7m | 1 | +180/−0 |
+| execute | claude-code | 9 | 214 | 108k/81k/369k/54k | 41m | 17 | +842/−118 |
+
+A phase worked from both prints both — that column is how a handoff shows up in the artifact.
 
 The execution progress board (states: `blocked`, `ready`, `running`, `reviewing`, `rejected`,
 `integrated`) prints on every spawn, report, verdict, integrate or escalate:
 
 ```
-kss · 012-batch-cutoff · execute
+kss · 012-batch-cutoff · execute · codex
 ███████░░░  7/10 integrated · 82% of estimated turns
-# | Ticket | State | Agent | Turns used/est | Since
-04 | wallet-projection | running | kss-opus-high | 31/45 | 14m
+# | Ticket | State | Tier | Turns used/est | Since
+04 | wallet-projection | running | T5 | 31/45 | 14m
 Critical path: 01 → 03 → 04 → 09
 Elapsed: 52m    Tokens: 19.8M
-Last: kss-reviewer approved 03
+Last: reviewer approved 03
 ```
 
-The statusline (installed by `kss-init`) reads `.kss/current`, e.g. `kss 012 · execute · 3/5
+The statusline is Claude Code only (Codex has no status-line hook; there, `$kss-status` prints the
+board on demand). Installed by `kss-init`, it reads `.kss/current`, e.g. `kss 012 · execute · 3/5
 ████░░ · running: 04 (31t, 14m) · 19.8M tok`. With no active run it falls back to the previously
 installed statusline's output.
 
@@ -336,11 +425,13 @@ See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation.
 
 ```
 kss-skill/
-  .claude-plugin/    plugin.json, marketplace.json
-  agents/            eight-agent matrix, installed into consuming projects
+  .claude-plugin/    plugin.json, marketplace.json  — Claude Code
+  .codex-plugin/     plugin.json                    — Codex
+  agents/            eight-agent matrix — Claude Code only
   hooks/             hooks.json (SubagentStop/SessionEnd/Stop) + metrics/progress scripts
-  scripts/           current.mjs, render-cost.mjs, statusline.mjs
-  skills/            the 13 kss-*/SKILL.md files, plus skills/README.md
+  references/        tiers.md + one adapter per harness → .kss/references/
+  scripts/           harness.mjs, current.mjs, next.mjs, render-cost.mjs, statusline.mjs
+  skills/            the 13 kss-*/SKILL.md files (+ agents/openai.yaml for Codex), skills/README.md
   templates/         copied into a project's .kss/templates/ by kss-init
   DESIGN.md          the normative spec every builder reads first
   LICENSE

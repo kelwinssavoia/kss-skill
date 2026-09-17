@@ -1,6 +1,6 @@
 ---
 name: kss-execute
-description: Run a feature's tickets to done — continuous-frontier scheduling in worktrees, report gates, per-ticket review, escalation, integration and the PR. Run it after /kss-tickets, or to resume an interrupted run.
+description: Run a feature's tickets to done — continuous-frontier scheduling in worktrees, report gates, per-ticket review, escalation, integration and the PR. Run it after kss-tickets, or to resume an interrupted run.
 argument-hint: NNN-<slug> [--ticket NN]
 disable-model-invocation: true
 ---
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 Drive the ticket graph from `ready` to `integrated` and open the pull request. You are the
 **coordinator**: you schedule, you spawn, you read reports and verdicts, you integrate, you log.
-You never write the feature's code yourself and you never read a diff — a `kss-reviewer` does
+You never write the feature's code yourself and you never read a diff — a `reviewer` does
 that and hands you a verdict. Everything you need is on disk, so this session stays small enough
 to survive the whole run; when it does not, you say so and let the user `/clear`.
 
@@ -20,14 +20,25 @@ Read, in this order:
 - `.kss/config.md` — `execution`, `base_branch`, `branch_prefix`, `features_root`.
 - `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `<features_root>/NNN-slug/README.md` — the index.
-- `<features_root>/NNN-slug/05-tickets/graph.md` — the graph, the models, the estimates.
+- `<features_root>/NNN-slug/05-tickets/graph.md` — the graph, the tiers, the estimates.
 - `<features_root>/NNN-slug/06-execution.md` — the log, to recompute the frontier on resume.
 - A ticket file `05-tickets/NN-<slug>.md` **only** at the moment you spawn it, to paste it into
   the brief.
 
 **Do not read:** `03-spec.md`, `04-plan.md`, `01-investigation.md`, `02-decisions.md`, any source
 file, any test file, or any diff. If something is missing from the ticket, the ticket is wrong —
-send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
+send it back to `kss-tickets`; do not fill the gap from the spec or the plan.
+
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
 
 ## Preconditions
 
@@ -39,15 +50,15 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
-   `No .kss/config.md found. Run /kss-init first.`
+   `No .kss/config.md found. Run kss-init first.`
 2. The feature folder and `05-tickets/graph.md` must exist. If not, stop with exactly:
-   `No ticket graph for NNN-slug. Run /kss-tickets NNN-slug first.`
+   `No ticket graph for NNN-slug. Run kss-tickets NNN-slug first.`
 3. The feature branch must be checked out and the worktree clean — after the sweep in step 0 has
    committed the phase artifacts, anything still dirty is the user's own work. If so, stop with
    exactly: `Worktree is dirty. Commit or stash before executing.` Never stash or discard it
    yourself.
 4. The README must show the Tickets block as approved. If it does not, stop with exactly:
-   `Ticket graph for NNN-slug is not approved. Run /kss-tickets NNN-slug and approve it.`
+   `Ticket graph for NNN-slug is not approved. Run kss-tickets NNN-slug and approve it.`
 5. Pick the sub-procedure from `execution` in `.kss/config.md`: `multi-agent` → §A,
    `single-session` → §B. Never mix them.
 6. `--ticket NN` runs that one ticket only (a re-run or a fix ticket); its blockers must already
@@ -75,38 +86,36 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
    The branch is exactly `NNN-slug/NN-ticket` (prefixed by `branch_prefix` when set). Record the
    absolute worktree path in `.kss/current` as `tickets.<NN>.worktree`; that is what tells a
    resumed run whether a `running` ticket is still alive.
-4. **Spawn.** The agent type is Model + Effort from the graph: `kss-sonnet-low`,
-   `kss-sonnet-medium`, `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`. There is no
-   `kss-opus-low`. **Read the names from the agent list before the first spawn**: agents that
-   come from the plugin are namespaced `kss:kss-opus-high`, and only a vendored copy in
-   `.claude/agents/` answers to the bare name. Use whichever form the list shows; a wrong name
-   fails the spawn, not the ticket. **The brief is the ticket file pasted in verbatim, plus the worktree path —
-   nothing else.** No summary of the spec, no extra context, no links to the plan. The ticket
-   already forbids running any test, lint, build or tsc command; add nothing on the subject.
+4. **Spawn.** The tier comes from the graph (`T1`–`T5`); the **harness adapter** says what to spawn
+   for it and how — read it before the first spawn of the run, and follow it exactly. A ticket
+   written before tiers carries `Model` + `Effort` instead: translate it with the compat table in
+   `.kss/references/tiers.md`, and do not rewrite the ticket.
+   **The brief is the ticket file pasted in verbatim, plus the worktree path, plus whatever
+   preamble the adapter says the role needs — nothing else.** No summary of the spec, no extra
+   context, no links to the plan. The ticket already forbids running any test, lint, build or tsc
+   command; add nothing on the subject.
 5. **Gate the report.** A report is accepted only when all three hold:
    1. it follows the ticket's Report-back shape and is ≤1.5k chars;
    2. the commit order is test-before-implementation — two commits, the test one first;
    3. every deviation is justified.
    A failing gate goes **back to the same agent** (same worktree, same agent type) with the list
    of exactly what is missing. Never accept a report by filling the gap yourself.
-6. **Review.** Spawn `kss-reviewer` on every finished ticket. It reads the diff and the report and
+6. **Review.** Spawn a `reviewer` on every finished ticket. It reads the diff and the report and
    returns either `approve`, or `reject` with numbered findings, each naming file, line, and the
    rule or FR broken. **You read verdicts only, never diffs.**
 7. **Escalate on reject.**
    - *Execution error* (the design was right, the code is not): re-run the **same ticket, one
      effort level up, in the same worktree**, with the findings pasted in.
    - *Reasoning error* (the approach itself is wrong): **model and effort both go up**.
-   - **Never skip two levels.** sonnet-low → sonnet-medium → sonnet-high → opus-medium →
-     opus-high, one step at a time.
+   - **Never skip two levels.** `T1 → T2 → T3 → T4 → T5`, one step at a time, and never past `T5`.
    - A ticket still unfinished past **80 turns**: stop it, **keep the worktree**, and send it back
-     to `/kss-tickets` to be re-sliced. The executor never splits a ticket on its own.
-8. **Integrate** with a `kss-sonnet-low` agent: rebase the ticket branch on the feature branch,
+     to `kss-tickets` to be re-sliced. The executor never splits a ticket on its own.
+8. **Integrate** with a `T1` agent: rebase the ticket branch on the feature branch,
    merge it into the feature branch, remove the worktree (`git worktree remove --force
    .kss/worktrees/NNN-slug/NN`, then `rm -rf` the directory if it is still there, then delete the
    ticket branch), set the state to `integrated`, and
    unblock the dependants — then immediately spawn whatever that unblocked (step 2). A rebase
-   conflict goes to `kss-sonnet-medium` with both tickets' context, and then to the reviewer
-   again.
+   conflict goes to `T2` with both tickets' context, and then to the reviewer again.
 9. **Record git stats** for each integrated ticket: append a `kind: "git"` line to
    `<features_root>/NNN-slug/metrics.jsonl` with `git: { files, added, deleted, commits }` from
    `git diff --shortstat` and `git rev-list --count` on the merged range.
@@ -136,13 +145,13 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 1. Execute the tickets **in the order** given by the Single-session section of `graph.md`. No
    worktrees, no graph frontier, no per-ticket model; commits land on the feature branch.
 2. Before a ticket whose header says `/clear before: yes`, **stop** and print exactly:
-   `Next ticket NN needs a fresh context. Safe to /clear, then run /kss-execute NNN-slug --ticket NN.`
+   `Next ticket NN needs a fresh context. Safe to /clear, then run kss-execute NNN-slug --ticket NN.`
    Do not start that ticket in the current session.
 3. The **same three gates apply, self-applied**, to your own work: report shape, commit order
    (test first), justified deviations. You write the specs and do not run them; the suite runs
    once at the end, as in §A.10. Write the report into `06-execution.md` exactly as an agent
    would.
-4. Run a `kss-reviewer` subagent per ticket where the Agent tool exists; where it does not, write
+4. Run a `reviewer` subagent per ticket where the harness can spawn one; where it cannot, write
    the reviewer's checklist and your answers into the log instead.
 5. Finish as in §A.10.
 
@@ -151,7 +160,7 @@ send it back to `/kss-tickets`; do not fill the gap from the spec or the plan.
 When your own context passes ~150k, print exactly:
 
 > Coordinator context at Xk. State is on disk. Safe to /clear and run
-> `/kss-execute NNN-slug` to resume.
+> `kss-execute NNN-slug` to resume.
 
 Resuming recomputes the frontier from the log; a ticket marked `running` with no live worktree is
 reset to `ready`.
@@ -161,9 +170,9 @@ reset to `ready`.
 - **The progress board, printed on every event** — spawn, report, verdict, integrate, escalate:
 
   ```
-  kss · NNN-slug · execute
+  kss · NNN-slug · execute · <harness>
   ███████░░░  n/N integrated · x% of estimated turns
-  # | Ticket | State | Agent | Turns used/est | Since
+  # | Ticket | State | Tier | Turns used/est | Since
   Critical path: …
   Elapsed: …    Tokens: …
   Last: <event>
@@ -191,7 +200,8 @@ reset to `ready`.
 
   ```json
   {"feature":"NNN-slug","phase":"execute","ticket":"04",
-   "tickets":{"04":{"state":"running","agent_type":"kss-opus-high","started_at":"ISO-8601",
+   "harness":"<from harness.mjs>",
+   "tickets":{"04":{"state":"running","tier":"T5","started_at":"ISO-8601",
                     "turns":31,"est_turns":45,
                     "worktree":"/abs/path/.kss/worktrees/NNN-slug/04"}},
    "execution":{"integrated":3,"total":5,"critical_path":"01→03→05","last":"<event>"}}
@@ -200,7 +210,7 @@ reset to `ready`.
   - `tickets` is a **map keyed by the ticket number**, never an array — that is what lets one
     ticket be updated on its own, e.g.
     `node .kss/scripts/current.mjs set '{"tickets":{"04":{"state":"integrated"}}}'`.
-  - The per-ticket fields are exactly `state`, `agent_type`, `started_at`, `turns`, `est_turns`,
+  - The per-ticket fields are exactly `state`, `tier`, `started_at`, `turns`, `est_turns`,
     `worktree`. `state` is one of `blocked`, `ready`, `running`, `reviewing`, `rejected`,
     `integrated`.
   - The run's roll-up — `integrated`, `total`, `critical_path`, `last` — lives in the top-level
@@ -236,7 +246,7 @@ when the file does not exist.
 
 The `Next:` line is **never written by hand**: it is the output of
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --after execute`, which knows the track of the
-feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On M and L it is `/kss-review`; an S track ends here and the line lists
+feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On M and L it is `kss-review`; an S track ends here and the line lists
 review and docs as optional.
 
 ## Rules
@@ -247,13 +257,14 @@ review and docs as optional.
 - `.kss/current` follows DESIGN.md §3.3: `tickets` is a map keyed by `NN`, and the run roll-up is
   the top-level `execution` key — never `session`, and never an array of tickets.
 - The brief is the ticket file pasted in plus the worktree path — nothing else.
-- The agent type is Model + Effort from the graph; there is no `kss-opus-low`.
+- The tier comes from the graph and the adapter turns it into a spawn; the coordinator never
+  writes a model name into an artifact.
 - All three report gates hold, or the report goes back to the same agent with the missing list.
-- Every finished ticket is reviewed by `kss-reviewer`; the coordinator reads verdicts, never diffs.
-- Escalation: execution error → effort +1 in the same worktree with the findings; reasoning error
-  → model and effort up; never skip two levels.
-- Past 80 turns a ticket stops, keeps its worktree, and goes back to `/kss-tickets`.
-- Integration is a `kss-sonnet-low` job; conflicts go to `kss-sonnet-medium` and then the reviewer.
+- Every finished ticket is reviewed by a `reviewer`; the coordinator reads verdicts, never diffs.
+- Escalation: execution error → one tier up in the same worktree with the findings; reasoning
+  error → up to two; never more, never past `T5`.
+- Past 80 turns a ticket stops, keeps its worktree, and goes back to `kss-tickets`.
+- Integration is a `T1` job; conflicts go to `T2` and then the reviewer.
 - **No agent runs tests, lint, build or tsc — ever.** Executors write the specs and commit them
   first; the coordinator runs the suite itself, once, after every ticket is `integrated`, and at
   most once more after the fixes. A third failing run stops and goes to the user.

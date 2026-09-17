@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // SubagentStop → append one `kind: "subagent"` line to the feature's metrics.jsonl.
 // No-op (exit 0) whenever there is no active KSS run.
+//
+// Both harnesses fire this event with the same payload shape; Codex names the subagent's own
+// transcript `agent_transcript_path` and writes it in the rollout format (DESIGN.md §19).
 
-import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summariseTranscript, readMeta, activeTicket, isActive } from './kss-lib.mjs'
+import { readStdin, parseJson, readCurrent, featureDir, appendMetric, summarise, readMeta, activeTicket, isActive } from './kss-lib.mjs'
 
 async function main() {
   const payload = parseJson(await readStdin(), null)
@@ -14,14 +17,16 @@ async function main() {
   const dir = featureDir(cwd, current)
   if (!dir) return
 
-  const s = summariseTranscript(payload.transcript_path)
+  const transcript = payload.agent_transcript_path || payload.transcript_path
+  const s = summarise(transcript)
   if (!s.turns) return
 
-  const meta = readMeta(payload.transcript_path)
+  const meta = readMeta(transcript)
 
   appendMetric(dir, {
     ts: new Date().toISOString(),
     phase: current.phase || null,
+    harness: current.harness || null,
     ticket: current.ticket || activeTicket(current),
     kind: 'subagent',
     agent_type: payload.agent_type || (meta && meta.agentType) || null,

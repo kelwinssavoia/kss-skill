@@ -1,6 +1,6 @@
 ---
 name: kss-docs-product
-description: Write the product-facing documentation for a finished feature and link it from the docs index. Run it after /kss-review, for the people who use the feature rather than build it.
+description: Write the product-facing documentation for a finished feature and link it from the docs index. Run it after kss-review, for the people who use the feature rather than build it.
 argument-hint: NNN-<slug>
 disable-model-invocation: true
 ---
@@ -29,6 +29,17 @@ Read, in this order:
 **Do not read:** source files, `04-plan.md`, `06-execution.md`, `01-investigation.md`, or the
 technical decisions. This skill spawns no explorer.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -39,11 +50,11 @@ technical decisions. This skill spawns no explorer.
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
 1. `.kss/config.md` must exist. If it does not, stop with exactly:
-   `No .kss/config.md found. Run /kss-init first.`
+   `No .kss/config.md found. Run kss-init first.`
 2. The feature folder must exist. If it does not, stop with exactly:
    `No feature NNN-slug under <features_root>.`
 3. `00-brief.md` must exist. If it does not, stop with exactly:
-   `NNN-slug has no brief. Run /kss-clarify first.`
+   `NNN-slug has no brief. Run kss-clarify first.`
    When `03-spec.md` is absent (an S track), write from the brief alone and say so under
    `## What changed`.
 
@@ -101,7 +112,7 @@ gitignored and never part of this.
 
 **Close the run** when nothing is left to do for this feature:
 `node .kss/scripts/current.mjs end`. It sets `phase: "done"` so the hooks stop appending to
-`metrics.jsonl` and the statusline hands back to the previous one. Running any later `kss-` skill on
+`metrics.jsonl`, and a harness with a status line hands it back to the previous one. Running any later `kss-` skill on
 this feature re-opens it automatically. The main session's own cost for this last phase is not
 recorded — that is the price of a clean tree (DESIGN.md §6).
 

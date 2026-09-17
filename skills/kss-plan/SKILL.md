@@ -1,6 +1,6 @@
 ---
 name: kss-plan
-description: Write the implementation plan for a KSS feature — shape rather than code, covering models, contracts, flows, UI, reuse, the file map and the test plan, with file-level facts gathered by read-only explorers. Use after /kss-spec, before /kss-tickets.
+description: Write the implementation plan for a KSS feature — shape rather than code, covering models, contracts, flows, UI, reuse, the file map and the test plan, with file-level facts gathered by read-only explorers. Use after kss-spec, before kss-tickets.
 argument-hint: NNN-<slug>
 disable-model-invocation: true
 ---
@@ -17,7 +17,7 @@ back to an FR or a decision, and the plan ends with one approval turn.
 
 Read `~/.kss/preferences.md` for `conversation_language` (everything printed in this session).
 
-Read `.kss/config.md` (`features_root`, `standards`, `layout_references`, `explorer_model`), then
+Read `.kss/config.md` (`features_root`, `standards`, `layout_references`, `explorer_tier`), then
 in `<features_root>/NNN-slug/`:
 
 - `README.md` — whole file.
@@ -30,6 +30,17 @@ in `<features_root>/NNN-slug/`:
 **Do not read:** application source files (explorers do that), `05-tickets/`, `06-execution.md`,
 `node_modules`, or `CLAUDE.md`-style standards beyond the NFR rules the spec already cites.
 
+## Harness
+
+`node .kss/scripts/harness.mjs` prints the harness this phase is running in and the adapter to read:
+`.kss/references/harness-<name>.md`. That file holds how a phase is invoked, how a subagent is
+spawned and what each tier maps to (`.kss/references/tiers.md`) — **read it before spawning anything
+or printing a command**. If it prints `unknown`, ask which harness this is — one question — then
+record it with `node .kss/scripts/harness.mjs --set <name>`.
+
+Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
+phase may well run in the other one (DESIGN.md §19).
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -39,13 +50,13 @@ in `<features_root>/NNN-slug/`:
    `git add <those paths> && git commit -m "docs(NNN): <previous phase> artifacts"`, and say so
    in one line. Never stash or discard it, never mix it into this phase's commit.
 
-1. `.kss/config.md` missing → stop: `No .kss/config.md. Run /kss-init first.`
-2. `03-spec.md` missing → stop: `No 03-spec.md for NNN-slug. Run /kss-spec NNN-slug first.`
+1. `.kss/config.md` missing → stop: `No .kss/config.md. Run kss-init first.`
+2. `03-spec.md` missing → stop: `No 03-spec.md for NNN-slug. Run kss-spec NNN-slug first.`
 3. The spec lists a story with no FR (an error) → stop:
    `03-spec.md has unresolved errors: <list>. Fix the spec before planning.`
 4. A product or architecture decision the plan needs is absent — how an entity is keyed, who owns
    a flow, which service holds the data, what the money or tenancy rule is — → **stop**:
-   `Undecided: <question>. Run /kss-grill NNN-slug; the plan cannot choose this.`
+   `Undecided: <question>. Run kss-grill NNN-slug; the plan cannot choose this.`
    Never resolve such a question by picking the likely option.
 
 ## Procedure
@@ -54,11 +65,11 @@ in `<features_root>/NNN-slug/`:
    shapes, component props, fixture and helper paths, existing spec files. Group them into at most
    five explorer briefs — one area each.
 
-2. **Spawn read-only explorers in parallel**, agent type `kss-explorer`, model `explorer_model`
-   (default sonnet). For a question touching **contract, tenant/authorization or money**, escalate
-   that explorer to opus and print, before the spawn:
+2. **Spawn read-only explorers in parallel**, in the `explorer` role at the tier `explorer_tier`
+   names (default `explorer`). For a question touching **contract, tenant/authorization or money**,
+   escalate that one to `explorer-deep` and print, before the spawn:
 
-   > This question touches `<area>`; spawning an Opus explorer for it.
+   > This question touches `<area>`; reading it with a deep explorer.
 
    Each brief states the question, the return format and the read discipline: grep first, read
    ranges, never a whole file over 300 lines, never `node_modules`, never write. Return format,
@@ -133,7 +144,7 @@ in `<features_root>/NNN-slug/`:
   File: 04-plan.md (<n>k / 20k)<notes links>
   ```
 
-  Update the header `**State:**` to `plan` and `**Next:**` to `/kss-tickets NNN-slug`.
+  Update the header `**State:**` to `plan` and `**Next:**` to `kss-tickets NNN-slug`.
 - State (DESIGN.md §3.3), on spawn and again as each explorer returns:
 
   ```bash
@@ -160,7 +171,7 @@ Plan done · NNN-slug
 Approach: <one line>
 Files: <n> create / <n> modify · entities: <n> · contracts: <n>
 New dependencies: <names, or none>
-Explorers: <n> (<n> opus)
+Explorers: <n> (<n> deep)
 Cost: <line rendered from metrics.jsonl>
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after plan>
@@ -171,18 +182,19 @@ The `Next:` line is **never written by hand**: it is the output of
 feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header.
 
 `Cost:` is rendered from `<features_root>/NNN-slug/metrics.jsonl` — agents, turns and cumulative
-tokens for this phase. Never use the number the Agent tool displays.
+tokens for this phase. Never use the number the harness displays for a subagent — that is its
+final context size, not what it consumed.
 
 ## Rules
 
 - **Shape, not code.** Signatures, field lists, message shapes, component names and props. No
   implementation bodies, no diffs, no pseudo-code longer than a signature.
-- **A missing product or architecture decision stops the plan** and returns it to `/kss-grill`.
+- **A missing product or architecture decision stops the plan** and returns it to `kss-grill`.
   Choosing on the user's behalf is the failure mode this rule exists to prevent.
-- **The main session never reads source code.** Facts come from `kss-explorer` returns; explorers
+- **The main session never reads source code.** Facts come from `explorer` returns; explorers
   are read-only and never write.
-- **Escalate to opus, with the printed warning, for contract, tenant/authorization and money
-  questions.** Maximum five explorers in parallel; group the questions when there are more.
+- **Escalate to `explorer-deep`, with the printed warning, for contract, tenant/authorization and
+  money questions.** Maximum five explorers in parallel; group the questions when there are more.
 - **Every `create` in the File map is justified against Reuse**, naming what was considered.
 - **Every new dependency gets its own confirmation turn.** Never batched, never assumed.
 - Every section of the plan traces to an FR or a decision; an item citing neither is removed.

@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Docs Product"
+  short_description: "Document the feature for users"
+  default_prompt: "Use $kss-docs-product to document this feature for the people who use it."
+policy:
+  allow_implicit_invocation: false

@@ -4,9 +4,9 @@
 
 ## Multi-agent
 
-| # | Ticket | Layer | Blocked by | Model | Effort | Est. turns | Worktree |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| {{NN}} | {{title}} | {{layer}} | {{blockers}} | {{model}} | {{effort}} | {{turns}} | yes |
+| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |
+| --- | --- | --- | --- | --- | --- | --- |
+| {{NN}} | {{title}} | {{layer}} | {{blockers}} | {{T1..T5}} | {{turns}} | yes |
 
 - **Critical path:** {{path}} — {{turns}} turns
 - **Parallel after contract:** {{tickets}}
