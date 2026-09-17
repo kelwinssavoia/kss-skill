@@ -1093,7 +1093,7 @@ One tree, two manifests. Nothing is generated, nothing is duplicated:
 
 ```
 .claude-plugin/plugin.json     Claude Code: skills, agents, hooks
-.codex-plugin/plugin.json      Codex: skills, hooks
+.codex-plugin/plugin.json      Codex: skills (not hooks — see below)
 skills/<name>/SKILL.md         shared — harness-neutral body
 skills/<name>/agents/openai.yaml   Codex only: UI metadata + allow_implicit_invocation: false
 agents/kss-*.md                Claude Code only: the eight registered agents
@@ -1102,11 +1102,28 @@ hooks/hooks.json               both: SubagentStop, SessionEnd, Stop — the even
 scripts/, templates/           shared → copied to .kss/scripts/, .kss/templates/
 ```
 
-`argument-hint` and `disable-model-invocation` stay in the frontmatter. Codex's runtime parses both
-(verified: a skill carrying them is discovered and listed by `codex debug prompt-input`); only its
-`quick_validate.py` helper reports them as unexpected keys, and that helper is stricter than the
-loader. `allow_implicit_invocation: false` is what actually keeps a phase out of Codex's automatic
-routing, which is the same intent `disable-model-invocation` has on Claude Code.
+Two places where the two contracts genuinely disagree, and what KSS does about each:
+
+**Hooks.** Codex's plugin ingestion contract does not accept a `hooks` field in `plugin.json`
+(`validate_plugin.py`: "field `hooks` is not accepted"), although the plugin spec document lists it.
+So `.codex-plugin/plugin.json` declares skills only, and on Codex `kss-init` merges the three hook
+entries into the **user-level** `$CODEX_HOME/hooks.json` instead — with its own yes/no turn, a
+backup, and a merge that keeps every entry already there. That is the same shape as the Claude Code
+statusline: one user-level file, written only on an explicit yes, with an absolute `<PLUGIN>` path
+because the plugin-root variable is not set for a hook installed that way. Codex then asks to
+**trust** the hook once (`/hooks`); until it is trusted, every phase works and `metrics.jsonl`
+stays empty.
+
+**`disable-model-invocation`.** It stays `true` in the frontmatter, and that is a deliberate,
+documented deviation: it is what stops Claude Code from invoking a phase on its own, which the whole
+family depends on, and Claude Code offers no other way to express it. Codex's *runtime* parses the
+key and loads the skill regardless — verified with `codex debug prompt-input`, which lists a KSS
+skill carrying it — and `allow_implicit_invocation: false` in `agents/openai.yaml` is what actually
+keeps a phase out of Codex's automatic routing, the same intent. Codex's *ingestion* validator,
+however, requires the frontmatter key to be absent or `false`, so the plugin as shipped would be
+rejected by OpenAI's curated marketplace. Installing it from this repository's own marketplace is
+unaffected. If that ever has to change, the key goes and Claude Code loses only the protection
+against automatic invocation — not a rule, a safeguard.
 
 ### 19.5 The handoff
 

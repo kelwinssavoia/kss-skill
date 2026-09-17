@@ -73,7 +73,7 @@ or blank, using the README blocks that exist. A phase is `skipped` when
 `optional` and the phase did not run (DESIGN.md §3.9):
 
 ```
-kss · NNN-slug · <size> · <track>
+kss · NNN-slug · <size> · <track> · <harness>
 clarify ✓ · investigate ✓ · decisions ✓ · grill ✓ · spec ✓ · plan → · tickets · execute · review · docs
 Branch: <branch> → <base>
 State: <the README State line>
@@ -85,9 +85,9 @@ Next: <the README Next line>
 **Execution board** — exactly the shape in DESIGN.md §14.4:
 
 ```
-kss · NNN-slug · execute
+kss · NNN-slug · execute · <harness>
 ███████░░░  n/N integrated · x% of estimated turns
-# | Ticket | State | Agent | Turns used/est | Since
+# | Ticket | State | Tier | Turns used/est | Since
 Critical path: …
 Elapsed: …    Tokens: …
 Last: <event>
@@ -101,6 +101,10 @@ from `.kss/current.tickets` — a **map keyed by `NN`**, each value
 and the final line of `06-execution.md` for the last event when that key is absent. `Tokens` is the
 cumulative sum from `metrics.jsonl`. Read `.kss/current` with
 `node .kss/scripts/current.mjs get` when the scripts are installed.
+
+`<harness>` is what `node .kss/scripts/harness.mjs --name` prints — the harness this board is being
+printed from, which is not necessarily the one that ran the phases. When `.kss/current` recorded a
+different one, print both: `codex → claude-code`. Omit the field entirely when neither is known.
 
 **Review phase** adds, after the State line:
 

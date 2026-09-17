@@ -193,7 +193,8 @@ function tickets(current) {
     return {
       id: String(id),
       state: r.state,
-      agent_type: r.agent_type ?? null,
+      // `tier` since 0.2.0; `agent_type` is what a run started before it still carries.
+      tier: r.tier ?? r.agent_type ?? null,
       turns: Number.isFinite(r.turns) ? r.turns : null,
       est_turns: Number.isFinite(r.est_turns) ? r.est_turns : null,
       started_at: r.started_at ?? null,

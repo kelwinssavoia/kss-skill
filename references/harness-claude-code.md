@@ -73,7 +73,7 @@ cursor in `.kss/current`.
 | --- | --- |
 | Default `standards` entry | `CLAUDE.md` |
 | Agent definitions | `agents/kss-*.md` in the plugin, `.claude/agents/` for a vendored install |
-| Hook manifest | `hooks/hooks.json`, merged automatically while the plugin is enabled |
+| Hook manifest | `hooks/hooks.json`, declared by the plugin manifest and merged automatically while the plugin is enabled |
 | Hook events KSS uses | `SubagentStop`, `SessionEnd`, `Stop` |
 | Statusline | `statusLine` in the user-level `~/.claude/settings.json` (DESIGN.md §18) |
 | Transcript the metrics hooks read | Claude Code transcript JSONL; a turn is an assistant message with `usage`, deduplicated by `message.id` |

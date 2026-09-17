@@ -131,14 +131,24 @@ codex plugin marketplace add kelwinssavoia/kss-skill
 codex plugin install kss
 ```
 
-Codex asks to **trust** a plugin's hooks the first time. Until you grant it (`/hooks`), every phase
-still works and `metrics.jsonl` simply stays empty. If you already run KSS in Claude Code on this
-machine, `/import` migrates the setup instead.
+`$kss-init` then offers to install the three metrics hooks into the user-level
+`$CODEX_HOME/hooks.json` — a Codex plugin manifest may not declare hooks, so they are a user-level
+file here, exactly as the statusline is on Claude Code. Codex asks to **trust** a hook the first
+time; until you grant it (`/hooks`), every phase still works and `metrics.jsonl` simply stays empty.
+If you already run KSS in Claude Code on this machine, `/import` migrates the setup instead.
+
+Two notes on the Codex packaging, both in [DESIGN.md §19.4](DESIGN.md#194-packaging): the skills
+keep `disable-model-invocation: true` in their frontmatter, because that is what stops Claude Code
+from invoking a phase on its own — Codex's runtime loads them fine and honours
+`allow_implicit_invocation: false` for the same purpose, but its *ingestion* validator wants that
+key absent, so the plugin is meant to be installed from this repository rather than submitted to
+OpenAI's curated marketplace.
 
 ### Both
 
-The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) ship in `hooks/hooks.json` — the event
-names are the same on both harnesses — and merge in automatically while the plugin is enabled.
+The metrics hooks (`SubagentStop`, `SessionEnd`, `Stop`) live in `hooks/hooks.json` — the event
+names are the same on both harnesses. Claude Code merges them in automatically while the plugin is
+enabled; Codex takes them from the user-level file `kss-init` offers to write.
 
 Every phase commits the artifacts it wrote (`docs(NNN): <phase>`), the next phase commits what the
 hooks appended after that, and the last phase closes the run — the feature branch is clean when a

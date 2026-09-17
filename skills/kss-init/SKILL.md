@@ -139,6 +139,32 @@ Then, still one turn each:
     Say that the KSS statusline prints the previous statusline's output whenever no KSS run is
     active, so nothing is lost. **Never edit `~/.claude/settings.json` without this yes.**
 
+18. **Codex only** — ask whether to install the three metrics hooks into the user-level
+    `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json` when `CODEX_HOME` is unset). A Codex plugin
+    cannot ship them: the plugin ingestion contract does not accept a `hooks` field, so they are a
+    user-level file here, exactly as the statusline is on Claude Code. On Claude Code skip this
+    question — the plugin's own `hooks/hooks.json` is merged automatically.
+
+    Find the file next to `config.toml`. Show exactly what will be merged, with `<PLUGIN>` already
+    resolved and absolute (the plugin-root variable is not set for a hook installed this way):
+
+    ```json
+    {
+      "hooks": {
+        "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-subagent.mjs" }] }],
+        "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-session.mjs" }] }],
+        "Stop":         [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-stop.mjs" }] }]
+      }
+    }
+    ```
+
+    Rules for the write: **merge, never replace** — keep every event and every entry already there,
+    and add only the three whose command is not present yet; back the file up to
+    `~/.kss/codex-hooks.backup.json` before the first change, and never overwrite an existing
+    backup. Say afterwards that **Codex asks to trust a hook before it runs it** (`/hooks`), and
+    that until it is trusted every phase still works and `metrics.jsonl` simply stays empty.
+    **Never edit `hooks.json` without this yes**; a `no` is fine and costs only the cost table.
+
 On confirmation, write — in this order:
 
 0. `~/.kss/preferences.md` — only when step 0 produced a value or a confirmed change. Create `~/.kss/`
@@ -192,16 +218,20 @@ On confirmation, write — in this order:
      git (`git rm --cached -q .kss/statusline.backup.json`) if it is tracked;
    - otherwise **move** it to `~/.kss/statusline.backup.json` when that file does not exist yet,
      or delete the project copy when a user-level backup is already there. Say which.
-7. `~/.claude/settings.json` — Claude Code only, and only if step 17 was a yes. Apply the backup
+7. `$CODEX_HOME/hooks.json` — Codex only, and only if step 18 was a yes. Merge the three entries
+   as described there, after writing `~/.kss/codex-hooks.backup.json` when that file does not exist
+   yet. Keep every other event and entry byte-identical.
+
+7b. `~/.claude/settings.json` — Claude Code only, and only if step 17 was a yes. Apply the backup
    action decided in step 17 first: write `~/.kss/statusline.backup.json` (creating `~/.kss/`)
    preserving whatever shape the old value had, or write nothing when the old value was already KSS
    or a backup exists. **Never write a backup whose command contains `statusline.mjs` or `kss`.**
    Then set `statusLine`. Keep the rest of the file byte-identical apart from that key.
 
-Do **not** write hooks into any settings file, on either harness. The plugin's `hooks/hooks.json`
-is declared by the plugin manifest and merged while the plugin is enabled. Say so in the summary,
-and on Codex add one line: **Codex asks to trust a plugin's hooks once** — until that is granted,
-`metrics.jsonl` stays empty and every phase still works; `/hooks` is where it is granted.
+On **Claude Code**, do not write hooks anywhere: the plugin's `hooks/hooks.json` is declared by
+`.claude-plugin/plugin.json` and merged while the plugin is enabled. Say so in the summary. On
+**Codex** they are the user-level file of step 18, because a Codex plugin manifest may not declare
+hooks — and either way Codex asks to trust them once before it runs them.
 
 ## Outputs
 
@@ -214,6 +244,8 @@ and on Codex add one line: **Codex asks to trust a plugin's hooks once** — unt
 | `.kss/references/` | `tiers.md` and **both** harness adapters |
 | `.claude/agents/kss-*.md` | the eight-agent matrix — Claude Code, vendored installs only |
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
+| `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |
+| `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
 | `.gitignore` | `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` added |
 
 `.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
@@ -233,7 +265,7 @@ References: .kss/references/ (tiers.md + <n> harness adapters)
 Agents: .claude/agents/ (<n> written, <n> kept) | not applicable on Codex
 Statusline: installed (previous backed up to ~/.kss/statusline.backup.json) | installed (already KSS, path refreshed) | skipped | not applicable on Codex
 Legacy backup: none | removed self-referencing .kss/statusline.backup.json | moved to ~/.kss/
-Hooks: come with the plugin — SubagentStop, SessionEnd, Stop. Nothing to install.<on Codex: · trust them once via /hooks or metrics.jsonl stays empty>
+Hooks: come with the plugin — SubagentStop, SessionEnd, Stop. Nothing to install. | installed into <path>/hooks.json — trust them once via /hooks, or metrics.jsonl stays empty | skipped
 Next: <prefix>kss-clarify <what you want to build>
 ```
 
@@ -252,6 +284,8 @@ Next: <prefix>kss-clarify <what you want to build>
 - `~/.kss/preferences.md` is user-local: never write it inside the repository, never commit it, and
   never overwrite an existing value without the user confirming the change.
 - Never invent the plugin path either — search for it, and ask when the search is not conclusive.
+- Never write a user-level file — the statusline, `hooks.json` — without its own yes, and always
+  merge into it rather than replacing it.
 - Never back up a `statusLine` that is already KSS, and never write `statusline.backup.json` inside
   the repository. A backup that points at the KSS statusline makes the fallback spawn itself
   (DESIGN.md §18.1).
