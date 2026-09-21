@@ -4,7 +4,7 @@
 //   node .kss/scripts/jev.mjs config                    print the effective local config, key redacted
 //   node .kss/scripts/jev.mjs check                     one tiny request; prints ok / the error
 //   node .kss/scripts/jev.mjs decide  '<json>'          auto-assumption gate for one investigation decision
-//   node .kss/scripts/jev.mjs tier    '<json>'          pick T1–T5 for one ticket summary
+//   node .kss/scripts/jev.mjs tier    '<json>'          pick T1–T5 from execution uncertainty
 //   node .kss/scripts/jev.mjs classify '<json>'         a coordinator judgement (escalation class, report gate, size)
 //   node .kss/scripts/jev.mjs ask     '<json>'          raw { state, questions } passthrough
 //
@@ -147,11 +147,11 @@ export function assumptionThreshold(cfg, category) {
 // ---------------------------------------------------------------- request building
 
 const TIER_CRITERIA = {
-  T1: 'light — one layer, 1–2 files, copying an existing pattern that is already in the codebase; also pure integration (rebase, merge, cleanup)',
-  T2: 'standard — one layer, several files, fitting an already decided plan to the code; no design choice left',
-  T3: 'demanding — a hard single-layer ticket (dense logic, many cases) that still follows a design someone else decided',
-  T4: 'design — the ticket contains design judgement (a shape, an abstraction, a trade-off to pick), or it is an escalation of a rejected T2/T3',
-  T5: 'critical — a contract or wire spec, tenant isolation or authorization, money movement, a cross-service flow, or tricky debugging where a wrong answer is expensive',
+  T1: 'light — mechanical, local work with a known pattern; also pure integration such as rebase, merge, or cleanup',
+  T2: 'standard — bounded multi-file implementation following explicit patterns; this is the normal default',
+  T3: 'demanding — same-area reconciliation that is demanding but whose decisions are already made',
+  T4: 'design — real technical judgement, unresolved design or data semantics, or meaningful cross-layer reconciliation',
+  T5: 'critical — long-horizon end-to-end integration, difficult diagnosis, genuinely unresolved cross-service state or failure semantics, or escalation after a failed ticket',
 }
 
 const CLASSIFY = {
@@ -218,7 +218,7 @@ export function buildDecide(input, cfg) {
 /** `tier` input → systemOne body. */
 export function buildTier(input, cfg) {
   if (!isObj(input) || typeof input.title !== 'string') {
-    throw new Error('tier needs {title, goal?, layer?, files?, contracts?, design_left?, risk?}')
+    throw new Error('tier needs {title, goal?, layer?, files?, contracts?, execution_uncertainty?, domain_risk?, safeguards?}')
   }
   const state = {
     title: input.title,
@@ -226,12 +226,13 @@ export function buildTier(input, cfg) {
     layer: input.layer ?? null,
     files: input.files ?? null,
     contracts_touched: input.contracts ?? null,
-    design_judgement_left: input.design_left ?? null,
-    risk: input.risk ?? null,
+    execution_uncertainty: input.execution_uncertainty ?? input.design_left ?? null,
+    domain_risk_categories: input.domain_risk ?? input.risk ?? null,
+    safeguards: input.safeguards ?? null,
   }
   const instructions =
-    'Choose how much agent one implementation ticket deserves. The tiers are a ladder from T1 (light) to T5 (critical). ' +
-    'Pick the lowest tier whose description fully covers the ticket; anything touching a contract, tenant isolation or money is T5 regardless of size.'
+    'Choose a tier from execution effort and uncertainty only. The tiers are a ladder from T1 (light) to T5 (critical). ' +
+    'Pick the lowest tier whose description fully covers the expected execution. Domain-risk categories such as migration, contract or wire changes, authorization, tenant isolation, and money do not raise a tier by themselves: they require safeguards, tests, review, and final gates independently. Escalate for unresolved execution state, not merely for a risk label.'
   return { body: { state, questions: { tier: choice(instructions, TIER_CRITERIA) } }, threshold: cfg.jev.tier_selection.confidence }
 }
 
@@ -314,7 +315,7 @@ function usage() {
   process.stderr.write(
     'usage: jev.mjs <config|check|decide|tier|classify|ask> [json] [--cwd <dir>]\n' +
       '  decide   {question, options:[{id,label,description?}], category?, context?, evidence?}\n' +
-      '  tier     {title, goal?, layer?, files?, contracts?, design_left?, risk?}\n' +
+      '  tier     {title, goal?, layer?, files?, contracts?, execution_uncertainty?, domain_risk?, safeguards?}\n' +
       '  classify {kind: escalation_class|report_gate|size, state}\n' +
       '  ask      {state, questions}\n',
   )

@@ -107,11 +107,11 @@ Everything below applies to M and L.
 
    | Tier | The ticket it belongs to |
    | --- | --- |
-   | `T1` | one layer, 1–2 files, copying an existing pattern |
-   | `T2` | one layer, several files, fitting the plan to the code |
-   | `T3` | a demanding single layer that still follows a decided design |
-   | `T4` | work with design judgement in it |
-   | `T5` | contract, wire spec, tenant/authorization, money, cross-service flow, debugging |
+   | `T1` | mechanical, local work with a known pattern |
+   | `T2` | bounded multi-file implementation following explicit patterns; the normal default |
+   | `T3` | demanding same-area reconciliation with decisions already made |
+   | `T4` | real technical judgement, unresolved semantics, or meaningful cross-layer reconciliation |
+   | `T5` | long-horizon integration, difficult diagnosis, unresolved cross-service state/failure semantics, or escalation after failure |
 
    | Field | Rule |
    | --- | --- |
@@ -126,7 +126,7 @@ Everything below applies to M and L.
 
    ```bash
    node .kss/scripts/jev.mjs tier '{"title":"…","goal":"<one line>","layer":"…",
-     "files":<n>,"contracts":"<none | which>","design_left":"<none | what>","risk":"<tenant|money|none>"}'
+     "files":<n>,"contracts":"<none | which>","execution_uncertainty":"<none | what>","domain_risk":"<categories>","safeguards":"<required checks>"}'
    ```
 
    Exit 3: Jev is off — apply the rubric. Exit 2: failure — say so once for the phase, apply the
@@ -134,8 +134,9 @@ Everything below applies to M and L.
    `Tier: T3 (jev 0.82)` in the ticket header comment, never in the `Tier:` field itself. With
    `verdict: open`: follow `fallback` — `rubric` means you decide from the table above with Jev's
    `ranked` list as a hint, `ask` means one question to the user with the ranked list as options.
-   A `T5` from the rubric (contract, tenant, money) is **never lowered** by Jev, whatever its
-   confidence.
+   Domain risk determines required safeguards, review, and test coverage independently; it does
+   not impose a minimum tier. A confident Jev result may therefore select the lowest tier that
+   covers the ticket's execution uncertainty.
 
 8. Write one file per ticket, `05-tickets/NN-<slug>.md`, from `.kss/templates/ticket.md`, using the **multi-agent header** and deleting
    the single-session header comment.
@@ -269,8 +270,9 @@ tool displays.
 
 ## Rules
 
-- Jev may propose a tier; the rubric's `T5` triggers always win, and a Jev tier below the
-  threshold is a hint, not a decision (DESIGN.md §20).
+- Jev may propose a tier from execution uncertainty. A result below the confidence threshold is a
+  hint, not a decision; migration, contract, authorization, tenant and money safeguards remain
+  mandatory regardless of the selected tier (DESIGN.md §20).
 
 - **The ticket is the brief.** Everything the executor needs is pasted in; it never opens the spec
   or the plan. A ticket that only cites `FR-07` instead of quoting it is incomplete.

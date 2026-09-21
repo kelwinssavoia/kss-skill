@@ -334,11 +334,11 @@ executed from either harness. The tier is the portable name; each harness adapte
 
 | Tier | The ticket it belongs to | Claude Code | Codex |
 | --- | --- | --- | --- |
-| `T1` | 1 layer, 1–2 files, copies a pattern; also integration | `kss-sonnet-low` | `gpt-5.6-luna` · low |
-| `T2` | 1 layer, several files, fits the plan to the code | `kss-sonnet-medium` | `gpt-5.6-terra` · medium |
-| `T3` | a demanding single layer on a decided design | `kss-sonnet-high` | `gpt-5.6-terra` · high |
-| `T4` | design judgement, or an escalation | `kss-opus-medium` | `gpt-6-astra` · medium |
-| `T5` | contract, wire, tenant, money, cross-service, hard bugs | `kss-opus-high` | `gpt-6-astra` · high |
+| `T1` | mechanical, local work with a known pattern | `kss-sonnet-low` | `gpt-5.6-luna` · low |
+| `T2` | bounded multi-file implementation following explicit patterns; the normal default | `kss-sonnet-medium` | `gpt-5.6-terra` · medium |
+| `T3` | demanding same-area reconciliation with decisions already made | `kss-sonnet-high` | `gpt-5.6-terra` · high |
+| `T4` | real technical judgement, unresolved semantics, or meaningful cross-layer reconciliation | `kss-opus-medium` | `gpt-6-astra` · medium |
+| `T5` | long-horizon integration, difficult diagnosis, unresolved cross-service state/failure semantics, or escalation after failure | `kss-opus-high` | `gpt-6-astra` · high |
 | `explorer` | one bounded read-only question, `file:line` evidence | `kss-explorer` | `gpt-5.4-mini` · low |
 | `explorer-deep` | the same, on a contract / tenant / money question | `kss-opus-medium` | `gpt-6-astra` · medium |
 | `reviewer` | one finished ticket's diff — approve or reject + findings | `kss-reviewer` | `gpt-6-astra` · high |
@@ -477,7 +477,7 @@ behind its own switch and threshold:
 | Switch | Phase | Effect when confidence clears the threshold |
 | --- | --- | --- |
 | `auto_assumptions` | `kss-investigate` | an `open` technical/layout decision becomes an `AD-`, recorded with Jev's confidence; below it, Jev's ranking is the proposed answer for the grill |
-| `tier_selection` | `kss-tickets` | the ticket takes Jev's tier; below it, the rubric decides. A rubric `T5` is never lowered |
+| `tier_selection` | `kss-tickets` | the ticket takes Jev's execution-uncertainty tier; below threshold, the rubric decides. Domain safeguards stay independent |
 | `reasoning` (experimental) | `kss-execute` | the coordinator takes Jev's `execution`/`reasoning` class on a reject, or `pass`/`fail` on a report |
 
 Business decisions are never auto: their threshold defaults above 1.0 on purpose. Every call goes

@@ -72,8 +72,9 @@ this machine, logged in.
     Weights are normalised, so `70/30` and `7/3` are the same. Default `50/50`. A harness with
     weight 0 is never used.
 3c. `execution.cross_harness.tiers` — which tiers may leave the local harness. Default
-    `T1, T2, T3`. Say why the default stops there: `T4`/`T5` carry design and contract judgement,
-    and a cross-CLI run has no reviewer conversation, only a report.
+    `T1, T2, T3`. Say why the default stops there: `T4`/`T5` carry material execution uncertainty,
+    and a cross-CLI run has no reviewer conversation, only a report. Domain-risk safeguards remain
+    mandatory at every tier.
 3d. `execution.cross_harness.cli` — the binary names (or absolute paths), and per harness the
     knobs: Claude Code `permission_mode` (default `acceptEdits`), `allowed_tools` (default
     read/edit/write tools plus `Bash(git *)` — that is what keeps a foreign executor from running

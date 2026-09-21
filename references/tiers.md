@@ -1,6 +1,6 @@
-# Tiers — who executes a ticket
+# Tiers — execution effort and uncertainty
 
-A ticket says **what** must be done and **how much agent** it deserves. It never says which model,
+A ticket says **what** must be done and how much execution effort and uncertainty it contains. It never says which model,
 because the same feature folder is worked from more than one harness: the spec phases in one, the
 execution in another (DESIGN.md §19). The tier is the portable name; each harness adapter maps it
 to whatever it actually spawns.
@@ -9,11 +9,22 @@ to whatever it actually spawns.
 
 | Tier | Name | When a ticket gets it |
 | --- | --- | --- |
-| `T1` | light | one layer, 1–2 files, copying an existing pattern. Also integration: rebase, merge, worktree cleanup |
-| `T2` | standard | one layer, several files, fitting the plan to the code |
-| `T3` | demanding | a demanding single-layer ticket that still follows a design someone else decided |
-| `T4` | design | work with design judgement in it, or an escalation from a rejected `T2`/`T3` |
-| `T5` | critical | contract, wire spec, tenant isolation, money movement, cross-service flow, tricky debugging |
+| `T1` | light | mechanical, local work with a known pattern. Also pure integration such as rebase, merge, or worktree cleanup. |
+| `T2` | standard | bounded multi-file implementation following explicit patterns; the normal default. |
+| `T3` | demanding | same-area reconciliation that is demanding but whose decisions are already made. |
+| `T4` | design | real technical judgement, unresolved design or data semantics, or meaningful cross-layer reconciliation. |
+| `T5` | critical | long-horizon end-to-end integration, difficult diagnosis, genuinely unresolved cross-service state or failure semantics, or an escalation after a failed ticket. |
+
+## Domain risk is a separate decision
+
+Migration, API/proto or wire changes, authorization and tenant paths, money-related rules, and
+other domain-risk categories do **not** determine the tier by themselves. A mechanically specified
+contract or migration may therefore be T2 or T3; a low-risk task with hard diagnosis may be T5.
+
+Risk instead determines mandatory safeguards: the relevant migration discipline, real-codec or
+contract coverage, authentication and permission checks, no-scope and forged-tenant cases,
+review, and the final suite gate. Model choice can reduce execution uncertainty; it cannot replace
+those controls. See [tier calibration](tier-calibration.md).
 
 Plus three fixed roles, which are not a ladder and are never assigned to a ticket:
 
@@ -41,6 +52,8 @@ folder can see the equivalence without opening either adapter.
 | `T3` | `kss-sonnet-high` | `gpt-5.6-terra` · `high` |
 | `T4` | `kss-opus-medium` | `gpt-6-astra` · `medium` |
 | `T5` | `kss-opus-high` | `gpt-6-astra` · `high` |
+
+For Claude Code, this is Sonnet low/medium/high at T1/T2/T3 and Opus medium/high at T4/T5.
 | `explorer` | `kss-explorer` | `gpt-5.4-mini` · `low`, read-only |
 | `explorer-deep` | `kss-opus-medium`, prompted read-only | `gpt-6-astra` · `medium`, read-only |
 | `reviewer` | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |

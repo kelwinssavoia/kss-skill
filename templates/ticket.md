@@ -6,7 +6,8 @@
 **Est.:** {{turns}} turns · **Worktree:** yes
 
 <!-- The tier says how much agent this ticket deserves, never which model: the same ticket may be
-     executed from either harness. `.kss/references/tiers.md` maps it. -->
+     executed from either harness. It measures execution effort and uncertainty; domain-risk
+     safeguards are independent. `.kss/references/tiers.md` maps it. -->
 
 <!-- single-session header
 **Order:** {{n}} · **Est. context:** {{k}}k · **/clear before:** {{yes|no}}

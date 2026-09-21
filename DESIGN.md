@@ -789,7 +789,7 @@ and `config.execution`. **An FR blocked by a `DF-` is never scheduled.**
 
 | Field | Rule |
 | --- | --- |
-| Tier | `T1` one layer, 1–2 files, copying a pattern · `T2` one layer, several files, fitting the plan to the code · `T3` a demanding single layer on a decided design · `T4` design judgement · `T5` contract / wire / tenant / money / cross-service / debugging. **Never a model name** (§19) |
+| Tier | `T1` mechanical local work · `T2` bounded pattern-following, the normal default · `T3` demanding same-area reconciliation on a decided design · `T4` real judgement, unresolved semantics, or meaningful cross-layer reconciliation · `T5` long-horizon integration, difficult diagnosis, unresolved cross-service state/failure semantics, or escalation after failure. **Never a model name** (§19). Domain safeguards are independent. |
 | Helpers | `explorer` or none — `runner` is the coordinator's alone. Depth max 2; helpers never write code or run commands; ≤5 per ticket; helper return ≤1.5k |
 | Worktree | yes |
 
@@ -1161,13 +1161,13 @@ switch and its own threshold, because "a confidence threshold is not one number"
 | Use | Phase | What is sent | What comes back | Threshold (default) |
 | --- | --- | --- | --- | --- |
 | **Auto-assumptions** | `kss-investigate` | one `open` technical or layout decision, the options the explorers found, one line of evidence each | `auto` → an `AD-` with Jev's confidence in the record; `open` → stays open, the ranked list becomes the proposed answer | technical 0.85 · layout 0.9 · business > 1 (never) |
-| **Tier selection** | `kss-tickets` | one ticket summary: layer, file count, contracts, design left, risk | `auto` → the tier; `open` → the rubric decides, Jev's ranking is a hint | 0.7 |
+| **Tier selection** | `kss-tickets` | one ticket summary: layer, file count, contracts, execution uncertainty, domain risk, safeguards | `auto` → the tier; `open` → the rubric decides, Jev's ranking is a hint | 0.7 |
 | **Coordinator judgements** (experimental) | `kss-execute` | a reviewer's findings, or an executor's report | `execution` / `reasoning`; `pass` / `fail` | 0.8 |
 
 Two rules hold across all three. **Business decisions are never auto**: the threshold for that
 category defaults above 1.0, so the knob exists and is visible but no default ever trips it. And
-**a rubric `T5` is never lowered**: contract, tenant isolation and money keep the tier the rubric
-gives them whatever Jev's confidence.
+**domain risk is not a tier floor**: contract, tenant isolation, money, migration and wire work
+keep their prescribed safeguards whatever execution tier Jev or the rubric selects.
 
 The third use is where the `jev-eval-agent` case study points — the classifier decides the fork,
 the model runs with less reasoning — and where the analogy is weakest for KSS. An executor's
@@ -1299,4 +1299,3 @@ verdict and escalation per ticket. Joining the two by ticket answers the questio
 turned on for: reject rate per harness at the same tier, turns and tokens per accepted ticket per
 harness, and whether the foreign fallback fired. A harness that is rejected twice as often as the
 other at `T2` is not saving anything; the split goes back to what the trace supports.
-
