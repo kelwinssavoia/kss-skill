@@ -109,6 +109,28 @@ phase may well run in the other one (DESIGN.md §19).
    **Business decisions are never auto** — they are always `open`. **Layout is auto only on an
    exact match** in a `layout_references` entry. If `auto_decide: false` in the config, every
    decision is `open`.
+
+   **Jev gate (optional, DESIGN.md §20).** For every item that came out `open` above and has
+   **enumerated options** the explorers actually found, run one call per item:
+
+   ```bash
+   node .kss/scripts/jev.mjs decide '{"question":"…","category":"technical|layout",
+     "options":[{"id":"a","label":"…","description":"<evidence, one line>"}, …],
+     "context":"<one line of where it lives>","evidence":["file:line — …", …]}'
+   ```
+
+   Exit 3 means Jev is off for this project — skip silently. Exit 2 is a network or API failure —
+   say so in one line and keep the item `open`. Exit 0 returns `verdict`, `choice`, `confidence`,
+   `threshold` and `ranked`: on `auto`, record the item as an `AD-` with verdict `default`, its
+   Decision the chosen option, its Confidence the number Jev returned and the threshold it cleared,
+   and its Evidence the explorer evidence **plus** the line `jev: <choice> <confidence> ≥ <threshold>
+   · runner-up <id> <p>`; on `open`, it stays open, and the ranked list is written under the item
+   in `01-investigation.md` as the proposed answer for the grill or the decision check. Business
+   items are **never** sent — the script keeps their threshold above 1 anyway. Items whose options
+   are not enumerable (a question of intent, a free-text design) are not sent either: Jev chooses,
+   it does not invent. Never send more than the `max_options` the local config allows; cluster
+   first. Every call is traced to `<feature>/jev-trace.jsonl` when tracing is on, and that file is
+   committed with the phase.
 8. Revise the size if the evidence demands it, recording in `01-investigation.md`:
    `Size revised: S → L, reason: …`, and updating the README header.
 
@@ -234,7 +256,10 @@ when the user answered `grill` in the decision check. On L the result is `kss-gr
 - Explorer returns are ≤2k chars in the Answer / Evidence / Reuse / Unknown format, max 8 evidence
   lines.
 - Business decisions are never auto. Layout is auto only on an exact `layout_references` match.
-  `default` requires ≥3/4 of comparable places.
+  `default` requires ≥3/4 of comparable places — or a Jev `auto` verdict over enumerated options,
+  recorded with its confidence and threshold (DESIGN.md §20).
+- Jev is optional and never blocking: exit 3 is "off", exit 2 is "keep it open and say so". A Jev
+  answer is never written as fact without its confidence next to it.
 - Every auto decision is written to `auto-decisions.md`; nothing there is ever deleted.
 - `01-investigation.md` is ≤12k chars; overflow goes to `notes/` and is linked.
 - Write only `01-investigation.md`, `auto-decisions.md` and the Investigation block of `README.md`.

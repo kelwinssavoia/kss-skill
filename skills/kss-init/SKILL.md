@@ -193,9 +193,9 @@ On confirmation, write — in this order:
    feature specified from Codex and executed from Claude Code finds its adapter already in the
    project. Overwrite freely, same as the scripts.
 5. **Claude Code only** — `.claude/agents/`, and **only when the plugin's agents are not already
-   available**. The plugin ships the eight (`kss-sonnet-low`, `kss-sonnet-medium`,
+   available**. The plugin ships the nine (`kss-sonnet-low`, `kss-sonnet-medium`,
    `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`, `kss-reviewer`, `kss-explorer`,
-   `kss-runner`) and registers them as `kss:kss-*` while it is enabled: when they are in the agent
+   `kss-runner`, `kss-dispatcher`) and registers them as `kss:kss-*` while it is enabled: when they are in the agent
    list, write nothing here and say so in the summary. Copy them into the project only for a
    vendored, plugin-less install — the ones that are absent, asking before overwriting any that
    exists and accepting "keep mine". **A project copy is a fork**: it stops following plugin
@@ -204,10 +204,12 @@ On confirmation, write — in this order:
 
    On Codex there is no agent registry and nothing is written: the role preambles live in
    `.kss/references/harness-codex.md`, which write step 4 already installed.
-6. `.gitignore` — append `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` if
-   they are not already ignored. The first two are live state, not history
-   (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each ticket's git worktree); the third
-   is the legacy per-project backup, a user setting that must never be committed. Leave
+6. `.gitignore` — append `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
+   `.kss/config.local.json` if they are not already ignored. The first two are live state, not
+   history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each ticket's git worktree);
+   the third is the legacy per-project backup, a user setting that must never be committed; the
+   fourth is the per-machine preferences file `kss-config` writes — it carries the Jev API key, so
+   it is ignored **before** it can exist. Leave
    `.kss/config.md`, `.kss/templates/`, `.kss/scripts/`, `.kss/references/` and the feature folders
    tracked.
 
@@ -240,13 +242,13 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `~/.kss/preferences.md` | `conversation_language` — user-local, outside the repo, never committed |
 | `.kss/config.md` | the answers |
 | `.kss/templates/` | the project's copy of the KSS templates |
-| `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `statusline.mjs`, `kss-lib.mjs` |
+| `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `statusline.mjs`, `jev.mjs`, `dispatch.mjs`, `kss-lib.mjs` |
 | `.kss/references/` | `tiers.md` and **both** harness adapters |
-| `.claude/agents/kss-*.md` | the eight-agent matrix — Claude Code, vendored installs only |
+| `.claude/agents/kss-*.md` | the nine-agent matrix — Claude Code, vendored installs only |
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
 | `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |
 | `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
-| `.gitignore` | `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` added |
+| `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
 
 `.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
 
@@ -266,6 +268,7 @@ Agents: .claude/agents/ (<n> written, <n> kept) | not applicable on Codex
 Statusline: installed (previous backed up to ~/.kss/statusline.backup.json) | installed (already KSS, path refreshed) | skipped | not applicable on Codex
 Legacy backup: none | removed self-referencing .kss/statusline.backup.json | moved to ~/.kss/
 Hooks: come with the plugin — SubagentStop, SessionEnd, Stop. Nothing to install. | installed into <path>/hooks.json — trust them once via /hooks, or metrics.jsonl stays empty | skipped
+Preferences: <prefix>kss-config — models, efforts and Jev live in the gitignored .kss/config.local.json (optional)
 Next: <prefix>kss-clarify <what you want to build>
 ```
 

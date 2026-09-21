@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS Config"
+  short_description: "Set the per-machine KSS preferences: models, efforts and Jev"
+  default_prompt: "Use $kss-config to set my models, efforts and Jev preferences for this project."
+policy:
+  allow_implicit_invocation: false

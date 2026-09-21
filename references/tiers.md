@@ -23,6 +23,7 @@ Plus three fixed roles, which are not a ladder and are never assigned to a ticke
 | `explorer-deep` | the same job on a question that touches a contract, tenant isolation or money — the questions where a cheap wrong answer is expensive. `kss-investigate` and `kss-plan` escalate to it on their own, saying so before they spawn |
 | `reviewer` | reads one finished ticket's diff and report, returns approve or reject with numbered findings; read-only |
 | `runner` | runs exactly the command it is given and returns the summary and the failures; **coordinator-only**, and only for the single final run |
+| `dispatcher` | runs exactly one `dispatch.mjs run …`, which executes a ticket in the other harness's CLI, and returns its report verbatim; **coordinator-only**, only when cross-harness execution is on (DESIGN.md §21) |
 
 **Escalation is one step at a time**: `T1 → T2 → T3 → T4 → T5`. An execution error (the design was
 right, the code is not) moves one tier up in the same worktree with the findings pasted in. A
@@ -44,9 +45,16 @@ folder can see the equivalence without opening either adapter.
 | `explorer-deep` | `kss-opus-medium`, prompted read-only | `gpt-6-astra` · `medium`, read-only |
 | `reviewer` | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |
 | `runner` | `kss-runner` | `gpt-5.4-mini` · `low` |
+| `dispatcher` | `kss-dispatcher` | `gpt-5.4-mini` · `low` |
 
 A harness whose model list has moved on overrides the right-hand column in its own adapter. The
 left column — the tier — never changes, which is the whole point.
+
+A **machine** may override a row too: `models.tiers` in the gitignored `.kss/config.local.json`
+(written by `kss-config`) names, per tier and per harness, the agent (Claude Code) or the
+`{model, reasoning_effort}` (Codex) to spawn instead. The adapter reads it before the first spawn;
+the ticket still says `T3`. Names must be in `models.allowed` / `models.efforts`, and a `T5` is
+never mapped to less than the adapter's own `T5`.
 
 ## Reading a ticket written before tiers
 

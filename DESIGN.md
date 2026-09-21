@@ -64,11 +64,12 @@ of one of these measurements.
 
 ---
 
-## 2. The skills (13)
+## 2. The skills (14)
 
 | Skill | Required? | Role |
 | --- | --- | --- |
 | `kss-init` | once per project | Writes `.kss/config.md`, copies templates, scripts and both harness adapters into the project, and installs whatever the current harness needs |
+| `kss-config` | optional | Writes the gitignored `.kss/config.local.json`: allowed models and efforts, per-tier overrides, cross-harness execution and its split (§21), and the Jev settings and key (§20) |
 | `kss-clarify` | yes | Turns a vague request into a brief; picks size and track; creates folder and branch |
 | `kss-investigate` | M, L | Read-only explorers map the code; classifies decisions auto vs open; on M, settles them with the user in the decision check (§8.4) |
 | `kss-review-decisions` | optional | Review, accept, reopen or override the auto decisions |
@@ -411,6 +412,7 @@ It then:
 | `kss-reviewer` | opus | high | read-only |
 | `kss-explorer` | sonnet | low | read-only |
 | `kss-runner` | sonnet | low | coordinator-only, final run: runs tests / lint / tsc; returns only summary lines and failures |
+| `kss-dispatcher` | sonnet | low | coordinator-only; runs one `dispatch.mjs run` (a ticket in the other harness's CLI) and returns its report verbatim (§21) |
 
 There is **no `kss-opus-low`** by design, and nothing above `high`.
 
@@ -1096,7 +1098,7 @@ One tree, two manifests. Nothing is generated, nothing is duplicated:
 .codex-plugin/plugin.json      Codex: skills (not hooks — see below)
 skills/<name>/SKILL.md         shared — harness-neutral body
 skills/<name>/agents/openai.yaml   Codex only: UI metadata + allow_implicit_invocation: false
-agents/kss-*.md                Claude Code only: the eight registered agents
+agents/kss-*.md                Claude Code only: the nine registered agents
 references/                    tiers.md + one adapter per harness → copied to .kss/references/
 hooks/hooks.json               both: SubagentStop, SessionEnd, Stop — the event names match
 scripts/, templates/           shared → copied to .kss/scripts/, .kss/templates/
@@ -1134,3 +1136,167 @@ line, open the other app in the same directory, type the same phase with that ap
 
 What makes it work is §19.1 — and what proves it worked is the `Harness` column of the `## Cost`
 table, which names every harness that touched each phase.
+
+---
+
+## 20. Jev — a System One classifier in the loop
+
+### 20.1 What it is, and what it is not
+
+Jev (TypeSafe, `docs.typesafe.ai`) is not a language model in the sense the rest of this document
+uses the word. It takes a small JSON **state** and a set of typed **questions** — `choice` (pick one
+label), `score` (a rubric level), `noul` (is this true) — and returns, per question, a probability
+for every label and a **confidence** derived from how concentrated that distribution is. One call,
+many questions, evaluated in parallel; output tokens are free; the request is bounded at 64k tokens
+with 32k for the state. It does not generate text, it does not count reliably, it does not compare
+dates, and its accuracy drops as the state fills with material unrelated to the question.
+
+So in KSS Jev is used for exactly one kind of moment: a **fork whose options are already
+enumerated**, where the phase would otherwise spend a model turn — or a user turn — choosing. It
+is never asked to write, plan, or find anything. Three such moments exist, each behind its own
+switch and its own threshold, because "a confidence threshold is not one number".
+
+### 20.2 The three uses
+
+| Use | Phase | What is sent | What comes back | Threshold (default) |
+| --- | --- | --- | --- | --- |
+| **Auto-assumptions** | `kss-investigate` | one `open` technical or layout decision, the options the explorers found, one line of evidence each | `auto` → an `AD-` with Jev's confidence in the record; `open` → stays open, the ranked list becomes the proposed answer | technical 0.85 · layout 0.9 · business > 1 (never) |
+| **Tier selection** | `kss-tickets` | one ticket summary: layer, file count, contracts, design left, risk | `auto` → the tier; `open` → the rubric decides, Jev's ranking is a hint | 0.7 |
+| **Coordinator judgements** (experimental) | `kss-execute` | a reviewer's findings, or an executor's report | `execution` / `reasoning`; `pass` / `fail` | 0.8 |
+
+Two rules hold across all three. **Business decisions are never auto**: the threshold for that
+category defaults above 1.0, so the knob exists and is visible but no default ever trips it. And
+**a rubric `T5` is never lowered**: contract, tenant isolation and money keep the tier the rubric
+gives them whatever Jev's confidence.
+
+The third use is where the `jev-eval-agent` case study points — the classifier decides the fork,
+the model runs with less reasoning — and where the analogy is weakest for KSS. An executor's
+reasoning is writing code against a ticket, which Jev cannot do. What can be delegated is the
+**coordinator's** deliberation on already-enumerated classes, and the effort of a ticket whose fork
+points were settled before it was spawned (`effort_when_delegated`, Codex only, because a Claude
+Code agent's effort is fixed in its definition). It ships off by default, traced, so the trace can
+say whether it earns its keep.
+
+### 20.3 The contract
+
+- **One script**, `scripts/jev.mjs`, copied to `.kss/scripts/` by `kss-init` like the others. No
+  dependency: `fetch` against `POST /v1/systemone`, bearer auth, the model from the config. Exit
+  codes are part of the contract: `0` an answer, `3` off (skip silently), `2` a failure (say so,
+  fall back), `1` a usage error. **No phase ever stops because Jev did not answer.**
+- **One file**, `.kss/config.local.json`, written by `kss-config`, gitignored by `kss-init` before it
+  can exist. It holds the API key (or the name of the environment variable that does), the
+  switches, the thresholds, and the per-machine model overrides (`models.allowed`, `models.efforts`,
+  `models.tiers`). It is the only KSS file that may name a model, and it never leaves the machine.
+- **Nothing Jev says is written as fact.** An auto-assumption records `jev: <choice> <confidence> ≥
+  <threshold> · runner-up`; a tier records `(jev 0.82)` in a comment; an execution event logs
+  `jev: <kind> <choice> <confidence>`. The user can always see that a machine decided, and how sure
+  it was.
+- **Every call is traced** to `<feature>/jev-trace.jsonl` (state, ranked options, confidence, gate,
+  latency) while `jev.trace` is on, and the file is committed with the phase. That trace is the
+  only honest way to tune a threshold: count how many `auto` verdicts the grill would have
+  overridden, and how many `open` verdicts the user answered exactly as Jev's top option.
+- **§19.1 stands.** The local file may name models; no artifact does. A `models.tiers` override
+  changes what this machine spawns for `T3`, not what the ticket says.
+
+### 20.4 What to measure before believing it
+
+The claim is three-fold — fewer tokens, less wall time, more consistent decisions — and each has a
+number in the existing metrics. Before and after turning a switch on, over the same kind of
+feature: the count of `Qn` turns the grill printed (auto-assumptions); the coordinator's turns and
+tokens in `kss-tickets` and `kss-execute` (tier selection, judgements); the escalation count per
+feature (whether Jev's tiers were too low). And from the trace, the two error rates above. A switch
+whose trace shows the user overriding it more than one time in ten is turned off again.
+
+---
+
+## 21. Cross-harness execution
+
+### 21.1 The idea
+
+§19 made one feature folder workable from two harnesses *in sequence*: spec here, execute there.
+This section makes the execution itself mixed: a coordinator running in Claude Code may hand a
+ticket to Codex, and one running in Codex may hand a ticket to Claude Code, **in the same run**, in
+a proportion the user sets. The reasons are the ones the user has: spreading a run across two
+subscriptions, comparing the two on like-for-like tickets, and keeping a run moving when one side
+is rate-limited.
+
+Nothing about the ticket changes. It still says `T2`; the foreign harness's adapter table (or the
+machine's `models.tiers` override) still turns that into a model and an effort. What changes is
+*who* runs it: instead of the harness's own subagent tool, the harness's **CLI**, non-interactive,
+in the ticket's worktree, with the brief on stdin.
+
+### 21.2 The mechanism
+
+```
+coordinator (harness A)
+  └─ dispatch.mjs pick      → "codex" | "claude-code" | local (exit 3)
+  └─ writes NN.brief.md     = executor preamble (adapter B) + ticket + worktree
+  └─ spawns `dispatcher`    (light, local subagent: sonnet-low / gpt-5.4-mini-low)
+       └─ dispatch.mjs run  → spawns CLI B in the worktree, brief on stdin
+            claude -p --model … --effort … --output-format json --permission-mode acceptEdits
+                      --allowedTools Read Grep Glob Edit Write "Bash(git *)" --max-turns 80
+            codex exec --json --cd <wt> -m … -c model_reasoning_effort="…" -s workspace-write
+                      -c approval_policy="never" -o <last-message> -
+       └─ returns the report block + one `Dispatch:` line
+  └─ gates, reviews, integrates exactly as for a local ticket
+```
+
+Three facts make this hold together:
+
+- **The brief is identical.** A foreign executor receives the same preamble a local one would on
+  that harness, then the ticket, then the worktree path — nothing else. The CLI is just another
+  spawn primitive.
+- **The report is identical.** `claude -p --output-format json` returns the final message in
+  `result`; `codex exec -o <file>` writes it. Both are the ticket's Report-back block, so the
+  coordinator's gate does not know or care where the ticket ran.
+- **The cost is recorded by the script.** `SubagentStop` never fires for a CLI child, so
+  `dispatch.mjs run` writes the `kind: "subagent"` metrics line itself — `harness` set to the
+  foreign one, `agent_type: cross:<harness>:<tier>`, tokens from the CLI's own usage figures
+  (Claude: `usage`; Codex: the sum of `turn.completed` events, with the cached and cache-written
+  tokens subtracted from `input_tokens` as `kss-lib` does for rollouts), `cost_usd` when the CLI
+  reports one. The `## Cost` table's `Harness` column then shows the mix per phase, which is the
+  point of running it.
+
+### 21.3 The split
+
+`execution.cross_harness.split` is a weight per harness; `pick` normalises it and assigns each
+ticket by **largest deficit**: the harness whose observed count is furthest below
+`share × (n + 1)` gets the next ticket, ties go to the local harness. Over ten tickets a `70/30`
+split lands exactly 7 and 3 whatever the order they become ready in. The observed counts come
+from `<feature>/dispatch.jsonl`, an append-only log the script writes on every `pick` and `run`, so
+a resumed run continues the same split.
+
+Three guards, all in the script, none in the coordinator's judgement:
+
+- `tiers` — which tiers may leave the local harness, default `T1`–`T3`. `T4` and `T5` carry design
+  and contract judgement, and a CLI run has no `SendMessage` back to it: a reject means a fresh
+  spawn. The user may add them; the default does not.
+- A harness whose CLI binary is not on `PATH` is skipped, and `pick` says so in `unavailable`.
+- A failed or timed-out foreign run is re-spawned **locally**, same tier, once, and logged as an
+  escalation with the reason `cross-harness fallback`. It never bounces to the other harness again.
+
+### 21.4 What a foreign executor may do
+
+The CLI flags are the enforcement, and they are configuration, not prose:
+
+| | Claude Code (`claude -p`) | Codex (`codex exec`) |
+| --- | --- | --- |
+| Edit and commit | `--permission-mode acceptEdits` + `--allowedTools … "Bash(git *)"` | `-s workspace-write` |
+| Run tests, lint, build | **not allowed** — no other `Bash` pattern is in the list | by instruction only (the preamble); the sandbox cannot distinguish `git` from `npm test` |
+| Ask the user | impossible in print mode — `approval_policy` / permission denials fail the call | `-c approval_policy="never"` |
+| Turn budget | `--max-turns 80` | the preamble's ~80 |
+| Wall clock | `timeout_ms`, default one hour, then `SIGTERM` and a local fallback | same |
+
+The asymmetry in the second row is real and worth knowing: on Claude Code the tool list makes the
+no-tests rule mechanical; on Codex it is the preamble's rule 3, as it is for a native Codex
+subagent. The coordinator's final run is the same either way.
+
+### 21.5 What to measure
+
+`dispatch.mjs status` prints target vs observed. `metrics.jsonl` now carries, per ticket, the
+harness, model, effort, turns, tokens and (for Claude) dollars; `06-execution.md` carries the
+verdict and escalation per ticket. Joining the two by ticket answers the questions the split was
+turned on for: reject rate per harness at the same tier, turns and tokens per accepted ticket per
+harness, and whether the foreign fallback fired. A harness that is rejected twice as often as the
+other at `T2` is not saving anything; the split goes back to what the trace supports.
+

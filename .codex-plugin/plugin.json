@@ -1,6 +1,6 @@
 {
   "name": "kss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Phase-based development workflow: clarify, investigate, grill, spec, plan, tickets, execute, review, docs — with a fresh thread between phases and token metrics",
   "author": {
     "name": "Kelwin Savoia",

@@ -90,6 +90,31 @@ phase may well run in the other one (DESIGN.md §19).
    for it and how — read it before the first spawn of the run, and follow it exactly. A ticket
    written before tiers carries `Model` + `Effort` instead: translate it with the compat table in
    `.kss/references/tiers.md`, and do not rewrite the ticket.
+   **Cross-harness (optional, DESIGN.md §21).** Before choosing the local spawn, ask once per
+   ticket:
+
+   ```bash
+   node .kss/scripts/dispatch.mjs pick '{"feature":"NNN-slug","ticket":"NN","tier":"T2","local":"<harness from harness.mjs>"}'
+   ```
+
+   Exit 3: the ticket stays local (cross-harness off, tier excluded, tie, or the foreign CLI is
+   missing — the JSON says which); spawn as usual. Exit 0 with `foreign: true`: write the brief —
+   the executor preamble from `.kss/references/harness-<harness>.md`, then the ticket file
+   verbatim, then `Worktree: <abs path>` — to `<worktree>/../NN.brief.md` (inside
+   `.kss/worktrees/NNN-slug/`, which is gitignored), and spawn the **`dispatcher`** role with
+   exactly one command:
+
+   ```
+   node .kss/scripts/dispatch.mjs run '{"feature":"NNN-slug","ticket":"NN","tier":"T2","harness":"<picked>","worktree":"<abs>","brief_file":"<abs>"}'
+   ```
+
+   The dispatcher returns the report block plus one `Dispatch:` line; gate the report exactly as a
+   local one (step 5). A failed dispatch (`blocked` with a `Dispatch: … failed` line) is re-spawned
+   **locally** at the same tier, once, and logged as `escalate · cross-harness fallback`. Record
+   `harness` in the ticket's `.kss/current` entry and in the `spawn` log line
+   (`spawn · T2 · codex via dispatcher`). The metrics line for a foreign run is written by the
+   script, not by a hook.
+
    **The brief is the ticket file pasted in verbatim, plus the worktree path, plus whatever
    preamble the adapter says the role needs — nothing else.** No summary of the spec, no extra
    context, no links to the plan. The ticket already forbids running any test, lint, build or tsc
@@ -103,7 +128,13 @@ phase may well run in the other one (DESIGN.md §19).
 6. **Review.** Spawn a `reviewer` on every finished ticket. It reads the diff and the report and
    returns either `approve`, or `reject` with numbered findings, each naming file, line, and the
    rule or FR broken. **You read verdicts only, never diffs.**
-7. **Escalate on reject.**
+7. **Escalate on reject.** Decide the class yourself from the findings — or, when the local
+   config delegates it (`jev.reasoning.enabled`, decision `escalation_class`, DESIGN.md §20), run
+   `node .kss/scripts/jev.mjs classify '{"kind":"escalation_class","state":{"goal":"…","report":"…","findings":[…]}}'`
+   and take `choice` when `verdict` is `auto`; on `open`, exit 2 or exit 3, decide yourself. The
+   same applies to the report gate in step 5 (`kind: report_gate`, `choice: pass|fail`): a Jev
+   `fail` still needs *your* list of what is missing, so a delegated gate saves the judgement, not
+   the message. Log `jev: <kind> <choice> <confidence>` in the execution event either way.
    - *Execution error* (the design was right, the code is not): re-run the **same ticket, one
      effort level up, in the same worktree**, with the findings pasted in.
    - *Reasoning error* (the approach itself is wrong): **model and effort both go up**.
@@ -211,7 +242,7 @@ reset to `ready`.
     ticket be updated on its own, e.g.
     `node .kss/scripts/current.mjs set '{"tickets":{"04":{"state":"integrated"}}}'`.
   - The per-ticket fields are exactly `state`, `tier`, `started_at`, `turns`, `est_turns`,
-    `worktree`. `state` is one of `blocked`, `ready`, `running`, `reviewing`, `rejected`,
+    `worktree`, and `harness` when the ticket was dispatched cross-harness. `state` is one of `blocked`, `ready`, `running`, `reviewing`, `rejected`,
     `integrated`.
   - The run's roll-up — `integrated`, `total`, `critical_path`, `last` — lives in the top-level
     **`execution`** key. It is not part of `session`: the `Stop` hook owns `session`, and a writer
@@ -259,6 +290,8 @@ review and docs as optional.
 - The brief is the ticket file pasted in plus the worktree path — nothing else.
 - The tier comes from the graph and the adapter turns it into a spawn; the coordinator never
   writes a model name into an artifact.
+- A cross-harness ticket goes through `dispatch.mjs pick` then the `dispatcher` role; it is gated
+  and reviewed like any other, and a failed dispatch falls back to a local spawn once.
 - All three report gates hold, or the report goes back to the same agent with the missing list.
 - Every finished ticket is reviewed by a `reviewer`; the coordinator reads verdicts, never diffs.
 - Escalation: execution error → one tier up in the same worktree with the findings; reasoning

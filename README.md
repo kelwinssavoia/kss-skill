@@ -1,6 +1,6 @@
 # KSS — Phase-based development for Claude Code and Codex
 
-KSS is a family of thirteen skills, prefixed `kss-`, that carry a software task from a vague request
+KSS is a family of fourteen skills, prefixed `kss-`, that carry a software task from a vague request
 to merged-and-documented, one phase at a time, each its own skill invocation with a `/clear`
 suggested at the end. It installs on **Claude Code** and on **Codex**, from one source tree and one
 version, and a single feature can be specified in one and executed in the other — see
@@ -169,10 +169,14 @@ plus execution mode (multi-agent/single-session), layout references and standard
    `~/.kss/statusline.backup.json` — KSS falls back to printing that output when no run is active.
    If the statusline is already KSS (a second project on the same machine, or an upgrade) nothing
    is backed up; the path is just refreshed. On Codex this step is skipped.
-4. *(Claude Code)* Creates the eight-agent matrix in `.claude/agents/`, skipping files that already
+4. *(Claude Code)* Creates the nine-agent matrix in `.claude/agents/`, skipping files that already
    exist (asks before overwriting). On Codex there is no agent registry and nothing is written.
-5. Adds `.kss/current`, `.kss/worktrees/` and `.kss/statusline.backup.json` to `.gitignore`;
-   config, templates, references and feature folders stay tracked.
+5. Adds `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
+   `.kss/config.local.json` to `.gitignore`; config, templates, references and feature folders stay
+   tracked.
+
+Optionally, then run `/kss-config` to write the per-machine preferences — see
+[Preferences, cross-harness and Jev](#preferences-cross-harness-and-jev-kssconfiglocaljson).
 
 ### `.kss/config.md` keys
 
@@ -199,13 +203,21 @@ question instead of guessing.
 
 **Requirements:** Node ≥ 18 (`hooks/*.mjs`, `scripts/*.mjs`), `gh` CLI (`kss-review` reads/polls
 PR threads/CI), git (every feature is a branch; each ticket gets its own worktree). Tests:
-`node --test hooks/ scripts/`.
+`node --test hooks/*.test.mjs scripts/*.test.mjs`.
 
 ## Skills
 
 Written `/kss-name` below, which is how a phase is invoked in Claude Code. In Codex the same phase
 is `$kss-name`, with the arguments typed after it. Nothing else about a phase differs, and you never
 type the prefix into an artifact: `scripts/next.mjs` prints the right one.
+
+### `kss-config` — `/kss-config [--show | --check | key=value …]`
+Writes the gitignored `.kss/config.local.json`: the models and efforts this machine may spend per
+tier, and the Jev switches, thresholds and API key. Optional; any time after `kss-init`.
+- **Reads/writes:** reads `.kss/templates/config.local.json`, `.kss/references/tiers.md`; writes
+  `.kss/config.local.json` and the `.gitignore` line if it is missing. Never prints the key whole.
+- **Confirmation:** one turn per key, a final turn with the redacted file before writing, then a
+  connectivity check when Jev is on.
 
 ### `kss-init` — `/kss-init` (no arguments)
 Sets the project up for the workflow. Run once, first.
@@ -331,12 +343,13 @@ executed from either harness. The tier is the portable name; each harness adapte
 | `explorer-deep` | the same, on a contract / tenant / money question | `kss-opus-medium` | `gpt-6-astra` · medium |
 | `reviewer` | one finished ticket's diff — approve or reject + findings | `kss-reviewer` | `gpt-6-astra` · high |
 | `runner` | coordinator-only, final run — the given command, summarised | `kss-runner` | `gpt-5.4-mini` · low |
+| `dispatcher` | coordinator-only — runs one ticket in the *other* harness's CLI, returns its report | `kss-dispatcher` | `gpt-5.4-mini` · low |
 
 Escalation is **one tier at a time**, `T1 → T5`, never past it. Tickets written before tiers carry
 `Model` + `Effort`; they are translated on the fly, never rewritten
 ([`references/tiers.md`](references/tiers.md)).
 
-On Claude Code the plugin ships those eight agents, registered as `kss:kss-*` while it is enabled —
+On Claude Code the plugin ships those nine agents, registered as `kss:kss-*` while it is enabled —
 that prefix is the name to spawn them by. `kss-init` copies them into the project's
 `.claude/agents/` **only when the plugin is not available** (a vendored install, where they answer
 to the bare name); a project copy stops following releases and drifts. On Codex there is no agent
@@ -395,9 +408,88 @@ board on demand). Installed by `kss-init`, it reads `.kss/current`, e.g. `kss 01
 ████░░ · running: 04 (31t, 14m) · 19.8M tok`. With no active run it falls back to the previously
 installed statusline's output.
 
+## Preferences, cross-harness and Jev (`.kss/config.local.json`)
+
+`.kss/config.md` is the project's shared configuration and is committed. What varies per machine
+and per person lives in **`.kss/config.local.json`**, written by `/kss-config`, gitignored by
+`kss-init` before it can exist, because it holds an API key. Template: `templates/config.local.json`.
+
+```jsonc
+{
+  "models": {
+    "allowed": { "claude-code": ["sonnet", "opus"], "codex": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"] },
+    "efforts": ["low", "medium", "high"],
+    "tiers": { "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } }
+  },
+  "jev": {
+    "enabled": true,
+    "api_key": "",                       // or leave empty and set api_key_env
+    "api_key_env": "TYPESAFE_API_KEY",
+    "model": "jev-latest",
+    "trace": true,                       // <feature>/jev-trace.jsonl, committed with the phase
+    "auto_assumptions": { "enabled": true, "confidence": 0.85, "by_category": { "technical": 0.85, "layout": 0.9, "business": 1.01 }, "max_options": 12 },
+    "tier_selection":   { "enabled": true, "confidence": 0.7, "on_low_confidence": "rubric" },
+    "reasoning":        { "enabled": false, "confidence": 0.8, "decisions": ["escalation_class", "report_gate"], "effort_when_delegated": {} }
+  }
+}
+```
+
+### Cross-harness execution
+
+With `execution.cross_harness.enabled`, `kss-execute` may run a ticket in the **other** harness's
+CLI — `codex exec` from a Claude Code coordinator, `claude -p` from a Codex one — through a light
+`dispatcher` subagent whose whole job is one `node .kss/scripts/dispatch.mjs run …` command.
+`split` is the target proportion per harness (weights, normalised); `pick` assigns each ticket to
+the harness furthest below its share, so ten `T1`–`T3` tickets at `70/30` land 7 and 3. `tiers`
+bounds what may leave (default `T1`–`T3`), a harness whose CLI is not on `PATH` is skipped with a
+reason, and a failed foreign run is re-spawned locally once. The foreign CLI gets the same brief a
+local executor would — the harness's executor preamble plus the ticket — and its tokens, turns and
+cost are written to `metrics.jsonl` by the script, tagged with the harness that ran it, so the
+`## Cost` table shows the mix. Assignments are logged in `<feature>/dispatch.jsonl`;
+`dispatch.mjs status NNN-slug` prints target vs observed.
+
+```jsonc
+"execution": {
+  "cross_harness": {
+    "enabled": true,
+    "split": { "claude-code": 60, "codex": 40 },
+    "tiers": ["T1", "T2", "T3"],
+    "timeout_ms": 3600000,
+    "cli": {
+      "claude-code": { "bin": "claude", "permission_mode": "acceptEdits", "allowed_tools": ["Read", "Grep", "Glob", "Edit", "Write", "Bash(git *)"], "max_turns": 80 },
+      "codex":       { "bin": "codex", "sandbox": "workspace-write", "approval_policy": "never" }
+    }
+  }
+}
+```
+
+The `allowed_tools` default is deliberate: a foreign Claude executor can read, edit and commit, and
+nothing else — which is how the "nobody but the coordinator runs tests" rule survives the CLI
+boundary. Full design: [DESIGN.md §21](DESIGN.md#21-cross-harness-execution).
+
+### Jev
+
+[Jev](https://docs.typesafe.ai) is TypeSafe's System One classifier: it answers *choice*, *score*
+and *yes/no* questions over a small JSON state with a probability per option and a confidence. It
+does not generate text, so KSS hands it only forks whose options are already enumerated, each
+behind its own switch and threshold:
+
+| Switch | Phase | Effect when confidence clears the threshold |
+| --- | --- | --- |
+| `auto_assumptions` | `kss-investigate` | an `open` technical/layout decision becomes an `AD-`, recorded with Jev's confidence; below it, Jev's ranking is the proposed answer for the grill |
+| `tier_selection` | `kss-tickets` | the ticket takes Jev's tier; below it, the rubric decides. A rubric `T5` is never lowered |
+| `reasoning` (experimental) | `kss-execute` | the coordinator takes Jev's `execution`/`reasoning` class on a reject, or `pass`/`fail` on a report |
+
+Business decisions are never auto: their threshold defaults above 1.0 on purpose. Every call goes
+through `node .kss/scripts/jev.mjs` — exit 3 means off, exit 2 means a failure the phase reports
+and falls back from; no phase ever stops because Jev did not answer. `models.tiers` changes what
+*this machine* spawns for a tier; tickets and graphs keep saying `T3` (DESIGN.md §19.1). The full
+design, and what to measure before trusting a switch, is [DESIGN.md §20](DESIGN.md#20-jev--a-system-one-classifier-in-the-loop).
+
 ## Configuration reference
 
-See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation.
+See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation, and
+[Preferences, cross-harness and Jev](#preferences-cross-harness-and-jev-kssconfiglocaljson) for `.kss/config.local.json`.
 
 ## Conventions
 
@@ -427,7 +519,7 @@ See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation.
 kss-skill/
   .claude-plugin/    plugin.json, marketplace.json  — Claude Code
   .codex-plugin/     plugin.json                    — Codex
-  agents/            eight-agent matrix — Claude Code only
+  agents/            nine-agent matrix — Claude Code only
   hooks/             hooks.json (SubagentStop/SessionEnd/Stop) + metrics/progress scripts
   references/        tiers.md + one adapter per harness → .kss/references/
   scripts/           harness.mjs, current.mjs, next.mjs, render-cost.mjs, statusline.mjs
