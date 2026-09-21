@@ -31,6 +31,12 @@ concurrently — that is how the continuous frontier spawns everything that just
 | `explorer-deep` | `kss-opus-medium`, with the read-only instruction in the prompt |
 | `reviewer` | `kss-reviewer` |
 | `runner` | `kss-runner` |
+| `dispatcher` | `kss-dispatcher` — one `dispatch.mjs run` command, report back verbatim |
+
+**Local overrides.** `node .kss/scripts/jev.mjs config` prints `models.tiers`; a row like
+`"T2": {"claude-code": "kss-sonnet-high"}` replaces the agent for that tier on this machine only.
+The name must be one of the nine KSS agents (or its `kss:` form) — anything else is refused, and
+the table above stands. The ticket and the graph keep saying `T2`.
 
 **Read the names from the agent list before the first spawn.** Agents that come from the plugin are
 namespaced `kss:kss-opus-high`; only a vendored copy in `.claude/agents/` answers to the bare name.

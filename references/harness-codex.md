@@ -56,6 +56,13 @@ authorisation to *spawn at all*, which is what invoking the phase gives it.
 | `explorer-deep` | `gpt-6-astra` | `medium` |
 | `reviewer` | `gpt-6-astra` | `high` |
 | `runner` | `gpt-5.4-mini` | `low` |
+| `dispatcher` | `gpt-5.4-mini` | `low` |
+
+**Local overrides.** `node .kss/scripts/jev.mjs config` prints `models.tiers`; a row like
+`"T2": {"codex": {"model": "gpt-5.6-terra", "reasoning_effort": "low"}}` replaces that tier's pair on
+this machine only, and `jev.reasoning.effort_when_delegated` lowers the `reasoning_effort` of a tier
+whose fork points Jev already settled (DESIGN.md §20). Both must stay inside `models.allowed` and
+`models.efforts`, and neither ever lowers a `T5`. The ticket keeps saying `T2`.
 
 Check the names against `codex --help` / the model picker before the first spawn of a run; when a
 model in this table is not available, drop to the nearest one **of the same or greater capability**
@@ -184,6 +191,18 @@ Class: execution | reasoning
 The coordinator escalates differently for each, so choose deliberately. Never propose a patch,
 never soften a finding to "nit". A finding you are unsure of goes in with the doubt stated, not
 left out.
+```
+
+### Dispatcher preamble (`dispatcher`)
+
+```
+You are a KSS dispatcher, spawned only by the coordinator to run one ticket in the other harness.
+Run exactly the command below, once, and wait for it — it can take many minutes. Do not poll, do
+not re-run, do not open the worktree or the brief. The script writes the metrics; you write nothing.
+On exit 0 return the JSON's `report` field verbatim followed by one line
+`Dispatch: <harness> · <model> · <effort> · <turns> turns · <duration> · <tokens> tokens`.
+On exit 2 return `Ticket: NN · blocked`, then `Dispatch: <harness> · failed — <error, ≤300 chars>`,
+then `Report: <report or none>`. Nothing else.
 ```
 
 ### Runner preamble (`runner`)

@@ -121,6 +121,22 @@ Everything below applies to M and L.
    **Never write a model name into a ticket or the graph.** A ticket that says `opus` cannot be
    executed from the other harness, which is the whole reason tiers exist.
 
+   **Jev tier (optional, DESIGN.md §20).** Before applying the rubric yourself, ask once per
+   ticket:
+
+   ```bash
+   node .kss/scripts/jev.mjs tier '{"title":"…","goal":"<one line>","layer":"…",
+     "files":<n>,"contracts":"<none | which>","design_left":"<none | what>","risk":"<tenant|money|none>"}'
+   ```
+
+   Exit 3: Jev is off — apply the rubric. Exit 2: failure — say so once for the phase, apply the
+   rubric. Exit 0 with `verdict: auto`: use `choice` as the tier and note
+   `Tier: T3 (jev 0.82)` in the ticket header comment, never in the `Tier:` field itself. With
+   `verdict: open`: follow `fallback` — `rubric` means you decide from the table above with Jev's
+   `ranked` list as a hint, `ask` means one question to the user with the ranked list as options.
+   A `T5` from the rubric (contract, tenant, money) is **never lowered** by Jev, whatever its
+   confidence.
+
 8. Write one file per ticket, `05-tickets/NN-<slug>.md`, from `.kss/templates/ticket.md`, using the **multi-agent header** and deleting
    the single-session header comment.
 
@@ -252,6 +268,9 @@ feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the
 tool displays.
 
 ## Rules
+
+- Jev may propose a tier; the rubric's `T5` triggers always win, and a Jev tier below the
+  threshold is a hint, not a decision (DESIGN.md §20).
 
 - **The ticket is the brief.** Everything the executor needs is pasted in; it never opens the spec
   or the plan. A ticket that only cites `FR-07` instead of quoting it is incomplete.

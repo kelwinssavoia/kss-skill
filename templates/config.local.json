@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "models": {
+    "efforts": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "allowed": {
+      "claude-code": [
+        "sonnet",
+        "opus"
+      ],
+      "codex": [
+        "gpt-5.4-mini",
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+        "gpt-6-astra"
+      ]
+    },
+    "tiers": {}
+  },
+  "execution": {
+    "cross_harness": {
+      "enabled": false,
+      "split": {
+        "claude-code": 50,
+        "codex": 50
+      },
+      "tiers": [
+        "T1",
+        "T2",
+        "T3"
+      ],
+      "timeout_ms": 3600000,
+      "cli": {
+        "claude-code": {
+          "bin": "claude",
+          "permission_mode": "acceptEdits",
+          "allowed_tools": [
+            "Read",
+            "Grep",
+            "Glob",
+            "Edit",
+            "Write",
+            "Bash(git *)"
+          ],
+          "max_turns": 80
+        },
+        "codex": {
+          "bin": "codex",
+          "sandbox": "workspace-write",
+          "approval_policy": "never"
+        }
+      }
+    }
+  },
+  "jev": {
+    "enabled": false,
+    "api_key": "",
+    "api_key_env": "TYPESAFE_API_KEY",
+    "model": "jev-latest",
+    "base_url": "https://api.typesafe.ai",
+    "timeout_ms": 10000,
+    "trace": true,
+    "auto_assumptions": {
+      "enabled": true,
+      "confidence": 0.85,
+      "by_category": {
+        "technical": 0.85,
+        "layout": 0.9,
+        "business": 1.01
+      },
+      "max_options": 12
+    },
+    "tier_selection": {
+      "enabled": true,
+      "confidence": 0.7,
+      "on_low_confidence": "rubric"
+    },
+    "reasoning": {
+      "enabled": false,
+      "confidence": 0.8,
+      "decisions": [
+        "escalation_class",
+        "report_gate"
+      ],
+      "effort_when_delegated": {}
+    }
+  }
+}

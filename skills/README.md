@@ -6,6 +6,7 @@ normative spec for every one of them.
 | Skill | Purpose | Argument hint |
 | --- | --- | --- |
 | `kss-init` | Sets KSS up in a project: writes `.kss/config.md`, copies the templates, scripts and both harness adapters, and installs whatever the current harness needs. Once per project. | *(no arguments)* |
+| `kss-config` | Writes the gitignored `.kss/config.local.json`: which models and efforts each harness may spend, per-tier overrides, cross-harness execution (Claude Code ↔ Codex via CLI, with a percentage split), and whether Jev settles auto-assumptions, picks tiers or takes coordinator judgements — each with its own confidence threshold and the API key. Optional; any time after `kss-init`. | `[--show \| --check \| key=value …]` |
 | `kss-clarify` | Turns a vague request into a brief, picks size and track, creates the feature folder and branch. | `<free text \| path \| url>` |
 | `kss-investigate` | Read-only explorers map where the feature lives and what to reuse; every decision is classified auto or open. On M (no grill) it ends with the decision check: one table, one answer, every open item decided or deferred. | `NNN-<slug> [--deep]` |
 | `kss-review-decisions` | Shows the auto decisions in one table and accepts, reopens or overrides them in a single turn. Optional. | `NNN-<slug>` |
