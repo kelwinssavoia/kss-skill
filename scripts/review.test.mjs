@@ -125,13 +125,19 @@ test('a model outside models.allowed, or an effort outside models.efforts, is re
   assert.match(b.warning, /models\.efforts/)
 })
 
-test('codex: a configured pair is taken as given; a half pair is refused', () => {
+test('codex: a configured pair is taken as given; a half pair inherits the default effort through the merge', () => {
   const ok = cfgWith({ models: { review: { light: { codex: { model: 'gpt-5.4-mini', reasoning_effort: 'high' } } } } })
   const r = pickReviewer({ depth: 'light', harness: 'codex' }, ok)
   assert.deepEqual([r.model, r.reasoning_effort, r.source], ['gpt-5.4-mini', 'high', 'config'])
 
   const half = cfgWith({ models: { review: { light: { codex: { model: 'gpt-5.4-mini' } } } } })
-  assert.equal(pickReviewer({ depth: 'light', harness: 'codex' }, half).source, 'default')
+  const h = pickReviewer({ depth: 'light', harness: 'codex' }, half)
+  assert.deepEqual([h.model, h.reasoning_effort, h.source], ['gpt-5.4-mini', 'medium', 'config'])
+
+  const noEffort = { ...cfgWith({}), models: { ...DEFAULTS.models, review: { light: { codex: { model: 'gpt-5.4-mini' } } } } }
+  const n = pickReviewer({ depth: 'light', harness: 'codex' }, noEffort)
+  assert.equal(n.source, 'default')
+  assert.match(n.warning, /reasoning_effort/)
 })
 
 test('a full review configured below the default is honoured and flagged', () => {
