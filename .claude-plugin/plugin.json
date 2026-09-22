@@ -21,6 +21,7 @@
     "./agents/kss-sonnet-high.md",
     "./agents/kss-opus-medium.md",
     "./agents/kss-opus-high.md",
+    "./agents/kss-haiku.md",
     "./agents/kss-reviewer.md",
     "./agents/kss-reviewer-sonnet-low.md",
     "./agents/kss-reviewer-sonnet-medium.md",

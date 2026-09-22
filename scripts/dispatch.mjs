@@ -57,7 +57,13 @@ const AGENT_TO_PAIR = {
   'kss-sonnet-high': { model: 'sonnet', effort: 'high' },
   'kss-opus-medium': { model: 'opus', effort: 'medium' },
   'kss-opus-high': { model: 'opus', effort: 'high' },
+  // Haiku rejects the effort parameter, so its agent carries none and its runs pass no --effort.
+  'kss-haiku': { model: 'haiku', effort: null },
 }
+
+/** Models that take no effort, and the tiers they may execute. */
+const NO_EFFORT_MODELS = ['haiku']
+const HAIKU_TIERS = ['T1', 'T2', 'T3']
 
 export const DEFAULTS = {
   enabled: false,
@@ -170,9 +176,14 @@ export function pairFor(harness, tier, overrides) {
   if (!base) return null
   const o = isObj(overrides) && isObj(overrides[tier]) ? overrides[tier][harness] : undefined
   if (harness === 'claude-code') {
-    if (typeof o === 'string') return AGENT_TO_PAIR[o.replace(/^kss:/, '')] || base
-    if (isObj(o) && typeof o.model === 'string') return { model: o.model, effort: typeof o.effort === 'string' ? o.effort : base.effort }
-    return base
+    let pair = base
+    if (typeof o === 'string') pair = AGENT_TO_PAIR[o.replace(/^kss:/, '')] || base
+    else if (isObj(o) && typeof o.model === 'string') pair = { model: o.model, effort: typeof o.effort === 'string' ? o.effort : base.effort }
+    if (NO_EFFORT_MODELS.includes(pair.model)) {
+      // T4/T5 carry real judgement: a haiku override there is refused and the adapter row stands.
+      return HAIKU_TIERS.includes(tier) ? { model: pair.model, effort: null } : base
+    }
+    return pair
   }
   if (isObj(o) && typeof o.model === 'string') return { model: o.model, effort: typeof o.reasoning_effort === 'string' ? o.reasoning_effort : base.effort }
   return base
@@ -186,7 +197,9 @@ export function buildCommand({ harness, worktree, tier, cross, overrides, lastMe
   if (!pair) throw new Error(`no tier mapping for ${harness} ${tier}`)
   const cli = cross.cli[harness] || {}
   if (harness === 'claude-code') {
-    const argv = [cli.bin || 'claude', '-p', '--model', pair.model, '--effort', pair.effort, '--output-format', 'json', '--no-session-persistence']
+    const argv = [cli.bin || 'claude', '-p', '--model', pair.model]
+    if (pair.effort) argv.push('--effort', pair.effort)
+    argv.push('--output-format', 'json', '--no-session-persistence')
     if (cli.permission_mode) argv.push('--permission-mode', cli.permission_mode)
     if (Array.isArray(cli.allowed_tools) && cli.allowed_tools.length) argv.push('--allowedTools', ...cli.allowed_tools)
     if (cli.max_turns) argv.push('--max-turns', String(cli.max_turns))
