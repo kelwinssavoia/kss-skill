@@ -29,14 +29,24 @@ concurrently — that is how the continuous frontier spawns everything that just
 | `T5` | `kss-opus-high` |
 | `explorer` | `kss-explorer` |
 | `explorer-deep` | `kss-opus-medium`, with the read-only instruction in the prompt |
-| `reviewer` | `kss-reviewer` |
+| `reviewer` | `kss-reviewer` (depth `full`) · `kss-reviewer-sonnet-medium` (depth `light`) — whatever `review.mjs pick` names |
 | `runner` | `kss-runner` |
 | `dispatcher` | `kss-dispatcher` — one `dispatch.mjs run` command, report back verbatim |
 
 **Local overrides.** `node .kss/scripts/jev.mjs config` prints `models.tiers`; a row like
 `"T2": {"claude-code": "kss-sonnet-high"}` replaces the agent for that tier on this machine only.
-The name must be one of the nine KSS agents (or its `kss:` form) — anything else is refused, and
-the table above stands. The ticket and the graph keep saying `T2`.
+The name must be one of the executor agents (or its `kss:` form) — anything else is refused, and
+the table above stands. The ticket and the graph keep saying `T2`. Besides the five in the table
+there is **`kss-haiku`**: Claude Haiku, which takes no effort parameter, so the agent carries none and
+a cross-harness run passes no `--effort`. It is never in the default ladder and may only replace
+`T1`, `T2` or `T3` — a `T4`/`T5` row naming it is refused and the adapter row stands.
+
+**Reviewer per depth.** `models.review.<full|light>.claude-code` names the reviewer for each review
+depth, as `{"model": "sonnet", "effort": "high"}` or as an agent name. Five reviewer agents carry
+the same read-only brief, one per pair: `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-medium`,
+`kss-reviewer-sonnet-high`, `kss-reviewer-opus-medium` and `kss-reviewer` (opus/high). Never resolve
+the name by hand: `node .kss/scripts/review.mjs pick '{"depth":"light","domain_risk":[]}'` does it,
+checks `models.allowed` / `models.efforts`, and pins `full` on any domain risk.
 
 **Read the names from the agent list before the first spawn.** Agents that come from the plugin are
 namespaced `kss:kss-opus-high`; only a vendored copy in `.claude/agents/` answers to the bare name.
@@ -58,7 +68,7 @@ Sending work back to an agent — a failed report gate, a reviewer's findings, a
 
 ## Read-only roles
 
-`kss-explorer` and `kss-reviewer` are declared with a read-only tool set in their agent files, so
+`kss-explorer` and every `kss-reviewer*` agent are declared with a read-only tool set in their agent files, so
 the harness enforces it. Nothing extra needs to be said in the prompt.
 
 ## Running commands

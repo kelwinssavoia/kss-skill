@@ -50,6 +50,18 @@ export const DEFAULTS = {
     efforts: ['low', 'medium', 'high'],
     allowed: {},
     tiers: {},
+    // Which reviewer a finished ticket gets, per review depth and harness (review.mjs).
+    // Claude Code: `{model, effort}` or a `kss-reviewer*` agent name. Codex: `{model, reasoning_effort}`.
+    review: {
+      full: {
+        'claude-code': { model: 'opus', effort: 'high' },
+        codex: { model: 'gpt-6-astra', reasoning_effort: 'high' },
+      },
+      light: {
+        'claude-code': { model: 'sonnet', effort: 'medium' },
+        codex: { model: 'gpt-5.6-terra', reasoning_effort: 'medium' },
+      },
+    },
   },
   jev: {
     enabled: false,

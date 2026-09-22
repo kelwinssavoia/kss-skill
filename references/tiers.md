@@ -54,9 +54,12 @@ folder can see the equivalence without opening either adapter.
 | `T5` | `kss-opus-high` | `gpt-6-astra` · `high` |
 
 For Claude Code, this is Sonnet low/medium/high at T1/T2/T3 and Opus medium/high at T4/T5.
+`kss-haiku` (Claude Haiku, no effort setting) exists for `models.tiers` to map `T1`–`T3` to; it is
+never a default and never `T4`/`T5`.
 | `explorer` | `kss-explorer` | `gpt-5.4-mini` · `low`, read-only |
 | `explorer-deep` | `kss-opus-medium`, prompted read-only | `gpt-6-astra` · `medium`, read-only |
-| `reviewer` | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |
+| `reviewer` (depth `full`) | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |
+| `reviewer` (depth `light`) | `kss-reviewer-sonnet-medium` | `gpt-5.6-terra` · `medium`, read-only |
 | `runner` | `kss-runner` | `gpt-5.4-mini` · `low` |
 | `dispatcher` | `kss-dispatcher` | `gpt-5.4-mini` · `low` |
 
@@ -67,7 +70,12 @@ A **machine** may override a row too: `models.tiers` in the gitignored `.kss/con
 (written by `kss-config`) names, per tier and per harness, the agent (Claude Code) or the
 `{model, reasoning_effort}` (Codex) to spawn instead. The adapter reads it before the first spawn;
 the ticket still says `T3`. Names must be in `models.allowed` / `models.efforts`, and a `T5` is
-never mapped to less than the adapter's own `T5`.
+never mapped to less than the adapter's own `T5`. `haiku` is accepted for `T1`–`T3` only.
+
+The reviewer has its own map, `models.review`, keyed by **review depth** rather than tier: `full`
+(the default, and forced whenever the ticket touches a contract, wire, authorization, tenant
+isolation, money or a migration) and `light` (only when Jev's `review_depth` classification says so
+with confidence). `scripts/review.mjs pick` resolves a depth to a reviewer; see DESIGN.md §20.2.
 
 ## Reading a ticket written before tiers
 

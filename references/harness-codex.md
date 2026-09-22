@@ -54,7 +54,7 @@ authorisation to *spawn at all*, which is what invoking the phase gives it.
 | `T5` | `gpt-6-astra` | `high` |
 | `explorer` | `gpt-5.4-mini` | `low` |
 | `explorer-deep` | `gpt-6-astra` | `medium` |
-| `reviewer` | `gpt-6-astra` | `high` |
+| `reviewer` | `gpt-6-astra` | `high` — depth `full`; depth `light` is `gpt-5.6-terra` · `medium`. `review.mjs pick` names the pair |
 | `runner` | `gpt-5.4-mini` | `low` |
 | `dispatcher` | `gpt-5.4-mini` | `low` |
 
@@ -63,6 +63,10 @@ authorisation to *spawn at all*, which is what invoking the phase gives it.
 this machine only, and `jev.reasoning.effort_when_delegated` lowers the `reasoning_effort` of a tier
 whose fork points Jev already settled (DESIGN.md §20). Both must stay inside `models.allowed` and
 `models.efforts`, and neither ever lowers a `T5`. The ticket keeps saying `T2`.
+`models.review.<full|light>.codex` does the same for the reviewer of each review depth, as
+`{"model": …, "reasoning_effort": …}`; resolve it with
+`node .kss/scripts/review.mjs pick '{"depth":"light","domain_risk":[]}'`, never by hand — the script
+pins `full` on any domain risk and keeps the default pair when a value is refused.
 
 Check the names against `codex --help` / the model picker before the first spawn of a run; when a
 model in this table is not available, drop to the nearest one **of the same or greater capability**

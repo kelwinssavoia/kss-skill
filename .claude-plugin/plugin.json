@@ -1,6 +1,6 @@
 {
   "name": "kss",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Phase-based development workflow on Claude Code and Codex: clarify, investigate, grill, spec, plan, tickets, execute, review, docs \u2014 with /clear between phases and token metrics",
   "author": {
     "name": "Kelwin Savoia"
@@ -21,7 +21,12 @@
     "./agents/kss-sonnet-high.md",
     "./agents/kss-opus-medium.md",
     "./agents/kss-opus-high.md",
+    "./agents/kss-haiku.md",
     "./agents/kss-reviewer.md",
+    "./agents/kss-reviewer-sonnet-low.md",
+    "./agents/kss-reviewer-sonnet-medium.md",
+    "./agents/kss-reviewer-sonnet-high.md",
+    "./agents/kss-reviewer-opus-medium.md",
     "./agents/kss-explorer.md",
     "./agents/kss-runner.md",
     "./agents/kss-dispatcher.md"

@@ -127,7 +127,22 @@ phase may well run in the other one (DESIGN.md §19).
    of exactly what is missing. Never accept a report by filling the gap yourself.
 6. **Review.** Spawn a `reviewer` on every finished ticket. It reads the diff and the report and
    returns either `approve`, or `reject` with numbered findings, each naming file, line, and the
-   rule or FR broken. **You read verdicts only, never diffs.**
+   rule or FR broken. **You read verdicts only, never diffs.** Which reviewer is two steps:
+   1. **Depth.** `full` by default. When the local config delegates it (`jev.reasoning.enabled`,
+      decision `review_depth`, DESIGN.md §20.2), ask
+      `node .kss/scripts/jev.mjs classify '{"kind":"review_depth","state":{"title":"…","layer":"…","files":[…],"domain_risk":[…],"report":"…"}}'`
+      and take `light` only when `verdict` is `auto` and `choice` is `light`; `open`, exit 2 or
+      exit 3 all mean `full`. `domain_risk` lists the categories the ticket touches — contract,
+      wire/proto, authorization, tenant isolation, money, migration — from its Plan excerpt,
+      Contract shapes and Project rules; `[]` when none.
+   2. **Reviewer.** Run
+      `node .kss/scripts/review.mjs pick '{"depth":"<full|light>","domain_risk":[…]}'` and spawn
+      what it names: `agent` on Claude Code, `model` + `reasoning_effort` on Codex. The script reads
+      `models.review` from the config, **forces `full` when `domain_risk` is not empty**, and keeps
+      the default reviewer when a configured value is refused (`warning` says why — log it once).
+   Log `review · <depth> · <agent or model/effort>` in the execution event, plus
+   `jev: review_depth <choice> <confidence>` when Jev was asked. A re-review after a fix uses the
+   same depth. A `light` reviewer's verdict is gated and escalated exactly like a `full` one.
 7. **Escalate on reject.** Decide the class yourself from the findings — or, when the local
    config delegates it (`jev.reasoning.enabled`, decision `escalation_class`, DESIGN.md §20), run
    `node .kss/scripts/jev.mjs classify '{"kind":"escalation_class","state":{"goal":"…","report":"…","findings":[…]}}'`
@@ -186,8 +201,9 @@ phase may well run in the other one (DESIGN.md §19).
    (test first), justified deviations. You write the specs and do not run them; the suite runs
    once at the end, as in §A.10. Write the report into `06-execution.md` exactly as an agent
    would.
-4. Run a `reviewer` subagent per ticket where the harness can spawn one; where it cannot, write
-   the reviewer's checklist and your answers into the log instead.
+4. Run a `reviewer` subagent per ticket where the harness can spawn one — chosen exactly as in
+   §A.6 (depth, then `review.mjs pick`); where it cannot, write the reviewer's checklist and your
+   answers into the log instead.
 5. Finish as in §A.10.
 
 ### Coordinator context
