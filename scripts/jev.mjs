@@ -5,11 +5,15 @@
 //   node .kss/scripts/jev.mjs check                     one tiny request; prints ok / the error
 //   node .kss/scripts/jev.mjs decide  '<json>'          auto-assumption gate for one investigation decision
 //   node .kss/scripts/jev.mjs tier    '<json>'          pick T1–T5 from execution uncertainty
-//   node .kss/scripts/jev.mjs classify '<json>'         a coordinator judgement (escalation class, report gate, size)
+//   node .kss/scripts/jev.mjs split   '<json>'          keep or split one drafted ticket
+//   node .kss/scripts/jev.mjs classify '<json>'         a coordinator judgement (escalation class, report gate, size, review depth)
 //   node .kss/scripts/jev.mjs ask     '<json>'          raw { state, questions } passthrough
 //
-// Every command reads `.kss/config.local.json` (written by kss-config, gitignored — it holds the
-// API key). When Jev is off, or the feature the command belongs to is off, the command prints
+// Every command reads `.kss/config.json` (committed: the policy) and then `.kss/config.local.json`
+// (gitignored: the API key, when it is not in the environment). Both are looked up in the current
+// directory first and in the main worktree second, because an ignored file does not exist in a
+// worktree and a silent rubric fallback is worse than a missing answer.
+// When Jev is off, or the feature the command belongs to is off, the command prints
 // `{"enabled":false,...}` and exits 3, and the skill falls back to its own rubric. A network or
 // API failure prints `{"error":...}` and exits 2 — also a fallback, never a stop. Exit 1 is a
 // usage error. Exit 0 carries a JSON answer on stdout.
@@ -32,13 +36,14 @@ const lib = await (async () => {
     return await import('../hooks/kss-lib.mjs')
   }
 })()
-const { readJsonFile, readCurrent, featureDir } = lib
+const { readJsonFile, readCurrent, featureDir, mainWorktreeRoot } = lib
 
+export const REPO_CONFIG = '.kss/config.json'
 export const LOCAL_CONFIG = '.kss/config.local.json'
 export const DEFAULT_BASE_URL = 'https://api.typesafe.ai'
 export const DEFAULT_MODEL = 'jev-latest'
 
-/** Baseline every `.kss/config.local.json` is merged over. Mirrors templates/config.local.json. */
+/** Baseline both config files are merged over. Mirrors templates/config.local.json. */
 export const DEFAULTS = {
   version: 1,
   models: {
@@ -65,6 +70,11 @@ export const DEFAULTS = {
       confidence: 0.7,
       on_low_confidence: 'rubric',
     },
+    ticket_split: {
+      enabled: true,
+      confidence: 0.7,
+      on_low_confidence: 'rubric',
+    },
     reasoning: {
       enabled: false,
       confidence: 0.8,
@@ -87,12 +97,48 @@ export function deepMerge(base, patch) {
   return out
 }
 
-/** Effective local config: DEFAULTS ← file. Missing file → DEFAULTS with `present: false`. */
-export function loadLocalConfig(cwd = process.cwd()) {
-  const path = resolve(cwd, LOCAL_CONFIG)
-  const raw = readJsonFile(path, null)
-  const cfg = deepMerge(DEFAULTS, isObj(raw) ? raw : {})
-  return { path, present: !!isObj(raw), cfg }
+/**
+ * Effective config: DEFAULTS ← `.kss/config.json` ← `.kss/config.local.json`,
+ * read from the current directory or, failing that, from the main worktree.
+ *
+ * `present` still reports only the local file, so an existing caller keeps its
+ * meaning; `sources` is what actually got merged and `root` is where from.
+ */
+export function loadLocalConfig(cwd = process.cwd(), opts = {}) {
+  const here = resolve(cwd)
+  const roots = [here]
+  // `opts.mainRoot` is the test seam: undefined means ask git, anything else is
+  // taken as given (null included, for "there is no main worktree").
+  const main = opts.mainRoot === undefined ? mainWorktreeRoot(here) : opts.mainRoot
+  if (main && resolve(main) !== here) roots.push(resolve(main))
+
+  // One root owns BOTH files. Layering a worktree's half-written policy over
+  // the main checkout's key would be worse than either file alone.
+  let root = here
+  for (const r of roots) {
+    if (existsSync(join(r, REPO_CONFIG)) || existsSync(join(r, LOCAL_CONFIG))) {
+      root = r
+      break
+    }
+  }
+
+  // DEFAULTS ← the committed policy ← the machine's own file. The policy is
+  // versioned so it reaches every worktree and every teammate; only the key
+  // stays out of git, which is why losing the local file no longer loses the
+  // configuration with it.
+  let cfg = DEFAULTS
+  const sources = []
+  for (const name of [REPO_CONFIG, LOCAL_CONFIG]) {
+    const p = join(root, name)
+    const raw = readJsonFile(p, null)
+    if (isObj(raw)) {
+      cfg = deepMerge(cfg, raw)
+      sources.push(p)
+    }
+  }
+
+  const path = join(root, LOCAL_CONFIG)
+  return { path, present: existsSync(path), cfg, sources, root }
 }
 
 /** The key, from the file or from the environment variable it names. Empty string when absent. */
@@ -154,11 +200,14 @@ const TIER_CRITERIA = {
   T5: 'critical — long-horizon end-to-end integration, difficult diagnosis, genuinely unresolved cross-service state or failure semantics, or escalation after a failed ticket',
 }
 
-const CLASSIFY = {
+export const CLASSIFY = {
   escalation_class: {
     instructions:
-      'A reviewer rejected a finished ticket. Given the ticket goal, the executor report and the numbered findings, was the failure an execution error or a reasoning error?',
+      'A reviewer rejected a finished ticket. Given the ticket goal, the executor report and the numbered findings, what kind of failure was it? ' +
+      'Answer cosmetic when every finding is formatting or style and none of them changes behaviour, because that costs a tier step for nothing.',
     criteria: {
+      cosmetic:
+        'Formatting or style only: line width, blank lines, import order, quoting. No finding changes behaviour. Goes back to the same agent with its context kept, and the tier does not change.',
       execution: 'The design and the ticket were right; the code is wrong, incomplete or breaks a listed rule. Fixable in the same worktree one tier up with the findings pasted in.',
       reasoning: 'The ticket or the plan was misunderstood or is itself wrong: the approach, not the code, has to change.',
     },
@@ -179,6 +228,29 @@ const CLASSIFY = {
       L: 'a new entity, a contract change, a cross-service flow, or any data question that needs confirmation',
     },
   },
+  review_depth: {
+    instructions:
+      'A ticket is finished and about to be reviewed. Does its diff need the strongest adversarial reviewer, or is a cheaper one enough? ' +
+      'Answer full whenever the ticket touches a contract, a wire or proto message, authorization, tenant isolation, or money, however mechanical the change looks: ' +
+      'those categories carry their safeguards independently of how carefully the code was written, and under-reviewing one of them is how a silent field drop or a cross-tenant read ships. ' +
+      'Answer light only when the ticket stays inside one surface, follows an explicit existing pattern, and touches none of them.',
+    criteria: {
+      full: 'The default. Mandatory whenever the diff touches a contract, a wire or proto message, authorization, tenant isolation, or money.',
+      light: 'One surface, an explicit existing pattern, and none of the domain-risk categories above. A cheaper reviewer reads it.',
+    },
+  },
+}
+
+/**
+ * Ticket sizing, asked once per ticket at `/kss-tickets`.
+ *
+ * The rubric behind `split` is the fixed rule the phase falls back to when the
+ * answer lands below the threshold, so both paths cut at the same place.
+ */
+export const SPLIT_CRITERIA = {
+  keep: 'One unit of work. The write targets sit in one area, serve one concern, and an executor can hold the whole change at once.',
+  split:
+    'More than one unit of work: more than six write targets, more than one service concern, both a read path and a write path in the same ticket, or an estimate that leaves no room under the 80-turn budget after one rejection.',
 }
 
 function choice(instructions, criteria) {
@@ -234,6 +306,31 @@ export function buildTier(input, cfg) {
     'Choose a tier from execution effort and uncertainty only. The tiers are a ladder from T1 (light) to T5 (critical). ' +
     'Pick the lowest tier whose description fully covers the expected execution. Domain-risk categories such as migration, contract or wire changes, authorization, tenant isolation, and money do not raise a tier by themselves: they require safeguards, tests, review, and final gates independently. Escalate for unresolved execution state, not merely for a risk label.'
   return { body: { state, questions: { tier: choice(instructions, TIER_CRITERIA) } }, threshold: cfg.jev.tier_selection.confidence }
+}
+
+/** `split` input → systemOne body. One keep-or-split question over the ticket's shape. */
+export function buildSplit(input, cfg) {
+  if (!isObj(input) || typeof input.title !== 'string' || typeof input.write_targets !== 'number') {
+    throw new Error(
+      'split needs {title, write_targets, layer?, directories?, service_concerns?, est_turns?, crosses_read_and_write?, files?}'
+    )
+  }
+  const state = {
+    title: input.title,
+    layer: input.layer ?? null,
+    write_targets: input.write_targets,
+    directories: input.directories ?? null,
+    service_concerns: input.service_concerns ?? null,
+    est_turns: input.est_turns ?? null,
+    crosses_read_and_write: input.crosses_read_and_write ?? null,
+    files: input.files ?? null,
+  }
+  const instructions =
+    'A ticket has been drafted. Is it one unit of work, or should it be cut into two before anybody executes it? ' +
+    'Judge the shape only: how many places it writes, how many concerns it serves, and whether one executor can hold all of it at once. ' +
+    'An oversized ticket is the expensive failure here, because a subagent that outgrows its turn budget re-reads its whole context every turn and its cost grows with the square of the turns. ' +
+    'Do not answer split merely because the work is risky or important: risk selects safeguards, not ticket boundaries.'
+  return { body: { state, questions: { split: choice(instructions, SPLIT_CRITERIA) } }, threshold: cfg.jev.ticket_split.confidence }
 }
 
 /** `classify` input → systemOne body. */
@@ -313,10 +410,11 @@ function out(obj, code = 0) {
 
 function usage() {
   process.stderr.write(
-    'usage: jev.mjs <config|check|decide|tier|classify|ask> [json] [--cwd <dir>]\n' +
+    'usage: jev.mjs <config|check|decide|tier|split|classify|ask> [json] [--cwd <dir>]\n' +
       '  decide   {question, options:[{id,label,description?}], category?, context?, evidence?}\n' +
       '  tier     {title, goal?, layer?, files?, contracts?, execution_uncertainty?, domain_risk?, safeguards?}\n' +
-      '  classify {kind: escalation_class|report_gate|size, state}\n' +
+      '  split    {title, write_targets, layer?, directories?, service_concerns?, est_turns?, crosses_read_and_write?}\n' +
+      '  classify {kind: escalation_class|report_gate|size|review_depth, state}\n' +
       '  ask      {state, questions}\n',
   )
   process.exit(1)
@@ -329,25 +427,27 @@ function parseArgs(argv) {
   return { cwd, cmd: rest[0], json: rest[1] }
 }
 
+const FEATURE_OF = { decide: 'auto_assumptions', tier: 'tier_selection', split: 'ticket_split', classify: 'reasoning' }
+
 function featureFlag(cfg, cmd) {
-  if (cmd === 'decide') return cfg.jev.auto_assumptions.enabled
-  if (cmd === 'tier') return cfg.jev.tier_selection.enabled
-  if (cmd === 'classify') return cfg.jev.reasoning.enabled
-  return true
+  const key = FEATURE_OF[cmd]
+  return key ? cfg.jev[key].enabled : true
 }
 
 async function main() {
   const { cwd, cmd, json } = parseArgs(process.argv.slice(2))
   if (!cmd) usage()
 
-  const { path, present, cfg } = loadLocalConfig(cwd)
+  const { path, present, cfg, sources, root } = loadLocalConfig(cwd)
 
-  if (cmd === 'config') out({ path, present, ...redact(cfg) })
+  if (cmd === 'config') out({ path, present, sources, root, ...redact(cfg) })
 
-  if (!['check', 'decide', 'tier', 'classify', 'ask'].includes(cmd)) usage()
+  if (!['check', 'decide', 'tier', 'split', 'classify', 'ask'].includes(cmd)) usage()
 
-  if (!cfg.jev.enabled) out({ enabled: false, reason: present ? 'jev.enabled is false' : `${LOCAL_CONFIG} not found` }, 3)
-  if (!featureFlag(cfg, cmd)) out({ enabled: false, reason: `jev.${cmd === 'decide' ? 'auto_assumptions' : cmd === 'tier' ? 'tier_selection' : 'reasoning'}.enabled is false` }, 3)
+  if (!cfg.jev.enabled) {
+    out({ enabled: false, reason: sources.length ? 'jev.enabled is false' : `no ${REPO_CONFIG} or ${LOCAL_CONFIG} under ${root}` }, 3)
+  }
+  if (!featureFlag(cfg, cmd)) out({ enabled: false, reason: `jev.${FEATURE_OF[cmd]}.enabled is false` }, 3)
 
   const apiKey = resolveApiKey(cfg)
   if (!apiKey) out({ error: `no API key: set jev.api_key in ${LOCAL_CONFIG} or export ${cfg.jev.api_key_env}` }, 2)
@@ -367,6 +467,7 @@ async function main() {
     if (cmd === 'check') built = { body: { state: 'ping', questions: { ok: { type: 'noul', instructions: 'Is the state the word ping?' } } }, threshold: 0 }
     else if (cmd === 'decide') built = buildDecide(input, cfg)
     else if (cmd === 'tier') built = buildTier(input, cfg)
+    else if (cmd === 'split') built = buildSplit(input, cfg)
     else if (cmd === 'classify') built = buildClassify(input, cfg)
     else if (cmd === 'ask') {
       if (!isObj(input) || !isObj(input.questions)) throw new Error('ask needs {state, questions}')
@@ -405,7 +506,9 @@ async function main() {
     latency_ms: res.latencyMs,
     usage: res.usage,
   }
-  if (cmd === 'tier' && g.verdict === 'open') result.fallback = cfg.jev.tier_selection.on_low_confidence
+  if (g.verdict === 'open' && FEATURE_OF[cmd] && cfg.jev[FEATURE_OF[cmd]].on_low_confidence) {
+    result.fallback = cfg.jev[FEATURE_OF[cmd]].on_low_confidence
+  }
   if (cmd === 'classify') result.kind = input.kind
   trace(cwd, cfg, { ...result, state: built.body.state })
   out(result)

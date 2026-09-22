@@ -28,6 +28,20 @@ Cap 15k chars. Over cap the skill refuses and asks for the feature to be split.
 ## Layout
 - {{surface}} — {{layout_file}} · view {{view}} — components: {{design_system_components}}
 
+## Card versus scope
+
+What the source asked for, beside what this spec builds. Every row on the right
+with no counterpart on the left is a widening: it is allowed, it is usually
+right, and it has to be visible as a widening rather than dissolve into the FR
+list. Name the decision that authorised it.
+
+| The card asked | We are building | Authorised by |
+| --- | --- | --- |
+| {{literal_line_from_the_source}} | {{what_the_spec_covers}} | — |
+| — | {{widening}} | {{D-xx}} |
+
+- Widenings: {{count}}. Anything in scope with no card line and no decision is an error.
+
 ## Out of scope
 - {{out_of_scope}}
 

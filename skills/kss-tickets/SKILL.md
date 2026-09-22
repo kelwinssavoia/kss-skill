@@ -138,8 +138,44 @@ Everything below applies to M and L.
    not impose a minimum tier. A confident Jev result may therefore select the lowest tier that
    covers the ticket's execution uncertainty.
 
+   **Size the ticket before you write it.** A ticket that is too big is the most expensive defect
+   this phase can ship: an agent's cost grows with the **square** of its turns, so one oversized
+   executor can outspend every other agent in the feature. Split when **any** of these holds:
+
+   - more than **six write targets**
+   - more than **one service concern**
+   - both a **read path and a write path** in the same ticket
+   - an estimate above **55 turns**, which leaves nothing under the 80-turn budget after one
+     rejection
+
+   Ask Jev the same question once per ticket, and treat the rule above as the fallback:
+
+   ```bash
+   node .kss/scripts/jev.mjs split '{"title":"…","layer":"…","write_targets":<n>,
+     "directories":<n>,"service_concerns":<n>,"est_turns":<n>,"crosses_read_and_write":<bool>}'
+   ```
+
+   Exit 2 or 3, or `verdict: open`: apply the rule yourself. `verdict: auto` with
+   `choice: split`: cut the ticket and say in one line where the seam went. The verdict is advice
+   — you decide, and you never let it merge two tickets the graph needs apart. Record each
+   verdict in the graph's **Sizing** table. Details: `.kss/references/spend-discipline.md`.
+
 8. Write one file per ticket, `05-tickets/NN-<slug>.md`, from `.kss/templates/ticket.md`, using the **multi-agent header** and deleting
    the single-session header comment.
+
+9. **Project the cost before anyone executes it.** Run
+
+   ```bash
+   node .kss/scripts/project-cost.mjs '[{"id":"01","tier":"T3","est_turns":35}, …]'
+   ```
+
+   and paste its table into `graph.md` under **Projection**. **Above five tickets or $30
+   projected, stop and ask the user for an explicit go-ahead before `/kss-execute`**, showing the
+   table and the two or three decisions that drive most of it. Below that, print the table and
+   carry on.
+
+   The point is not the decimal. It is that the person who authorised the scope sees its price
+   while changing it is still free — which, on feature 026, nobody did until the money was spent.
 
 ### 2b. Single-session mode
 

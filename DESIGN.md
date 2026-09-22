@@ -1156,18 +1156,23 @@ enumerated**, where the phase would otherwise spend a model turn — or a user t
 is never asked to write, plan, or find anything. Three such moments exist, each behind its own
 switch and its own threshold, because "a confidence threshold is not one number".
 
-### 20.2 The three uses
+### 20.2 The four uses
 
 | Use | Phase | What is sent | What comes back | Threshold (default) |
 | --- | --- | --- | --- | --- |
 | **Auto-assumptions** | `kss-investigate` | one `open` technical or layout decision, the options the explorers found, one line of evidence each | `auto` → an `AD-` with Jev's confidence in the record; `open` → stays open, the ranked list becomes the proposed answer | technical 0.85 · layout 0.9 · business > 1 (never) |
 | **Tier selection** | `kss-tickets` | one ticket summary: layer, file count, contracts, execution uncertainty, domain risk, safeguards | `auto` → the tier; `open` → the rubric decides, Jev's ranking is a hint | 0.7 |
-| **Coordinator judgements** (experimental) | `kss-execute` | a reviewer's findings, or an executor's report | `execution` / `reasoning`; `pass` / `fail` | 0.8 |
+| **Ticket sizing** | `kss-tickets` | one drafted ticket's shape: write targets, directories, service concerns, estimate, whether it crosses read and write | `keep` / `split`; `open` → the fixed rule in `references/spend-discipline.md` | 0.7 |
+| **Coordinator judgements** | `kss-execute` | a reviewer's findings, or an executor's report | `cosmetic` / `execution` / `reasoning`; `pass` / `fail` | 0.8 |
 
-Two rules hold across all three. **Business decisions are never auto**: the threshold for that
-category defaults above 1.0, so the knob exists and is visible but no default ever trips it. And
-**domain risk is not a tier floor**: contract, tenant isolation, money, migration and wire work
-keep their prescribed safeguards whatever execution tier Jev or the rubric selects.
+Three rules hold across all of them. **Business decisions are never auto**: the threshold for that
+category defaults above 1.0, so the knob exists and is visible but no default ever trips it.
+**Domain risk is not a tier floor**: contract, tenant isolation, money, migration and wire work
+keep their prescribed safeguards whatever execution tier Jev or the rubric selects. And **Jev never
+chooses less scrutiny by default**: `review_depth`, which would pick a cheaper reviewer, ships but
+stays out of the default `reasoning.decisions` list until a project's own trace shows the
+classifier is calibrated there. Under-reviewing is the one mistake in this list that ships a
+defect instead of costing money.
 
 The third use is where the `jev-eval-agent` case study points — the classifier decides the fork,
 the model runs with less reasoning — and where the analogy is weakest for KSS. An executor's
