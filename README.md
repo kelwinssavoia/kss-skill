@@ -169,7 +169,7 @@ plus execution mode (multi-agent/single-session), layout references and standard
    `~/.kss/statusline.backup.json` — KSS falls back to printing that output when no run is active.
    If the statusline is already KSS (a second project on the same machine, or an upgrade) nothing
    is backed up; the path is just refreshed. On Codex this step is skipped.
-4. *(Claude Code)* Creates the thirteen-agent matrix in `.claude/agents/`, skipping files that already
+4. *(Claude Code)* Creates the fourteen-agent matrix in `.claude/agents/`, skipping files that already
    exist (asks before overwriting). On Codex there is no agent registry and nothing is written.
 5. Adds `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
    `.kss/config.local.json` to `.gitignore`; config, templates, references and feature folders stay
@@ -350,7 +350,7 @@ Escalation is **one tier at a time**, `T1 → T5`, never past it. Tickets writte
 `Model` + `Effort`; they are translated on the fly, never rewritten
 ([`references/tiers.md`](references/tiers.md)).
 
-On Claude Code the plugin ships those agents — plus `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-high` and `kss-reviewer-opus-medium`, so `models.review` can name any pair — registered as `kss:kss-*` while it is enabled —
+On Claude Code the plugin ships those agents — plus `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-high` and `kss-reviewer-opus-medium`, so `models.review` can name any pair, and `kss-haiku`, an executor with no effort setting that `models.tiers` may map `T1`–`T3` to — registered as `kss:kss-*` while it is enabled —
 that prefix is the name to spawn them by. `kss-init` copies them into the project's
 `.claude/agents/` **only when the plugin is not available** (a vendored install, where they answer
 to the bare name); a project copy stops following releases and drifts. On Codex there is no agent
@@ -418,9 +418,9 @@ and per person lives in **`.kss/config.local.json`**, written by `/kss-config`, 
 ```jsonc
 {
   "models": {
-    "allowed": { "claude-code": ["sonnet", "opus"], "codex": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"] },
+    "allowed": { "claude-code": ["haiku", "sonnet", "opus"], "codex": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"] },
     "efforts": ["low", "medium", "high"],
-    "tiers": { "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } },
+    "tiers": { "T1": { "claude-code": "kss-haiku" }, "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } },
     "review": {                          // reviewer per review depth — scripts/review.mjs resolves it
       "full":  { "claude-code": { "model": "opus",   "effort": "high"   }, "codex": { "model": "gpt-6-astra",   "reasoning_effort": "high"   } },
       "light": { "claude-code": { "model": "sonnet", "effort": "medium" }, "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "medium" } }
@@ -524,7 +524,7 @@ See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation, and
 kss-skill/
   .claude-plugin/    plugin.json, marketplace.json  — Claude Code
   .codex-plugin/     plugin.json                    — Codex
-  agents/            thirteen-agent matrix — Claude Code only
+  agents/            fourteen-agent matrix — Claude Code only
   hooks/             hooks.json (SubagentStop/SessionEnd/Stop) + metrics/progress scripts
   references/        tiers.md + one adapter per harness → .kss/references/
   scripts/           harness.mjs, current.mjs, next.mjs, render-cost.mjs, statusline.mjs, jev.mjs, dispatch.mjs, review.mjs

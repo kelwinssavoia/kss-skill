@@ -52,13 +52,15 @@ question.
 **Models** — what each harness may spend.
 
 1. `models.allowed.<harness>` — the model names this harness may use, for the harness you are in
-   (the other harness's list is kept as is). Default: what the adapter maps today.
+   (the other harness's list is kept as is). Default: what the adapter maps today, plus `haiku` on
+   Claude Code, which only matters once a `models.tiers` row names `kss-haiku`.
 2. `models.efforts` — the effort ladder. Default `["low","medium","high"]`. Note that Claude Code
    agents carry their effort in the agent definition, so on Claude Code this list only bounds what
    `models.tiers` may name; on Codex it is passed as `reasoning_effort`.
 3. `models.tiers` — per-tier overrides, only if the user wants any. Show the current ladder from
    `tiers.md` (T1…T5, explorer, explorer-deep, reviewer, runner) and ask which rows to override.
-   On Claude Code a row is an agent name (`kss-sonnet-high`); on Codex it is
+   On Claude Code a row is an agent name (`kss-sonnet-high`, or `kss-haiku` for `T1`–`T3` only —
+   Haiku takes no effort, so none is asked for it); on Codex it is
    `{"model": …, "reasoning_effort": …}`. Every name must be in `models.allowed` / `models.efforts`,
    else refuse the value and ask again. Default: none — the adapter's table stands.
 3r. `models.review` — which reviewer each **review depth** spawns, for the harness you are in.

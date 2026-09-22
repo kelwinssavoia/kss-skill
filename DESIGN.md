@@ -409,6 +409,7 @@ It then:
 | `kss-sonnet-high` | sonnet | high | executor; may spawn helpers |
 | `kss-opus-medium` | opus | medium | executor; may spawn helpers |
 | `kss-opus-high` | opus | high | executor; may spawn helpers |
+| `kss-haiku` | haiku | — | executor; may spawn helpers. No effort: Haiku rejects the parameter. Never a default — only a `models.tiers` row for `T1`–`T3` spawns it |
 | `kss-reviewer` | opus | high | read-only; review depth `full` by default |
 | `kss-reviewer-opus-medium` | opus | medium | read-only; same brief, for `models.review` |
 | `kss-reviewer-sonnet-high` | sonnet | high | read-only; same brief, for `models.review` |
@@ -1102,7 +1103,7 @@ One tree, two manifests. Nothing is generated, nothing is duplicated:
 .codex-plugin/plugin.json      Codex: skills (not hooks — see below)
 skills/<name>/SKILL.md         shared — harness-neutral body
 skills/<name>/agents/openai.yaml   Codex only: UI metadata + allow_implicit_invocation: false
-agents/kss-*.md                Claude Code only: the thirteen registered agents
+agents/kss-*.md                Claude Code only: the fourteen registered agents
 references/                    tiers.md + one adapter per harness → copied to .kss/references/
 hooks/hooks.json               both: SubagentStop, SessionEnd, Stop — the event names match
 scripts/, templates/           shared → copied to .kss/scripts/, .kss/templates/

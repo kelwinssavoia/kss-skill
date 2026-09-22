@@ -35,8 +35,11 @@ concurrently — that is how the continuous frontier spawns everything that just
 
 **Local overrides.** `node .kss/scripts/jev.mjs config` prints `models.tiers`; a row like
 `"T2": {"claude-code": "kss-sonnet-high"}` replaces the agent for that tier on this machine only.
-The name must be one of the five executor agents (or its `kss:` form) — anything else is refused,
-and the table above stands. The ticket and the graph keep saying `T2`.
+The name must be one of the executor agents (or its `kss:` form) — anything else is refused, and
+the table above stands. The ticket and the graph keep saying `T2`. Besides the five in the table
+there is **`kss-haiku`**: Claude Haiku, which takes no effort parameter, so the agent carries none and
+a cross-harness run passes no `--effort`. It is never in the default ladder and may only replace
+`T1`, `T2` or `T3` — a `T4`/`T5` row naming it is refused and the adapter row stands.
 
 **Reviewer per depth.** `models.review.<full|light>.claude-code` names the reviewer for each review
 depth, as `{"model": "sonnet", "effort": "high"}` or as an agent name. Five reviewer agents carry

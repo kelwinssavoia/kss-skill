@@ -193,7 +193,7 @@ On confirmation, write — in this order:
    feature specified from Codex and executed from Claude Code finds its adapter already in the
    project. Overwrite freely, same as the scripts.
 5. **Claude Code only** — `.claude/agents/`, and **only when the plugin's agents are not already
-   available**. The plugin ships the thirteen (`kss-sonnet-low`, `kss-sonnet-medium`,
+   available**. The plugin ships the fourteen (`kss-haiku`, `kss-sonnet-low`, `kss-sonnet-medium`,
    `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`, `kss-reviewer`, `kss-reviewer-sonnet-low`,
    `kss-reviewer-sonnet-medium`, `kss-reviewer-sonnet-high`, `kss-reviewer-opus-medium`, `kss-explorer`,
    `kss-runner`, `kss-dispatcher`) and registers them as `kss:kss-*` while it is enabled: when they are in the agent
@@ -246,7 +246,7 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `.kss/config.json` | the committed Jev policy — everything but the key, so it reaches every worktree and every teammate |
 | `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `project-cost.mjs`, `statusline.mjs`, `jev.mjs`, `dispatch.mjs`, `review.mjs`, `kss-lib.mjs` |
 | `.kss/references/` | `tiers.md`, `tier-calibration.md`, `spend-discipline.md` and **both** harness adapters |
-| `.claude/agents/kss-*.md` | the thirteen-agent matrix (five executors, five reviewers, explorer, runner, dispatcher) — Claude Code, vendored installs only |
+| `.claude/agents/kss-*.md` | the fourteen-agent matrix (six executors, five reviewers, explorer, runner, dispatcher) — Claude Code, vendored installs only |
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
 | `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |
 | `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
