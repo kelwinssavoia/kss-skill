@@ -409,7 +409,11 @@ It then:
 | `kss-sonnet-high` | sonnet | high | executor; may spawn helpers |
 | `kss-opus-medium` | opus | medium | executor; may spawn helpers |
 | `kss-opus-high` | opus | high | executor; may spawn helpers |
-| `kss-reviewer` | opus | high | read-only |
+| `kss-reviewer` | opus | high | read-only; review depth `full` by default |
+| `kss-reviewer-opus-medium` | opus | medium | read-only; same brief, for `models.review` |
+| `kss-reviewer-sonnet-high` | sonnet | high | read-only; same brief, for `models.review` |
+| `kss-reviewer-sonnet-medium` | sonnet | medium | read-only; review depth `light` by default |
+| `kss-reviewer-sonnet-low` | sonnet | low | read-only; same brief, for `models.review` |
 | `kss-explorer` | sonnet | low | read-only |
 | `kss-runner` | sonnet | low | coordinator-only, final run: runs tests / lint / tsc; returns only summary lines and failures |
 | `kss-dispatcher` | sonnet | low | coordinator-only; runs one `dispatch.mjs run` (a ticket in the other harness's CLI) and returns its report verbatim (§21) |
@@ -1098,7 +1102,7 @@ One tree, two manifests. Nothing is generated, nothing is duplicated:
 .codex-plugin/plugin.json      Codex: skills (not hooks — see below)
 skills/<name>/SKILL.md         shared — harness-neutral body
 skills/<name>/agents/openai.yaml   Codex only: UI metadata + allow_implicit_invocation: false
-agents/kss-*.md                Claude Code only: the nine registered agents
+agents/kss-*.md                Claude Code only: the thirteen registered agents
 references/                    tiers.md + one adapter per harness → copied to .kss/references/
 hooks/hooks.json               both: SubagentStop, SessionEnd, Stop — the event names match
 scripts/, templates/           shared → copied to .kss/scripts/, .kss/templates/
@@ -1163,16 +1167,25 @@ switch and its own threshold, because "a confidence threshold is not one number"
 | **Auto-assumptions** | `kss-investigate` | one `open` technical or layout decision, the options the explorers found, one line of evidence each | `auto` → an `AD-` with Jev's confidence in the record; `open` → stays open, the ranked list becomes the proposed answer | technical 0.85 · layout 0.9 · business > 1 (never) |
 | **Tier selection** | `kss-tickets` | one ticket summary: layer, file count, contracts, execution uncertainty, domain risk, safeguards | `auto` → the tier; `open` → the rubric decides, Jev's ranking is a hint | 0.7 |
 | **Ticket sizing** | `kss-tickets` | one drafted ticket's shape: write targets, directories, service concerns, estimate, whether it crosses read and write | `keep` / `split`; `open` → the fixed rule in `references/spend-discipline.md` | 0.7 |
-| **Coordinator judgements** | `kss-execute` | a reviewer's findings, or an executor's report | `cosmetic` / `execution` / `reasoning`; `pass` / `fail` | 0.8 |
+| **Coordinator judgements** | `kss-execute` | a reviewer's findings, an executor's report, or a finished ticket about to be reviewed | `cosmetic` / `execution` / `reasoning`; `pass` / `fail`; `full` / `light` | 0.8 |
 
 Three rules hold across all of them. **Business decisions are never auto**: the threshold for that
 category defaults above 1.0, so the knob exists and is visible but no default ever trips it.
 **Domain risk is not a tier floor**: contract, tenant isolation, money, migration and wire work
 keep their prescribed safeguards whatever execution tier Jev or the rubric selects. And **Jev never
-chooses less scrutiny by default**: `review_depth`, which would pick a cheaper reviewer, ships but
+chooses less scrutiny by default**: `review_depth`, which picks a cheaper reviewer, ships but
 stays out of the default `reasoning.decisions` list until a project's own trace shows the
 classifier is calibrated there. Under-reviewing is the one mistake in this list that ships a
 defect instead of costing money.
+
+When a project does turn it on, the depth becomes a reviewer through `scripts/review.mjs pick`,
+from `models.review.<full|light>.<harness>` in the layered config — on Claude Code a
+`{model, effort}` pair or a `kss-reviewer*` agent name (one agent per pair, same brief), on Codex a
+`{model, reasoning_effort}`. Two rules live in the script, not in the prompt, so no coordinator can
+talk its way past them: **any domain-risk category the ticket carries forces `full`**, whatever Jev
+said; and **a missing, unknown or disallowed value keeps the default reviewer**, so a broken config
+never buys a cheaper review. Only an explicit `models.review.full` below opus/high lowers `full`, and
+the script flags it (`below_default`).
 
 The third use is where the `jev-eval-agent` case study points — the classifier decides the fork,
 the model runs with less reasoning — and where the analogy is weakest for KSS. An executor's
@@ -1191,7 +1204,7 @@ say whether it earns its keep.
 - **One file**, `.kss/config.local.json`, written by `kss-config`, gitignored by `kss-init` before it
   can exist. It holds the API key (or the name of the environment variable that does), the
   switches, the thresholds, and the per-machine model overrides (`models.allowed`, `models.efforts`,
-  `models.tiers`). It is the only KSS file that may name a model, and it never leaves the machine.
+  `models.tiers`, `models.review`). It is the only KSS file that may name a model, and it never leaves the machine.
 - **Nothing Jev says is written as fact.** An auto-assumption records `jev: <choice> <confidence> ≥
   <threshold> · runner-up`; a tier records `(jev 0.82)` in a comment; an execution event logs
   `jev: <kind> <choice> <confidence>`. The user can always see that a machine decided, and how sure

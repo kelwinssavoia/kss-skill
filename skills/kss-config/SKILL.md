@@ -1,6 +1,6 @@
 ---
 name: kss-config
-description: Write or edit .kss/config.local.json — the gitignored, per-machine preferences of KSS: which models and efforts the harness may use per tier, whether tickets may be executed cross-harness (Claude Code ↔ Codex via their CLIs, with a percentage split), and whether Jev (TypeSafe's System One classifier) settles auto-assumptions, picks ticket tiers or takes coordinator judgements, each with its own confidence threshold and the API key. Run it after kss-init, or any time to change a preference.
+description: Write or edit .kss/config.local.json — the gitignored, per-machine preferences of KSS: which models and efforts the harness may use per tier and per review depth, whether tickets may be executed cross-harness (Claude Code ↔ Codex via their CLIs, with a percentage split), and whether Jev (TypeSafe's System One classifier) settles auto-assumptions, picks ticket tiers or takes coordinator judgements, each with its own confidence threshold and the API key. Run it after kss-init, or any time to change a preference.
 argument-hint: "[--show | --check | <key>=<value> …]"
 disable-model-invocation: true
 ---
@@ -22,7 +22,7 @@ default), a bare Enter keeps it. Nothing is written until the confirmation turn.
 | `kss-config` | full interview below |
 | `kss-config --show` | print the effective config — `node .kss/scripts/jev.mjs config` — and stop. The key is redacted; never print it whole |
 | `kss-config --check` | `node .kss/scripts/jev.mjs check`: one tiny request to Jev, print `ok · <model> · <latency>` or the error, and stop |
-| `kss-config <key>=<value> …` | set only those keys (dot paths: `jev.enabled=true`, `jev.auto_assumptions.by_category.layout=0.95`, `models.tiers.T2.claude-code=kss-sonnet-high`), show the diff, ask one yes, write |
+| `kss-config <key>=<value> …` | set only those keys (dot paths: `jev.enabled=true`, `jev.auto_assumptions.by_category.layout=0.95`, `models.tiers.T2.claude-code=kss-sonnet-high`, `models.review.light.claude-code=kss-reviewer-sonnet-high`), show the diff, ask one yes, write |
 
 ## Inputs
 
@@ -61,6 +61,19 @@ question.
    On Claude Code a row is an agent name (`kss-sonnet-high`); on Codex it is
    `{"model": …, "reasoning_effort": …}`. Every name must be in `models.allowed` / `models.efforts`,
    else refuse the value and ask again. Default: none — the adapter's table stands.
+3r. `models.review` — which reviewer each **review depth** spawns, for the harness you are in.
+   Show both rows with their current values: `full` (every ticket by default, and forced whenever
+   the ticket touches a contract, wire, authorization, tenant isolation, money or a migration) and
+   `light` (only when Jev's `review_depth` answers `light` with confidence — question 12). On Claude
+   Code a value is `{"model": "sonnet|opus", "effort": "low|medium|high"}` or a reviewer agent name
+   (`kss-reviewer`, `kss-reviewer-opus-medium`, `kss-reviewer-sonnet-high`,
+   `kss-reviewer-sonnet-medium`, `kss-reviewer-sonnet-low`); `opus`/`low` has no agent and is
+   refused. On Codex it is `{"model": …, "reasoning_effort": …}`. Every name must be in
+   `models.allowed` / `models.efforts`. Defaults: `full` opus/high (`gpt-6-astra`/high), `light`
+   sonnet/medium (`gpt-5.6-terra`/medium). When the user sets `full` below the default, say in one
+   line that every ticket — domain-risk ones included — will then be reviewed by that pair, and ask
+   once more. Verify the result with `node .kss/scripts/review.mjs pick '{"depth":"light"}'` and
+   `'{"depth":"full"}'` after writing, and print any `warning` they return.
 
 **Execution** — cross-harness (DESIGN.md §21). Say in two lines first: when on, `kss-execute`
 may run a ticket in the *other* harness's CLI (`claude -p` from Codex, `codex exec` from Claude
@@ -114,8 +127,11 @@ enumerated, and every use has its own threshold.
     executor report pass). Default `false`. Say the honest limit in one line: Jev cannot do an
     executor's reasoning — it cannot write code or a plan — so what this saves is the coordinator's
     deliberation on already-enumerated forks, not the executor's work.
-12. `jev.reasoning.decisions` and `confidence` — which of `escalation_class`, `report_gate`, `size`
-    are delegated, and the threshold. Defaults: the first two, `0.8`.
+12. `jev.reasoning.decisions` and `confidence` — which of `escalation_class`, `report_gate`,
+    `size`, `review_depth` are delegated, and the threshold. Defaults: the first two, `0.8`.
+    `review_depth` lets `kss-execute` send a ticket with no domain risk to the `light` reviewer of
+    `models.review`; say in one line that it trades review strength for cost and stays off by
+    default until the feature's `jev-trace.jsonl` shows Jev calibrated on this project.
 13. `jev.reasoning.effort_when_delegated` — optional: a tier → effort map applied by the adapter
     when a ticket's fork points were pre-decided (Codex only today; on Claude Code the agent's
     effort is fixed in its definition and a different effort is a different agent name in
@@ -146,11 +162,12 @@ Print exactly:
 KSS config · <repo name>
 File: .kss/config.local.json (gitignored: yes)
 Models: <harness> → <allowed list> · efforts <list> · tier overrides <n | none>
+Review: full → <agent | model/effort> · light → <agent | model/effort>
 Cross-harness: <off | on · claude-code 60% / codex 40% · tiers T1–T3 · CLIs found: <list> · missing: <list | none>>
 Jev: <off | on · <model> · key from <env NAME | file>>
   auto-assumptions: <on · technical ≥0.85 · layout ≥0.9 · business never | off>
   tier selection:   <on · ≥0.7 · below → rubric | off>
-  reasoning:        <on · escalation_class, report_gate · ≥0.8 | off (experimental)>
+  reasoning:        <on · escalation_class, report_gate[, review_depth] · ≥0.8 | off (experimental)>
   trace:            <on → <feature>/jev-trace.jsonl | off>
 Check: <ok · jev-1.13.0 · 320 ms | skipped | failed: <reason> — phases fall back to their rubric>
 Next: <prefix>kss-clarify <what you want to build>   (or nothing, if a feature is already running)

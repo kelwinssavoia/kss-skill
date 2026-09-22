@@ -169,7 +169,7 @@ plus execution mode (multi-agent/single-session), layout references and standard
    `~/.kss/statusline.backup.json` — KSS falls back to printing that output when no run is active.
    If the statusline is already KSS (a second project on the same machine, or an upgrade) nothing
    is backed up; the path is just refreshed. On Codex this step is skipped.
-4. *(Claude Code)* Creates the nine-agent matrix in `.claude/agents/`, skipping files that already
+4. *(Claude Code)* Creates the thirteen-agent matrix in `.claude/agents/`, skipping files that already
    exist (asks before overwriting). On Codex there is no agent registry and nothing is written.
 5. Adds `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
    `.kss/config.local.json` to `.gitignore`; config, templates, references and feature folders stay
@@ -341,7 +341,8 @@ executed from either harness. The tier is the portable name; each harness adapte
 | `T5` | long-horizon integration, difficult diagnosis, unresolved cross-service state/failure semantics, or escalation after failure | `kss-opus-high` | `gpt-6-astra` · high |
 | `explorer` | one bounded read-only question, `file:line` evidence | `kss-explorer` | `gpt-5.4-mini` · low |
 | `explorer-deep` | the same, on a contract / tenant / money question | `kss-opus-medium` | `gpt-6-astra` · medium |
-| `reviewer` | one finished ticket's diff — approve or reject + findings | `kss-reviewer` | `gpt-6-astra` · high |
+| `reviewer` | one finished ticket's diff — approve or reject + findings; depth `full` | `kss-reviewer` | `gpt-6-astra` · high |
+| `reviewer` | the same, depth `light` — only on Jev's `review_depth`, never with domain risk | `kss-reviewer-sonnet-medium` | `gpt-5.6-terra` · medium |
 | `runner` | coordinator-only, final run — the given command, summarised | `kss-runner` | `gpt-5.4-mini` · low |
 | `dispatcher` | coordinator-only — runs one ticket in the *other* harness's CLI, returns its report | `kss-dispatcher` | `gpt-5.4-mini` · low |
 
@@ -349,7 +350,7 @@ Escalation is **one tier at a time**, `T1 → T5`, never past it. Tickets writte
 `Model` + `Effort`; they are translated on the fly, never rewritten
 ([`references/tiers.md`](references/tiers.md)).
 
-On Claude Code the plugin ships those nine agents, registered as `kss:kss-*` while it is enabled —
+On Claude Code the plugin ships those agents — plus `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-high` and `kss-reviewer-opus-medium`, so `models.review` can name any pair — registered as `kss:kss-*` while it is enabled —
 that prefix is the name to spawn them by. `kss-init` copies them into the project's
 `.claude/agents/` **only when the plugin is not available** (a vendored install, where they answer
 to the bare name); a project copy stops following releases and drifts. On Codex there is no agent
@@ -419,7 +420,11 @@ and per person lives in **`.kss/config.local.json`**, written by `/kss-config`, 
   "models": {
     "allowed": { "claude-code": ["sonnet", "opus"], "codex": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"] },
     "efforts": ["low", "medium", "high"],
-    "tiers": { "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } }
+    "tiers": { "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } },
+    "review": {                          // reviewer per review depth — scripts/review.mjs resolves it
+      "full":  { "claude-code": { "model": "opus",   "effort": "high"   }, "codex": { "model": "gpt-6-astra",   "reasoning_effort": "high"   } },
+      "light": { "claude-code": { "model": "sonnet", "effort": "medium" }, "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "medium" } }
+    }
   },
   "jev": {
     "enabled": true,
@@ -478,7 +483,7 @@ behind its own switch and threshold:
 | --- | --- | --- |
 | `auto_assumptions` | `kss-investigate` | an `open` technical/layout decision becomes an `AD-`, recorded with Jev's confidence; below it, Jev's ranking is the proposed answer for the grill |
 | `tier_selection` | `kss-tickets` | the ticket takes Jev's execution-uncertainty tier; below threshold, the rubric decides. Domain safeguards stay independent |
-| `reasoning` (experimental) | `kss-execute` | the coordinator takes Jev's `execution`/`reasoning` class on a reject, or `pass`/`fail` on a report |
+| `reasoning` (experimental) | `kss-execute` | the coordinator takes Jev's `execution`/`reasoning` class on a reject, or `pass`/`fail` on a report; with `review_depth` in `decisions`, a ticket with no domain risk that Jev calls `light` goes to the `models.review.light` reviewer |
 
 Business decisions are never auto: their threshold defaults above 1.0 on purpose. Every call goes
 through `node .kss/scripts/jev.mjs` — exit 3 means off, exit 2 means a failure the phase reports
@@ -519,10 +524,10 @@ See [`.kss/config.md` keys](#kssconfigmd-keys) under Installation, and
 kss-skill/
   .claude-plugin/    plugin.json, marketplace.json  — Claude Code
   .codex-plugin/     plugin.json                    — Codex
-  agents/            nine-agent matrix — Claude Code only
+  agents/            thirteen-agent matrix — Claude Code only
   hooks/             hooks.json (SubagentStop/SessionEnd/Stop) + metrics/progress scripts
   references/        tiers.md + one adapter per harness → .kss/references/
-  scripts/           harness.mjs, current.mjs, next.mjs, render-cost.mjs, statusline.mjs
+  scripts/           harness.mjs, current.mjs, next.mjs, render-cost.mjs, statusline.mjs, jev.mjs, dispatch.mjs, review.mjs
   skills/            the 13 kss-*/SKILL.md files (+ agents/openai.yaml for Codex), skills/README.md
   templates/         copied into a project's .kss/templates/ by kss-init
   DESIGN.md          the normative spec every builder reads first
