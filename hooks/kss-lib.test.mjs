@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext } from './kss-lib.mjs'
+import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext, rootFromCommonDir, mainWorktreeRoot } from './kss-lib.mjs'
 
 const jsonl = (lines) => lines.map((l) => JSON.stringify(l)).join('\n') + '\n'
 
@@ -148,4 +148,30 @@ test('tailContext reads the last request size in either format', () => {
     writeFileSync(empty, '')
     assert.equal(tailContext(empty), null)
   })
+})
+
+// ---------------------------------------------------------------- worktree lookup
+
+test('rootFromCommonDir turns what git answers into the main worktree root', () => {
+  // A linked worktree answers the absolute path of the shared .git …
+  assert.equal(rootFromCommonDir('/repo/wt', '/repo/.git'), '/repo')
+  // … and a plain checkout answers a relative `.git`.
+  assert.equal(rootFromCommonDir('/repo', '.git'), '/repo')
+  assert.equal(rootFromCommonDir('/repo', ' /repo/.git \n'), '/repo', 'git output is trimmed')
+})
+
+test('rootFromCommonDir answers null rather than guessing when git said nothing', () => {
+  assert.equal(rootFromCommonDir('/repo', ''), null)
+  assert.equal(rootFromCommonDir('/repo', null), null)
+  assert.equal(rootFromCommonDir('/repo', undefined), null)
+})
+
+test('mainWorktreeRoot never throws, even outside a repository', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'kss-nogit-'))
+  try {
+    const r = mainWorktreeRoot(dir)
+    assert.ok(r === null || typeof r === 'string')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

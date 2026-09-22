@@ -242,8 +242,9 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `~/.kss/preferences.md` | `conversation_language` — user-local, outside the repo, never committed |
 | `.kss/config.md` | the answers |
 | `.kss/templates/` | the project's copy of the KSS templates |
-| `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `statusline.mjs`, `jev.mjs`, `dispatch.mjs`, `kss-lib.mjs` |
-| `.kss/references/` | `tiers.md` and **both** harness adapters |
+| `.kss/config.json` | the committed Jev policy — everything but the key, so it reaches every worktree and every teammate |
+| `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `project-cost.mjs`, `statusline.mjs`, `jev.mjs`, `dispatch.mjs`, `kss-lib.mjs` |
+| `.kss/references/` | `tiers.md`, `tier-calibration.md`, `spend-discipline.md` and **both** harness adapters |
 | `.claude/agents/kss-*.md` | the nine-agent matrix — Claude Code, vendored installs only |
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
 | `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |

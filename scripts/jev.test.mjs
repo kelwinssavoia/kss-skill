@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { spawnSync, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
-import { DEFAULTS, deepMerge, loadLocalConfig, resolveApiKey, redact, gate, assumptionThreshold, buildDecide, buildTier, buildClassify } from './jev.mjs'
+import { DEFAULTS, deepMerge, loadLocalConfig, resolveApiKey, redact, gate, assumptionThreshold, buildDecide, buildTier, buildClassify, buildSplit, CLASSIFY, SPLIT_CRITERIA } from './jev.mjs'
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'jev.mjs')
 
@@ -153,8 +153,74 @@ test('buildClassify: only kinds listed in reasoning.decisions are asked', () => 
   const cfg = deepMerge(DEFAULTS, {})
   assert.equal(buildClassify({ kind: 'size', state: {} }, cfg).disabled.includes('size'), true)
   const { body } = buildClassify({ kind: 'escalation_class', state: { findings: ['x'] } }, cfg)
-  assert.deepEqual(Object.keys(body.questions.escalation_class.criteria), ['execution', 'reasoning'])
+  assert.deepEqual(Object.keys(body.questions.escalation_class.criteria), ['cosmetic', 'execution', 'reasoning'])
   assert.throws(() => buildClassify({ kind: 'nope' }, cfg), /classify needs/)
+})
+
+test('escalation_class offers cosmetic, so a formatting reject costs no tier step', () => {
+  assert.match(CLASSIFY.escalation_class.criteria.cosmetic, /same agent/i)
+  assert.match(CLASSIFY.escalation_class.criteria.cosmetic, /tier does not change/i)
+})
+
+test('review_depth pins a full review to every domain-risk category', () => {
+  assert.ok(CLASSIFY.review_depth, 'review_depth is a classify kind')
+  assert.deepEqual(Object.keys(CLASSIFY.review_depth.criteria).sort(), ['full', 'light'])
+  for (const word of ['contract', 'wire', 'authorization', 'tenant', 'money']) {
+    assert.match(CLASSIFY.review_depth.instructions, new RegExp(word, 'i'), `instructions pin ${word} to full`)
+  }
+  // Deliberately absent from the default list: it trades review coverage for
+  // money and waits until the trace shows Jev is calibrated on the project.
+  assert.equal(DEFAULTS.jev.reasoning.decisions.includes('review_depth'), false)
+})
+
+test('buildSplit: one keep-or-split question over the ticket shape', () => {
+  const cfg = deepMerge(DEFAULTS, {})
+  assert.throws(() => buildSplit({ title: 'x' }, cfg), /write_targets/)
+  const { body, threshold } = buildSplit(
+    { title: 'Effective verification services', write_targets: 9, directories: 4, service_concerns: 3, est_turns: 55, crosses_read_and_write: true },
+    cfg
+  )
+  assert.deepEqual(Object.keys(body.questions), ['split'])
+  assert.deepEqual(Object.keys(body.questions.split.criteria).sort(), ['keep', 'split'])
+  assert.equal(body.state.write_targets, 9)
+  assert.equal(body.state.crosses_read_and_write, true)
+  assert.equal(threshold, 0.7)
+  // The rubric the phase falls back to below the threshold cuts at the same place.
+  assert.match(SPLIT_CRITERIA.split, /six/i)
+})
+
+test('loadLocalConfig: the committed policy layers under the local file', () => {
+  const s = sandbox(null)
+  try {
+    writeFileSync(join(s.cwd, '.kss', 'config.json'), JSON.stringify({ jev: { enabled: true, model: 'from-policy' } }))
+    let r = loadLocalConfig(s.cwd)
+    assert.equal(r.cfg.jev.enabled, true, 'the policy alone is enough to switch Jev on')
+    assert.equal(r.cfg.jev.model, 'from-policy')
+    assert.equal(r.present, false, 'present still reports only the local file')
+    assert.equal(r.sources.length, 1)
+
+    writeFileSync(join(s.cwd, '.kss', 'config.local.json'), JSON.stringify({ jev: { model: 'from-local' } }))
+    r = loadLocalConfig(s.cwd)
+    assert.equal(r.cfg.jev.model, 'from-local', 'the machine file wins')
+    assert.equal(r.cfg.jev.enabled, true, 'policy keys it omits survive')
+    assert.equal(r.sources.length, 2)
+  } finally {
+    s.done()
+  }
+})
+
+test('loadLocalConfig: a worktree reads the main checkout, because the local file is gitignored', () => {
+  const main = sandbox(null)
+  const wt = mkdtempSync(join(tmpdir(), 'kss-wt-'))
+  try {
+    writeFileSync(join(main.cwd, '.kss', 'config.json'), JSON.stringify({ jev: { enabled: true, model: 'from-main' } }))
+    const r = loadLocalConfig(wt, { mainRoot: main.cwd })
+    assert.equal(r.cfg.jev.model, 'from-main')
+    assert.equal(r.root, main.cwd)
+  } finally {
+    rmSync(wt, { recursive: true, force: true })
+    main.done()
+  }
 })
 
 test('CLI: no local file → enabled:false, exit 3; config prints redacted', () => {

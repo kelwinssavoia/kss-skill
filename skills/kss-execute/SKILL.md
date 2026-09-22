@@ -135,6 +135,10 @@ phase may well run in the other one (DESIGN.md §19).
    same applies to the report gate in step 5 (`kind: report_gate`, `choice: pass|fail`): a Jev
    `fail` still needs *your* list of what is missing, so a delegated gate saves the judgement, not
    the message. Log `jev: <kind> <choice> <confidence>` in the execution event either way.
+   - *Cosmetic* (every finding is formatting or style, none changes behaviour): back to the
+     **same agent**, same worktree, context kept, **no tier step**. A model change buys nothing
+     for three lines of line width, and spending a tier on it is how a reviewer pass gets burned
+     on whitespace.
    - *Execution error* (the design was right, the code is not): re-run the **same ticket, one
      effort level up, in the same worktree**, with the findings pasted in.
    - *Reasoning error* (the approach itself is wrong): **model and effort both go up**.

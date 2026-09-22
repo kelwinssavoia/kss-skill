@@ -25,10 +25,10 @@ gap to report, not to research around.
    against the test, never by running it.
 4. **Commit order is test → implementation.** Exactly two commits, the test one first. Nothing
    else is accepted.
-5. **You run no test, lint, build or type-check, ever** — not the project's test runner, not its
-   lint, build, `tsc` or an aggregate target like `affected:test` or `checkup`. If you feel you
-   need to run something to know whether it works, read the code and the existing specs instead,
-   and note the doubt under Deviations.
+5. **You run no test, lint, build or type-check, ever** — not `nx test`, `nx run …:test|lint|build`,
+   `jest`, `tsc`, `eslint`, `npm test`, `affected:test` or `npm run checkup`. If you feel you need
+   to run something to know whether it works, read the code and the existing specs instead, and
+   note the doubt under Deviations.
 6. Follow the project rules the ticket lists, and the standards files it points at.
 
 ## Helpers
@@ -43,12 +43,19 @@ A decision the ticket does not make is not yours to invent. If the ticket lacks 
 design conflicts with the code, or the work turns out larger than the ticket describes: **stop and
 report**. Do not improvise, do not widen the scope, do not split the ticket yourself.
 
-Do not exceed ~80 turns. If you are approaching that, stop and report where you are.
+## The turn budget is a hard stop
+
+**At 80 turns you stop, whatever state the work is in**, and report with state `over-budget`:
+what is done, what is committed, and what remains. This is not a style preference. Every turn
+resends your whole context, so your cost grows with the **square** of your turns — one executor
+ran to 152 turns on feature 026 and spent 16% of the entire feature by itself. A ticket that
+cannot be finished inside the budget was cut wrong, and saying so is worth more than finishing
+it. See `.kss/references/spend-discipline.md`.
 
 ## Report back (≤1.5k chars, this exact shape)
 
 ```
-Ticket: NN-<slug> · <state: done | blocked>
+Ticket: NN-<slug> · <state: done | blocked | over-budget>
 Branch: <branch> (worktree <path>)
 Commits: <sha> test: … / <sha> feat: …
 Files: <path>, <path>

@@ -13,6 +13,21 @@ Database migrations, API/proto and wire contracts, authorization and tenant path
 rules, and end-to-end boundaries retain their mandatory tests, reviews, and final gates regardless
 of tier. A stronger model can reduce execution uncertainty; it cannot replace those controls.
 
+## Scoring a tier after the fact
+
+A rubric nobody checks drifts. Once per feature, compare the tier Jev chose against what the
+ticket actually took, from `jev-trace.jsonl` and `metrics.jsonl`. Wrong with high confidence means
+the criteria text is wrong, not the threshold; right with low confidence means the threshold can
+come down.
+
+This is worth stating because it has already happened. On one feature the first tier pass put all
+seven tickets at T5, five of them at confidence 0.91 or above, because it was reading domain risk
+as execution effort. The fix was the `instructions` string in `buildTier`, which now says outright
+that a domain-risk category does not raise a tier by itself.
+
+The routine, and the rest of the habits that keep a feature's spend visible before it is spent,
+are in [spend discipline](spend-discipline.md).
+
 ## Evidence
 
 Anthropic's published comparison shows Sonnet 4.6 near Opus 4.6 on SWE-bench Verified, with a

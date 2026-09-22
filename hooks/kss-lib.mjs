@@ -4,6 +4,7 @@
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync, writeFileSync, openSync, readSync, closeSync, fstatSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 export function readStdin() {
   return new Promise((res) => {
@@ -71,6 +72,39 @@ export function isActive(current) {
 
 export function currentPath(cwd) {
   return join(cwd, '.kss', 'current')
+}
+
+/**
+ * The main worktree's root, from what `git rev-parse --git-common-dir` answered.
+ *
+ * Pure on purpose, so the lookup is testable without a repository. A plain
+ * checkout answers `.git`; every linked worktree answers the absolute path of
+ * that SAME `.git`, which is the one directory all of them agree on.
+ */
+export function rootFromCommonDir(cwd, commonDir) {
+  if (typeof commonDir !== 'string' || !commonDir.trim()) return null
+  return dirname(resolve(cwd, commonDir.trim()))
+}
+
+/**
+ * The main worktree's root for `cwd`, or null when git cannot say.
+ *
+ * Why KSS needs it: `.kss/config.local.json` is gitignored, and an ignored file
+ * does not exist in a worktree created after it. Without this, every command
+ * run from a worktree reads the defaults, decides Jev is off, and falls back to
+ * the rubric without telling anyone.
+ */
+export function mainWorktreeRoot(cwd) {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return rootFromCommonDir(cwd, common)
+  } catch {
+    return null
+  }
 }
 
 /** Parse the `key: value` lines of `.kss/config.md` (inside or outside the fence). */

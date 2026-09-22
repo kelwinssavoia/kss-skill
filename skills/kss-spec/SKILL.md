@@ -112,7 +112,19 @@ phase may well run in the other one (DESIGN.md §19).
 
 6. **Write** `<features_root>/NNN-slug/03-spec.md` from `.kss/templates/03-spec.md`, filling every section: Problem · Solution · User
    stories · Functional requirements · Non-functional requirements · Test seams · Contracts and
-   data · Layout · Out of scope · Open items · Traceability.
+   data · Layout · **Card versus scope** · Out of scope · Open items · Traceability.
+
+   **Card versus scope** is two columns: each line the source actually asked for, and what this
+   spec builds. Every row on the right with nothing on the left is a **widening** — name the
+   decision that authorised it. Anything in scope with no card line and no decision is an error,
+   not a row.
+
+   A widening is usually right and almost always deliberate: it comes out of the grill, with the
+   user in the room. The failure this table prevents is a different one. On feature 026 three
+   grill decisions added a management surface, a list badge and a revalidation path the card never
+   mentioned, each of them sensible, and together most of the cost. They disappeared into twelve
+   functional requirements and nobody could see the scope had doubled until the bill arrived.
+   Approved growth has to stay legible as growth.
 
 7. **Check the cap.** `wc -c` the file. Over 15k → do not ship it:
    `03-spec.md is <n>k, over the 15k cap. This feature is too large for one spec — split it into
