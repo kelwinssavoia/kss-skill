@@ -96,6 +96,38 @@ test('buildCommand: claude -p and codex exec with the tier pair and the config f
   assert.throws(() => buildCommand({ harness: 'nope', worktree: '/w', tier: 'T1', cross: DEFAULTS }), /unknown harness|no tier/)
 })
 
+test('pairFor: kss-haiku is a T1–T3 executor with no effort, since Haiku rejects the effort parameter', () => {
+  const byName = { T1: { 'claude-code': 'kss-haiku' } }
+  assert.deepEqual(pairFor('claude-code', 'T1', byName), { model: 'haiku', effort: null })
+  assert.deepEqual(pairFor('claude-code', 'T2', { T2: { 'claude-code': 'kss:kss-haiku' } }), { model: 'haiku', effort: null })
+  // A pair naming haiku never inherits the tier's effort, nor keeps one it was given.
+  assert.deepEqual(pairFor('claude-code', 'T1', { T1: { 'claude-code': { model: 'haiku' } } }), { model: 'haiku', effort: null })
+  assert.deepEqual(pairFor('claude-code', 'T3', { T3: { 'claude-code': { model: 'haiku', effort: 'high' } } }), { model: 'haiku', effort: null })
+  // T4 and T5 carry real judgement: a haiku override there is refused and the adapter row stands.
+  assert.deepEqual(pairFor('claude-code', 'T4', { T4: { 'claude-code': 'kss-haiku' } }), { model: 'opus', effort: 'medium' })
+  assert.deepEqual(pairFor('claude-code', 'T5', { T5: { 'claude-code': { model: 'haiku' } } }), { model: 'opus', effort: 'high' })
+})
+
+test('buildCommand: a haiku run passes --model haiku and no --effort', () => {
+  const c = buildCommand({ harness: 'claude-code', worktree: '/w', tier: 'T1', cross: DEFAULTS, overrides: { T1: { 'claude-code': 'kss-haiku' } } })
+  assert.equal(c.argv[c.argv.indexOf('--model') + 1], 'haiku')
+  assert.equal(c.argv.includes('--effort'), false)
+})
+
+test('kss-haiku ships: model haiku, no effort line, the executor brief verbatim, listed in plugin.json', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const body = (t) => t.slice(t.indexOf('---', 3) + 3)
+  const haiku = readFileSync(join(root, 'agents', 'kss-haiku.md'), 'utf8')
+  const low = readFileSync(join(root, 'agents', 'kss-sonnet-low.md'), 'utf8')
+  assert.match(haiku, /^name: kss-haiku$/m)
+  assert.match(haiku, /^model: haiku$/m)
+  assert.doesNotMatch(haiku.slice(0, haiku.indexOf('---', 3)), /^effort:/m)
+  assert.match(haiku, /^tools: Read, Grep, Glob, Bash, Edit, Write, Agent\(kss-explorer\)$/m)
+  assert.equal(body(haiku), body(low))
+  const plugin = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'))
+  assert.ok(plugin.agents.includes('./agents/kss-haiku.md'))
+})
+
 test('parseClaude: the result line gives report, usage, turns, cost', () => {
   const p = parseClaude(JSON.stringify(CLAUDE_RESULT))
   assert.equal(p.ok, true)
