@@ -109,6 +109,10 @@
         "report_gate"
       ],
       "effort_when_delegated": {}
+    },
+    "qa_judge": {
+      "enabled": true,
+      "confidence": 0.8
     }
   }
 }

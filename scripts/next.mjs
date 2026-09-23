@@ -15,6 +15,8 @@
 //   M  clarify → investigate → spec → plan → tickets → execute → review   (docs optional after)
 //   L  clarify → investigate → [review-decisions] → grill → spec → plan → tickets → execute
 //      → review → docs-tech → docs-product
+// kss-qa (the blind browser acceptance test, DESIGN.md §22) is optional on every track, right after
+// execute; the Next line after execute offers it.
 // On M the open decisions are settled inside kss-investigate (the decision check, §8.4); the grill
 // runs on M only when the user escalates to it from that check.
 
@@ -24,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
-  'review', 'docs-tech', 'docs-product',
+  'qa', 'review', 'docs-tech', 'docs-product',
 ]
 
 export const TRACKS = {
@@ -35,9 +37,9 @@ export const TRACKS = {
 
 /** Phases a track does not require but may run: optional, never off-track. */
 export const OPTIONAL = {
-  S: ['review', 'docs-tech', 'docs-product'],
-  M: ['review-decisions', 'grill', 'docs-tech', 'docs-product'],
-  L: ['review-decisions'],
+  S: ['qa', 'review', 'docs-tech', 'docs-product'],
+  M: ['review-decisions', 'grill', 'qa', 'docs-tech', 'docs-product'],
+  L: ['review-decisions', 'qa'],
 }
 
 export const TRACK_LINE = {
@@ -98,6 +100,7 @@ export function nextLine(size, after, feature, opts = {}) {
     if (next === 'grill' && size === 'L' && Number(opts.auto) > 0) {
       line += ` (optional first: ${p}kss-review-decisions ${id})`
     }
+    if (after === 'execute' && OPTIONAL[size].includes('qa')) line += ` (optional first: ${p}kss-qa ${id})`
     return line
   }
   const rest = OPTIONAL[size].filter((p2) => ORDER.indexOf(p2) > ORDER.indexOf(after))
