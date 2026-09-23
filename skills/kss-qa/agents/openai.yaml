@@ -1,0 +1,6 @@
+interface:
+  display_name: "KSS QA"
+  short_description: "Blind browser acceptance test of a KSS feature"
+  default_prompt: "Use $kss-qa to run the blind acceptance test of this feature."
+policy:
+  allow_implicit_invocation: false

@@ -64,7 +64,7 @@ of one of these measurements.
 
 ---
 
-## 2. The skills (14)
+## 2. The skills (15)
 
 | Skill | Required? | Role |
 | --- | --- | --- |
@@ -78,13 +78,14 @@ of one of these measurements.
 | `kss-plan` | M, L | Writes the implementation plan — shape, not code |
 | `kss-tickets` | M, L | Slices the plan into self-contained tickets and a dependency graph |
 | `kss-execute` | yes | Runs the tickets; frontier scheduling, gates, review, integration, PR |
+| `kss-qa` | optional | Blind acceptance test through the UI: planner + seed from the spec, disposable local environment, browser-driven scenarios with evidence, Jev-judged verdict (§22) |
 | `kss-review` | M, L | Works the PR review round(s); optionally watches the PR |
 | `kss-docs-tech` | optional | As-built technical documentation |
 | `kss-docs-product` | optional | Product-facing documentation |
 | `kss-status` | anytime | Prints the board; writes nothing |
 
 **Order:** clarify → investigate → [review-decisions] → grill → spec → plan → tickets → execute
-→ review → [docs-tech, docs-product]. Which of these a feature actually runs is its **track**,
+→ [qa] → review → [docs-tech, docs-product]. Which of these a feature actually runs is its **track**,
 fixed by its size (§3.9); every skill ends by pointing at the next phase *of that track*.
 
 Every skill can also be run on its own, given a feature id `NNN-<slug>`.
@@ -1318,3 +1319,74 @@ verdict and escalation per ticket. Joining the two by ticket answers the questio
 turned on for: reject rate per harness at the same tier, turns and tokens per accepted ticket per
 harness, and whether the foreign fallback fired. A harness that is rejected twice as often as the
 other at `T2` is not saving anything; the split goes back to what the trace supports.
+
+---
+
+## 22. `kss-qa` — the blind acceptance test (optional)
+
+### 22.1 The idea
+
+Every gate before this one reads the code: the executor's tests, the ticket reviewer, the final
+suite, the PR review. All of them share the implementer's understanding of the spec, so a
+requirement misread in the plan survives every one of them. `kss-qa` asks the one question they
+cannot: *does the running product, driven through its UI, do what was asked?* It is asked by
+agents that **never saw the code**, from the request and the functional spec alone.
+
+It is optional on every track, offered by `next.mjs` right after `execute`
+(`Next: /kss-review NNN (optional first: /kss-qa NNN)`), and it needs a UI to drive.
+
+### 22.2 The pipeline (`scripts/qa.mjs`)
+
+| Step | Who | Sees | Writes |
+| --- | --- | --- | --- |
+| `plan` | blind planner, `claude -p` (`models.planner`, default sonnet), file tools only, empty temp cwd | `00-brief.md` (or the spec's Problem), the spec sections in `spec.sections` (never contracts, NFRs or the plan), the database schemas, the environment catalog | `qa/plan.json` (services, personas, scenarios with exact expected values, not-covered FRs, assumptions), `qa/seed/<db>.sql`, `qa/plan.md` |
+| `up` | script | `.kss/qa.config.json` | compose project up, migrations, Keycloak realm + client secret + personas, seed, services in dependency levels with readiness checks, page warm-up |
+| `run` | blind driver per scenario, `claude -p` (`models.driver`, default haiku), **only** `Bash(browser-use:*)`, fresh Chrome profile per scenario | one scenario, its FR texts, one persona, the app URL | `qa/runs/<id>/<S-NN>/NN-step.jpg` + `steps.jsonl` (via `qa_step`), `result.json` (via `qa_done`), `driver.json` |
+| `judge` | Jev (`jev.qa_judge`) | the FR texts, the expected outcomes, the recorded observations | `judge.json`: driver verdict, Jev's gated answer, final |
+| `report` | script | the run | `qa/report.md`, `qa/result.json` (latest) and a copy per run |
+| `down` | script | state | services and browsers stopped, `compose down -v` |
+
+`all` chains them and always tears down unless `--keep-up`. Both models run with
+`--setting-sources ""` and `--strict-mcp-config` from an empty directory: no CLAUDE.md, no memory,
+no hook, no plugin, no MCP reaches them. The driver cannot read a file at all; the evidence
+helpers (`templates/qa/agent_helpers.py`, loaded by browser-use from `BH_AGENT_WORKSPACE`) are
+its only way to write anything.
+
+### 22.3 The project adapter
+
+The plugin assumes Docker Compose for infrastructure and Chrome/Chromium for the browser, and
+nothing else about the stack. Everything project-specific is `.kss/qa.config.json` (committed;
+every credential in it is local and throwaway):
+
+| Key | What it holds |
+| --- | --- |
+| `compose` | files and project name; an override file moves every host port and owns its volumes, so the QA stack never touches dev data |
+| `databases.<db>` | `url`, `schema` (any file — it reaches the planner as `schema/<db><ext>`), `migrate`, and optional `ready` / `seed` shell commands run with `KSS_QA_DB_URL` and `KSS_QA_SEED_FILE` (default: `psql`), `seed_format` / `seed_ext` for the planner (default: PostgreSQL SQL, `.sql`), `description` |
+| `auth` | `{provider: "keycloak", url, admin, adminPassword, realm, realmImport, clients, roles}` — realm import, client secrets, personas with roles and attributes — or `{provider: "command", command, roles, description}`, run with `KSS_QA_PERSONAS_FILE` pointing at the personas JSON; absent = the project creates no users |
+| `env` | base dotenv files plus overrides pointing every dependency at the QA stack and every external provider at an unreachable address; re-applied inside each final Node process by `env-preload.cjs`, so no task runner's dotenv handling can swap them back |
+| `prepare` | shell commands run on every `up` before any service starts — generated clients, codegen — because the checkout may have changed branch since the last run |
+| `services` | the catalog: `command`, `ready` (`tcp` / `http` / `log`), `fail` (a log regex that aborts `up` at once, e.g. a failed build), `requires`, `warmup`, `description` |
+| `apps` | the web apps the driver may open |
+| `environment_notes` | the **project rules** in the planner's words — how users, accounts and data connect, and which isolation must always be tested |
+
+Runtime state lives in `.kss/qa/.runtime/` (gitignored).
+
+### 22.4 The verdict
+
+Per scenario: `final = driver` only when Jev's `qa_verdict` agrees **and** clears
+`jev.qa_judge.confidence` (0.8); disagreement or low confidence is `inconclusive`. With Jev off or
+failing, the driver's verdict stands and the report says `Judge: off`. Overall: any `fail` →
+**REJECTED**; every scenario `pass` → **APPROVED**; otherwise **INCONCLUSIVE**. FRs the planner
+declared not UI-testable are listed, never counted: they stay the unit and wire suites' job.
+
+Jev answers the question it is built for — a choice over already-enumerated classes from a compact
+state — and it judges from the *observations*, not from the driver's self-assessment, which is
+what makes it a second opinion rather than an echo. As in §20, nothing Jev says is written as
+fact: its answer, confidence and threshold are in `judge.json` and in the report.
+
+### 22.5 What to measure
+
+`report.md` carries cost (planner + drivers) and turns per scenario; `jev-trace.jsonl` carries
+every judgement. Worth watching: how often Jev and the driver disagree (a driver that marks `pass`
+without an observation is the failure mode this exists to catch), how often a `fail` is a real
+defect versus a seed or plan error, and the cost per scenario at haiku versus sonnet.

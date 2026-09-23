@@ -8,6 +8,7 @@
 //   node .kss/scripts/jev.mjs split   '<json>'          keep or split one drafted ticket
 //   node .kss/scripts/jev.mjs classify '<json>'         a coordinator judgement (escalation class, report gate, size, review depth)
 //   node .kss/scripts/jev.mjs ask     '<json>'          raw { state, questions } passthrough
+//   node .kss/scripts/jev.mjs judge   '<json>'          kss-qa: pass / fail / blocked for one scenario's evidence
 //
 // Every command reads `.kss/config.json` (committed: the policy) and then `.kss/config.local.json`
 // (gitignored: the API key, when it is not in the environment). Both are looked up in the current
@@ -92,6 +93,10 @@ export const DEFAULTS = {
       confidence: 0.8,
       decisions: ['escalation_class', 'report_gate'],
       effort_when_delegated: {},
+    },
+    qa_judge: {
+      enabled: true,
+      confidence: 0.8,
     },
   },
 }
@@ -269,6 +274,33 @@ function choice(instructions, criteria) {
   return { type: 'choice', instructions, criteria }
 }
 
+const QA_VERDICT = {
+  instructions:
+    'An independent, black-box UI tester exercised a web application against a functional requirement and recorded, step by step, what it expected and what the screen showed. ' +
+    'Expected outcomes carry ids (E1, E2, …) and the tester titles the step that observes each one with its id. ' +
+    'Judge only from the recorded observations, never from the tester\'s own verdict: pass only if every expected outcome is explicitly observed; fail if any observation contradicts an expected outcome; blocked if the flow never reached a check, the page errored for reasons unrelated to the requirement, or an expected outcome was never observed at all.',
+  criteria: {
+    pass: 'every expected outcome is explicitly observed on screen, with matching values',
+    fail: 'at least one observation contradicts an expected outcome of the requirement',
+    blocked: 'the evidence cannot decide: a check was never reached, the environment failed, or an expected outcome has no observation',
+  },
+}
+
+/** `judge` input → systemOne body. `{requirements, scenario, expected, steps, tester_summary?}` (kss-qa, DESIGN.md §22) */
+export function buildQaJudge(input, cfg) {
+  if (!isObj(input) || !Array.isArray(input.expected) || !Array.isArray(input.steps)) {
+    throw new Error('judge needs {requirements, scenario, expected:[...], steps:[{title, expected, observed, status}], tester_summary?}')
+  }
+  const state = {
+    requirements: input.requirements ?? null,
+    scenario: input.scenario ?? null,
+    expected_outcomes: input.expected,
+    recorded_steps: input.steps.map((s) => ({ title: s.title, expected: s.expected, observed: s.observed, step_status: s.status })),
+    tester_summary: input.tester_summary ?? null,
+  }
+  return { body: { state, questions: { qa_verdict: choice(QA_VERDICT.instructions, QA_VERDICT.criteria) } }, threshold: cfg.jev.qa_judge.confidence }
+}
+
 /** `decide` input → systemOne body + the threshold the answer will be gated with. */
 export function buildDecide(input, cfg) {
   if (!isObj(input) || typeof input.question !== 'string' || !Array.isArray(input.options) || input.options.length < 2) {
@@ -395,15 +427,15 @@ export async function systemOne(body, cfg, { apiKey, fetchImpl = fetch } = {}) {
 
 // ---------------------------------------------------------------- trace
 
-export function tracePath(cwd) {
-  const cur = readCurrent(cwd)
+export function tracePath(cwd, feature = null) {
+  const cur = feature ? { feature } : readCurrent(cwd)
   const dir = featureDir(cwd, cur)
   return dir ? join(dir, 'jev-trace.jsonl') : null
 }
 
-function trace(cwd, cfg, record) {
+export function trace(cwd, cfg, record) {
   if (!cfg.jev.trace) return
-  const path = tracePath(cwd)
+  const path = tracePath(cwd, record && record.feature)
   if (!path) return
   try {
     mkdirSync(dirname(path), { recursive: true })
@@ -422,12 +454,13 @@ function out(obj, code = 0) {
 
 function usage() {
   process.stderr.write(
-    'usage: jev.mjs <config|check|decide|tier|split|classify|ask> [json] [--cwd <dir>]\n' +
+    'usage: jev.mjs <config|check|decide|tier|split|classify|ask|judge> [json] [--cwd <dir>]\n' +
       '  decide   {question, options:[{id,label,description?}], category?, context?, evidence?}\n' +
       '  tier     {title, goal?, layer?, files?, contracts?, execution_uncertainty?, domain_risk?, safeguards?}\n' +
       '  split    {title, write_targets, layer?, directories?, service_concerns?, est_turns?, crosses_read_and_write?}\n' +
       '  classify {kind: escalation_class|report_gate|size|review_depth, state}\n' +
-      '  ask      {state, questions}\n',
+      '  ask      {state, questions}\n' +
+      '  judge    {requirements, scenario, expected:[...], steps:[...], tester_summary?}\n',
   )
   process.exit(1)
 }
@@ -439,7 +472,7 @@ function parseArgs(argv) {
   return { cwd, cmd: rest[0], json: rest[1] }
 }
 
-const FEATURE_OF = { decide: 'auto_assumptions', tier: 'tier_selection', split: 'ticket_split', classify: 'reasoning' }
+const FEATURE_OF = { decide: 'auto_assumptions', tier: 'tier_selection', split: 'ticket_split', classify: 'reasoning', judge: 'qa_judge' }
 
 function featureFlag(cfg, cmd) {
   const key = FEATURE_OF[cmd]
@@ -454,7 +487,7 @@ async function main() {
 
   if (cmd === 'config') out({ path, present, sources, root, ...redact(cfg) })
 
-  if (!['check', 'decide', 'tier', 'split', 'classify', 'ask'].includes(cmd)) usage()
+  if (!['check', 'decide', 'tier', 'split', 'classify', 'ask', 'judge'].includes(cmd)) usage()
 
   if (!cfg.jev.enabled) {
     out({ enabled: false, reason: sources.length ? 'jev.enabled is false' : `no ${REPO_CONFIG} or ${LOCAL_CONFIG} under ${root}` }, 3)
@@ -481,6 +514,7 @@ async function main() {
     else if (cmd === 'tier') built = buildTier(input, cfg)
     else if (cmd === 'split') built = buildSplit(input, cfg)
     else if (cmd === 'classify') built = buildClassify(input, cfg)
+    else if (cmd === 'judge') built = buildQaJudge(input, cfg)
     else if (cmd === 'ask') {
       if (!isObj(input) || !isObj(input.questions)) throw new Error('ask needs {state, questions}')
       built = { body: { state: input.state ?? null, questions: input.questions }, threshold: null }

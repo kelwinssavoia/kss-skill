@@ -15,6 +15,7 @@ normative spec for every one of them.
 | `kss-plan` | Writes `04-plan.md`: the implementation shape — models, contracts, flows, UI, reuse, file map, test plan. | `NNN-<slug>` |
 | `kss-tickets` | Slices the plan into self-contained tickets plus the dependency graph. | `NNN-<slug>` |
 | `kss-execute` | Runs the tickets to done: continuous-frontier scheduling in worktrees, gates, review, integration, PR. | `NNN-<slug> [--ticket NN]` |
+| `kss-qa` | Blind acceptance test through the web UI: a planner that never saw the code writes scenarios and a seed from the request and the spec, a disposable local environment comes up, a cheap model drives the browser leaving a screenshot per step, Jev judges each scenario, and `qa/report.md` carries the verdict. Optional, after `kss-execute`. | `NNN-<slug> [--replan] [--only S-01] [--keep-up]` |
 | `kss-review` | Works the PR review rounds — triage, fix, dispute, answer, defer, reply — and can watch the PR. | `NNN-<slug> [--watch]` |
 | `kss-docs-tech` | Writes the as-built technical documentation and links it from the docs index. Optional. | `NNN-<slug>` |
 | `kss-docs-product` | Writes the product-facing documentation and links it from the docs index. Optional. | `NNN-<slug>` |
