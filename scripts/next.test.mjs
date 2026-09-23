@@ -22,7 +22,7 @@ test('S: clarify → tickets → execute, then only optional phases', () => {
   assert.equal(nextPhase('S', 'clarify'), 'tickets')
   assert.equal(nextPhase('S', 'tickets'), 'execute')
   assert.equal(nextPhase('S', 'execute'), null)
-  assert.equal(nextLine('S', 'execute', '001-x'), 'Next: nothing on track S — /kss-review 001-x or /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
+  assert.equal(nextLine('S', 'execute', '001-x'), 'Next: nothing on track S — /kss-qa 001-x or /kss-review 001-x or /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
   // investigate ran anyway on an S: resume the track after it
   assert.equal(nextPhase('S', 'investigate'), 'tickets')
   assert.equal(check('S', 'investigate'), 'off-track')
@@ -36,6 +36,9 @@ test('M: no grill — investigate goes straight to spec unless the user escalate
   assert.equal(nextPhase('M', 'grill'), 'spec')
   assert.equal(nextPhase('M', 'review-decisions'), 'spec')
   assert.equal(nextPhase('M', 'execute'), 'review')
+  assert.equal(nextLine('M', 'execute', '001-x'), 'Next: /kss-review 001-x (optional first: /kss-qa 001-x)')
+  assert.equal(nextPhase('M', 'qa'), 'review', 'qa resumes the track at review')
+  assert.equal(check('M', 'qa'), 'optional')
   assert.equal(nextLine('M', 'review', '001-x'), 'Next: nothing on track M — /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
   assert.equal(check('M', 'grill'), 'optional')
   assert.equal(check('M', 'spec'), 'on-track')
@@ -48,6 +51,7 @@ test('L: grill always, review-decisions offered first when there are auto decisi
   assert.equal(nextPhase('L', 'review-decisions'), 'grill')
   assert.equal(nextPhase('L', 'review-decisions', { state: 'spec' }), 'spec', 're-run after the spec revises the spec')
   assert.equal(nextPhase('L', 'review'), 'docs-tech')
+  assert.equal(nextLine('L', 'execute', '001-x'), 'Next: /kss-review 001-x (optional first: /kss-qa 001-x)')
   assert.equal(nextLine('L', 'docs-product', '001-x'), 'Next: feature 001-x is documented — nothing left to run.')
 })
 
@@ -61,7 +65,7 @@ test('the invocation prefix follows the harness, the track does not', () => {
   )
   assert.equal(
     nextLine('S', 'execute', '001-x', { harness: 'codex' }),
-    'Next: nothing on track S — $kss-review 001-x or $kss-docs-tech 001-x or $kss-docs-product 001-x are optional.',
+    'Next: nothing on track S — $kss-qa 001-x or $kss-review 001-x or $kss-docs-tech 001-x or $kss-docs-product 001-x are optional.',
   )
   assert.deepEqual(Object.keys(PREFIX).sort(), ['claude-code', 'codex'])
 })
