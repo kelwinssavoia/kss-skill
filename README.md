@@ -121,6 +121,11 @@ The full contract is [DESIGN.md §19](DESIGN.md#19-harnesses).
 
 Enable it per project via `enabledPlugins` in `.claude/settings.json` (project or user level).
 
+Optional, Claude Code only: `/plugin install kss-ui@kss-skill` adds the **kss-ui** mod — a live
+board (`/kss`), a progress band above the prompt with a **Run next** button, toasts, and a guard
+that denies the reads a phase's "Do not read" list forbids. It only reads `.kss/current` and the
+README, so every skill works the same without it ([DESIGN.md §23](DESIGN.md)).
+
 ### Codex
 
 Add the repository as a marketplace and install the same plugin — the manifest Codex reads is
@@ -263,6 +268,8 @@ Interviews the user on every open decision, one per turn, business → layout �
   writes `02-decisions.md` (D-/DF-), `CONTEXT.md` terms, ADRs in `docs/adr/`.
 - **Confirmation:** each open item its own turn — question, repo-sourced options, ≤1 derived
   follow-up; "don't know" defers it. Closes with "Decided N, deferred N, overrode …?"
+- **Progress:** the queue is published in `.kss/current.grill`; in Claude Code each question is a
+  dialog (`AskUserQuestion`) and the statusline shows `grill · Q4/11`.
 - **Next:** `/kss-spec NNN-slug`
 
 ### `kss-spec` — `/kss-spec NNN-<slug>`
@@ -407,7 +414,8 @@ Last: reviewer approved 03
 The statusline is Claude Code only (Codex has no status-line hook; there, `$kss-status` prints the
 board on demand). Installed by `kss-init`, it reads `.kss/current`, e.g. `kss 012 · execute · 3/5
 ████░░ · running: 04 (31t, 14m) · 19.8M tok`. With no active run it falls back to the previously
-installed statusline's output.
+installed statusline's output. The optional `kss-ui` mod draws the same state as a band above
+the prompt and a `/kss` pane (DESIGN.md §23).
 
 ## Preferences, cross-harness and Jev (`.kss/config.local.json`)
 

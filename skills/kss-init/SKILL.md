@@ -270,6 +270,7 @@ Agents: .claude/agents/ (<n> written, <n> kept) | not applicable on Codex
 Statusline: installed (previous backed up to ~/.kss/statusline.backup.json) | installed (already KSS, path refreshed) | skipped | not applicable on Codex
 Legacy backup: none | removed self-referencing .kss/statusline.backup.json | moved to ~/.kss/
 Hooks: come with the plugin — SubagentStop, SessionEnd, Stop. Nothing to install. | installed into <path>/hooks.json — trust them once via /hooks, or metrics.jsonl stays empty | skipped
+UI: optional — claude plugin install kss-ui@kss-skill adds a live board, a progress band and a read guard (DESIGN.md §23) | not applicable on Codex
 Preferences: <prefix>kss-config — models, efforts and Jev live in the gitignored .kss/config.local.json (optional)
 Next: <prefix>kss-clarify <what you want to build>
 ```

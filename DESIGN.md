@@ -173,7 +173,14 @@ statusline falls back.
     "last_check": "…",
     "cursor": { "last_comment_at": "…", "last_ci_at": "…" }
   },
-  "explorers": { "running": 3, "returned": 2 }
+  "explorers": { "running": 3, "returned": 2 },
+  "grill": {
+    "asked": 4, "total": 11, "deferred": 1,
+    "business": { "done": 3, "total": 3 },
+    "layout": { "done": 1, "total": 2 },
+    "technical": { "done": 0, "total": 6 },
+    "current": "Q4 · layout · Where does the cutoff show on the batch screen?"
+  }
 }
 ```
 
@@ -188,6 +195,7 @@ statusline falls back.
 | `tickets.<NN>` | `kss-execute` | a **map keyed by ticket id**; each value is `{state, tier, started_at, turns, est_turns, worktree}`, `state` exactly `blocked` \| `ready` \| `running` \| `reviewing` \| `rejected` \| `integrated` |
 | `execution` | `kss-execute` | roll-up of the run: `integrated`, `total`, `critical_path`, `last` (the last event, as printed on the board) |
 | `review` | `kss-review` | `round`, `watching` (the watch target the statusline prints, absent when not watching) and `cursor` `{last_comment_at, last_ci_at}`, which the next round reads from; `pr`, `state`, `open` and `held` are optional extras |
+| `grill` | `kss-grill` | the interview queue: `asked`, `total`, `deferred`, one `{done, total}` per category with open items, and `current` (`Qn · <category> · <question, ≤60 chars>`). Set when the queue is built, updated per question, cleared after the closing turn |
 | `explorers` | `kss-investigate`, `kss-plan`, `kss-grill` | always the object `{running, returned}` — the size of the fan-out and how many are back, for the statusline. Never a bare number; absent when nothing is out |
 
 Every key is optional; a reader treats a missing key as unknown and prints `—`. Writers merge
@@ -656,7 +664,11 @@ Lean: <only when there is one>
 ```
 
 A `Lean:` is never offered for a business question — business options are consequences, not
-recommendations.
+recommendations. The fields are fixed; how they are drawn is the harness adapter's (**Asking the
+user**): a question dialog in Claude Code (`AskUserQuestion`, falling back to the text when the
+repo offers more than four options), the text above in Codex. The queue is published as
+`.kss/current.grill` (§3.3), so the board, the statusline and the `kss-ui` mod (§23) show
+`Q4/11 · business 3/3 · layout 1/2 · technical 0/6` while it runs.
 
 The grill spawns nothing, unless an answer needs a repo fact that was not fetched: then one
 sonnet explorer. **It never asks the user for facts.**
@@ -1006,6 +1018,7 @@ example:
 kss 012 · execute · 3/5 ████░░ · running: 04 (31t, 14m) · 19.8M tok
 kss 012 · investigate · 3 explorers running · 2/3 returned
 kss 012 · review · round 2 done · watching PR #61 · last check 3m ago
+kss 012 · grill · Q4/11 ████░░░░░░ · 1 deferred
 ```
 
 When no KSS run is active, it delegates to the backed-up previous statusline command, if there is
@@ -1390,3 +1403,37 @@ fact: its answer, confidence and threshold are in `judge.json` and in the report
 every judgement. Worth watching: how often Jev and the driver disagree (a driver that marks `pass`
 without an observation is the failure mode this exists to catch), how often a `fail` is a real
 defect versus a seed or plan error, and the cost per scenario at haiku versus sonnet.
+
+---
+
+## 23. `kss-ui` — the Claude Code mod (optional)
+
+### 23.1 The idea
+
+The skills report progress as text: a summary at the end of a phase, `kss-status` on demand, the
+statusline. `kss-ui` (`mods/kss-ui/`) draws the same facts inside Claude Code, live, and turns two
+prose rules into code. It is a plugin of function hooks — a Claude Code mod — and exists in that
+harness only, so it follows §19 strictly: it **reads** `.kss/current`, `.kss/config.md`, the
+feature `README.md` and `metrics.jsonl`, **writes nothing**, and every skill behaves the same
+without it. A Codex session, or a Claude Code one without the mod, loses the drawing and the guard,
+nothing else.
+
+### 23.2 What it adds
+
+| Piece | What it shows or does |
+| --- | --- |
+| Band above the prompt | `kss 012 ✓clarify ✓investigate ▸grill spec …`, one progress line for the running phase (the grill queue, `3/5 integrated · running 04`, explorers out, the review round) and the README's `Next:` with **Run next** once the phase has finished. Hidden with **Hide** or `/kss band` |
+| Pane — `/kss` | The board: every phase of the track, the grill queue by category with the question being asked, the ticket table, tokens, turns and context, and Next |
+| `/kss next` | Puts the Next command in the prompt — no copying it out of a summary after `/clear` |
+| Toasts | A ticket integrated or rejected; a phase finished (the README's Next moved past it); artifacts still uncommitted after a phase printed `Safe to /clear.` (§3.8) |
+| Read guard | A `Read` on the main loop that the running phase's **Do not read** list forbids is denied with the rule as the reason. `phase-files` (default) covers the feature folder's phase files; `strict` also denies application source outside the features root, `.kss/`, `.claude/`, `docs/`, `docs_root`, `domain_docs`, `CONTEXT.md`, `CLAUDE.md` and `AGENTS.md`; `off` disables it. Subagents are never guarded — explorers and executors read source by design. A `Bash` `cat` is not caught: the guard backs the rule, it does not replace it |
+
+"The phase finished" is read off the README: a skill rewrites its `Next:` line from `next.mjs` when
+it ends, so while `Next:` still names the running phase, that phase is not done.
+
+### 23.3 Install
+
+`claude plugin install kss-ui@kss-skill` from this repository's marketplace, or
+`claude --plugin-dir <repo>/mods/kss-ui` for one session. The guard mode is the plugin's `guard`
+option in the config menu. `kss-init` mentions the mod on Claude Code and installs nothing for it.
+
