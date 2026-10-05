@@ -10,19 +10,33 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { KssBoard, KssGrill } from '../types'
+import type { KssBoard, KssGrill, KssLive, KssQuota, KssTicket } from '../types'
+import type { KssRateReading } from './kss'
 import {
-  bar, buildBoard, commandOf, events, guard, human, invocation, parseConfig, parseJson, parseReadme,
-  short, sumTokens, withPending,
+  bar, buildBoard, commandOf, describeTool, events, guard, human, invocation, parseConfig, parseJson,
+  parseReadme, quotaLine, short, since, sumTokens, ticketOf, trackQuota, usedBy, withPending,
 } from './kss'
 import type { GuardMode, KssConfig } from './kss'
 
 const PANE = 'kss-board'
+
+/** Told to the execute coordinator while the board is drawn here, so the transcript stays short. */
+const QUIET_EXECUTE = [
+  'kss-ui is drawing the KSS execute board live in this session: every ticket with its progress,',
+  'elapsed time and current action, the recent log and the quota used. If you are the kss-execute',
+  'coordinator, do not print the progress board (DESIGN.md §14.4) on each event: print one line per',
+  'event instead, `NN · <event> · <detail>`, and the full board only when the run ends or the user',
+  'asks. Nothing else changes: keep writing .kss/current and 06-execution.md on every event, since',
+  'the board is drawn from them.',
+].join(' ')
 const POLL_MS = 3000
 
 const board = atom({ plugin: 'kss-ui', key: 'board' } as const, null)
 const isBandHidden = atom({ plugin: 'kss-ui', key: 'isBandHidden' } as const, false)
 const pending = atom({ plugin: 'kss-ui', key: 'pending' } as const, null)
+const live = atom({ plugin: 'kss-ui', key: 'live' } as const, {})
+const now = atom({ plugin: 'kss-ui', key: 'now' } as const, 0)
+const quota = atom({ plugin: 'kss-ui', key: 'quota' } as const, null)
 
 async function readText($: EngineInterface, path: string): Promise<string | null> {
   try {
@@ -46,15 +60,30 @@ async function load($: EngineInterface, withCost: boolean): Promise<KssBoard | n
   if (!config || !feature) return null
   const dir = `${cwd}/${config.featuresRoot}/${feature}`
   if (withCost) tokens = sumTokens(await readText($, `${dir}/metrics.jsonl`))
-  return buildBoard(current, parseReadme(await readText($, `${dir}/README.md`)), tokens)
+  return buildBoard(current, parseReadme(await readText($, `${dir}/README.md`)), tokens, {
+    graph: await readText($, `${dir}/05-tickets/graph.md`),
+    log: await readText($, `${dir}/06-execution.md`),
+  })
 }
 
 async function refresh($: EngineInterface, withCost: boolean) {
   const next = await load($, withCost)
   const prev = await read($, board)
-  if (JSON.stringify(prev) === JSON.stringify(next)) return
-  await update($, board, () => next)
-  for (const text of events(prev, next)) $.ui.toast(text)
+  if (JSON.stringify(prev) !== JSON.stringify(next)) {
+    if (prev?.feature !== next?.feature) await update($, live, () => ({}))
+    await update($, board, () => next)
+    for (const text of events(prev, next)) $.ui.toast(text)
+  }
+  // Elapsed times are drawn against `now`: tick it while something runs, and only then.
+  const b = await shown($)
+  if (b?.phase === 'execute' && b.tickets.some(t => t.state === 'running' || t.state === 'reviewing')) {
+    const t = await $.clock.now()
+    await update($, now, () => t)
+    if ((await read($, quota))?.feature !== b.feature) {
+      // No reading off a subscription, or none yet: the board draws without the quota line.
+      await $.session.usage().then(u => noteQuota($, u.rateLimits), () => undefined)
+    }
+  }
 }
 
 /** The board to draw: what the files say, with a phase the person just started laid over it. */
@@ -90,6 +119,38 @@ async function runNext($: EngineInterface, line: string, clearFirst: boolean) {
   await $.command.run({ command: name, args: cmd.args })
 }
 
+/**
+ * Folds a rate-limit reading into the running execute's quota use. Kept in `$.store` per feature
+ * too, so a resumed execute (a new session, after /clear) keeps its baseline.
+ */
+async function noteQuota($: EngineInterface, readings: readonly KssRateReading[]) {
+  const b = await shown($)
+  if (!b || b.phase !== 'execute' || b.isPhaseFinished || readings.length === 0) return
+  const key = `quota:${b.feature}`
+  const held = await read($, quota)
+  const prev = held?.feature === b.feature ? held : ((await $.store.get(key)) as KssQuota | undefined) ?? null
+  const next = trackQuota(prev, b.feature, readings)
+  await update($, quota, () => next)
+  await $.store.set(key, next)
+}
+
+/** The ticket whose live subagent is `agentId`. */
+function ticketOfAgent(map: Record<string, KssLive>, agentId: string): string | null {
+  return Object.entries(map).find(([, l]) => l.agentId === agentId)?.[0] ?? null
+}
+
+/** Records one step of a ticket's subagent: its turn count, or what it just did. */
+async function noteAgent($: EngineInterface, agentId: string, patch: Partial<KssLive>) {
+  const map = await read($, live)
+  const id = ticketOfAgent(map, agentId)
+  if (!id) return
+  const t = await $.clock.now()
+  await update($, live, m => {
+    const cur = m[id]
+    return cur && cur.agentId === agentId ? { ...m, [id]: { ...cur, ...patch, ...(patch.action ? { actionAt: t } : {}) } } : m
+  })
+}
+
 /** A phase that printed `Safe to /clear.` must have committed its artifacts (DESIGN.md §3.8). */
 async function checkCommitted($: EngineInterface) {
   if (!config) return
@@ -122,12 +183,58 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     await refresh($, true)
+    if (e.agentId !== undefined) await noteAgent($, e.agentId, { isDone: true })
     if (e.agentId === undefined) {
       // By the end of the turn the phase has written `.kss/current` itself (or failed to start).
       await update($, pending, () => null)
       if (/Safe to \/clear\./.test(e.answer)) await checkCommitted($)
     }
     return done
+  })
+
+  // ── Live execution: which subagent works on which ticket, its turns and its last action ──
+  on('agent.spawn', async ($, e, next) => {
+    const spawned = await next(e)
+    const b = await shown($)
+    const ticket = ticketOf(e.prompt, e.description)
+    if (b?.phase === 'execute' && ticket && 'agentId' in spawned && spawned.agentId) {
+      const entry: KssLive = {
+        agentId: spawned.agentId,
+        role: /review/i.test(e.subagentType) ? 'reviewer' : 'executor',
+        turns: 0,
+        startedAt: await $.clock.now(),
+        action: null,
+        actionAt: null,
+        isDone: false,
+      }
+      await update($, live, m => ({ ...m, [ticket]: entry }))
+    }
+    return spawned
+  })
+
+  // While the board shows the execute, the coordinator need not reprint it on every event.
+  on('prompt.compose', async ($, e, next) => {
+    const composed = await next(e)
+    const b = await shown($)
+    if (b?.phase !== 'execute' || b.isPhaseFinished) return composed
+    return { sections: [...composed.sections, { id: 'kss-ui-execute', text: QUIET_EXECUTE, scope: 'session' as const }] }
+  })
+
+  on('session.measure', async ($, e, next) => {
+    if (e.changed.includes('rateLimits')) await noteQuota($, e.rateLimits)
+    return next(e)
+  })
+
+  on('turn.step', async function* ($, e, next) {
+    if (e.agentId !== undefined) await noteAgent($, e.agentId, { turns: e.index + 1 })
+    return yield* next(e)
+  })
+
+  on('tool.call', async ($, e, next) => {
+    if (e.agentId !== undefined) {
+      await noteAgent($, e.agentId, { action: describeTool(String(e.tool), e as unknown as Record<string, unknown>) })
+    }
+    return next(e)
   })
 
   on('tool.call', { tool: 'Read' }, async ($, e, next) => {
@@ -171,7 +278,7 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column" width={e.props.bodyColumns}>
         {pipeline(b, Box, Text)}
-        {room > 2 && detail(b, Text)}
+        {room > 2 && detail(b, await read($, live), await read($, now), await read($, quota), Text)}
         <Box gap={1}>
           <Text dimColor>Next</Text>
           <Text wrap="truncate-end">{b.next ?? '—'}</Text>
@@ -218,20 +325,7 @@ export const register: Register = (on, options) => {
 
         {b.grill && grillQueue(b.grill, Box, Text)}
 
-        {b.tickets.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>
-              Tickets {b.total ? `${bar(b.integrated ?? 0, b.total)} ${b.integrated ?? 0}/${b.total} integrated` : ''}
-            </Text>
-            {b.tickets.map(t => (
-              <Text key={t.id} color={stateColor(t.state)}>
-                {t.id.padEnd(4)}{t.state.padEnd(11)}{(t.tier ?? '').padEnd(4)}
-                <Text dimColor>{t.turns !== null ? ` ${t.turns}/${t.est ?? '?'}t` : ''}</Text>
-              </Text>
-            ))}
-            {b.last && <Text dimColor>last: {b.last}</Text>}
-          </Box>
-        )}
+        {b.tickets.length > 0 && executeBoard(b, await read($, live), await read($, now), await read($, quota), e.props.bodyColumns, Box, Text)}
 
         <Text dimColor>
           {b.tokens !== null ? `${human(b.tokens)} tok` : ''}
@@ -277,7 +371,7 @@ function pipeline(b: KssBoard, Box: El, Text: El) {
 }
 
 /** The one line that says how far the running phase is. */
-function detail(b: KssBoard, Text: El) {
+function detail(b: KssBoard, liveMap: Record<string, KssLive>, nowMs: number, q: KssQuota | null, Text: El) {
   if (b.grill) {
     const g = b.grill
     const cat = (name: string, c: { done: number; total: number } | null) => (c ? ` · ${name} ${c.done}/${c.total}` : '')
@@ -291,12 +385,32 @@ function detail(b: KssBoard, Text: El) {
       </Text>
     )
   }
-  if (b.total) {
-    const running = b.tickets.filter(t => t.state === 'running').map(t => t.id)
+  if (b.total || b.tickets.length) {
+    const active = b.tickets.filter(t => t.state === 'running' || t.state === 'reviewing')
+    const integrated = b.integrated ?? b.tickets.filter(t => t.state === 'integrated').length
+    const total = b.total ?? b.tickets.length
+    const started = b.phaseStartedAt ? Date.parse(b.phaseStartedAt) : null
     return (
       <Text wrap="truncate-end">
-        <Text color="yellow">{bar(b.integrated ?? 0, b.total, 8)} {b.integrated ?? 0}/{b.total} integrated</Text>
-        <Text dimColor>{running.length ? ` · running ${running.join(', ')}` : ''}{b.last ? ` · ${b.last}` : ''}</Text>
+        <Text color="yellow">{bar(integrated, total, 8)} {integrated}/{total} integrated</Text>
+        <Text dimColor>
+          {started && nowMs ? ` · ${since(started, nowMs)}` : ''}
+          {q?.feature === b.feature ? q.windows.map(w => ` · +${usedBy(w)}% ${w.kind === 'five_hour' ? 'session' : 'week'}`).join('') : ''}
+        </Text>
+        {active.map(t => {
+          const l = liveMap[t.id]
+          const turns = l && !l.isDone ? l.turns : t.turns
+          return (
+            <Text key={t.id}>
+              <Text dimColor> │ </Text>
+              <Text color={stateColor(t.state)}>{t.id}</Text>
+              <Text dimColor>
+                {' '}{t.state === 'reviewing' ? 'review' : l?.action ?? 'starting'}
+                {turns !== null && turns !== undefined ? ` ${turns}/${t.est ?? '?'}t` : ''}
+              </Text>
+            </Text>
+          )
+        })}
       </Text>
     )
   }
@@ -323,6 +437,70 @@ function grillQueue(g: KssGrill, Box: El, Text: El) {
       {row('layout', g.layout)}
       {row('technical', g.technical)}
       {g.current && <Text color="yellow" wrap="truncate-end">▸ {g.current}</Text>}
+    </Box>
+  )
+}
+
+const MARK: Record<string, string> = { integrated: '✓', running: '▸', reviewing: '◆', rejected: '✗', blocked: '·', ready: '○' }
+
+/** One ticket's row and, while it runs, the line saying what its subagent is doing. */
+function ticketRows(t: KssTicket, l: KssLive | undefined, nowMs: number, width: number, Box: El, Text: El) {
+  const isActive = t.state === 'running' || t.state === 'reviewing'
+  const turns = l && !l.isDone ? l.turns : t.turns
+  const startedMs = l?.startedAt ?? (t.startedAt ? Date.parse(t.startedAt) : null)
+  const titleWidth = Math.max(8, width - 44)
+  const title = (t.title ?? '').length > titleWidth ? (t.title ?? '').slice(0, titleWidth - 1) + '…' : (t.title ?? '')
+  const isOver = turns !== null && t.est !== null && turns > t.est
+  return (
+    <Box key={t.id} flexDirection="column">
+      <Text color={stateColor(t.state)} dimColor={t.state === 'blocked'}>
+        {MARK[t.state] ?? ' '} {t.id} {title.padEnd(titleWidth)} {(t.tier ?? '').padEnd(3)}
+        <Text color={isOver ? 'red' : undefined} dimColor={!isActive}>
+          {' '}{t.est ? bar(turns ?? 0, t.est, 10) : ''.padEnd(10)} {`${turns ?? 0}/${t.est ?? '?'}t`.padEnd(8)}
+        </Text>
+        <Text dimColor>{isActive && startedMs && nowMs ? since(startedMs, nowMs).padStart(6) : ''.padStart(6)} {t.state}</Text>
+      </Text>
+      {isActive && (
+        <Text dimColor wrap="truncate-end">
+          {'      ↳ '}{l?.role === 'reviewer' || t.state === 'reviewing' ? 'reviewer: ' : ''}{l?.action ?? 'starting…'}
+          {l?.actionAt && nowMs ? ` · ${since(l.actionAt, nowMs)} ago` : ''}
+        </Text>
+      )}
+      {t.state === 'blocked' && t.blockedBy.length > 0 && <Text dimColor>{`      waits on ${t.blockedBy.join(', ')}`}</Text>}
+    </Box>
+  )
+}
+
+/** The execute board: the run's progress, one row per ticket, and the last lines of the log. */
+function executeBoard(b: KssBoard, liveMap: Record<string, KssLive>, nowMs: number, q: KssQuota | null, width: number, Box: El, Text: El) {
+  const integrated = b.integrated ?? b.tickets.filter(t => t.state === 'integrated').length
+  const total = b.total ?? b.tickets.length
+  const used = b.tickets.reduce((n, t) => n + ((liveMap[t.id] && !liveMap[t.id]!.isDone ? liveMap[t.id]!.turns : t.turns) ?? 0), 0)
+  const est = b.tickets.reduce((n, t) => n + (t.est ?? 0), 0)
+  const started = b.phaseStartedAt ? Date.parse(b.phaseStartedAt) : null
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text bold>
+          Execute {bar(integrated, total)} {integrated}/{total} integrated
+          <Text dimColor>
+            {est ? ` · ${Math.round((used / est) * 100)}% of est. turns` : ''}
+            {started && nowMs ? ` · ${since(started, nowMs)}` : ''}
+          </Text>
+        </Text>
+        {q?.feature === b.feature && quotaLine(q, nowMs) && <Text dimColor>{`Quota  ${quotaLine(q, nowMs)}`}</Text>}
+        {b.tickets.map(t => ticketRows(t, liveMap[t.id], nowMs, width, Box, Text))}
+      </Box>
+      {b.log.length > 0 && (
+        <Box flexDirection="column">
+          <Text bold>Recent</Text>
+          {b.log.map((l, i) => (
+            <Text key={String(i)} dimColor={i < b.log.length - 1} wrap="truncate-end">
+              {(/T(\d{2}:\d{2})/.exec(l.at)?.[1] ?? l.at).padEnd(6)}{(l.ticket ?? '').padEnd(4)}{l.event}{l.detail ? ` · ${l.detail}` : ''}
+            </Text>
+          ))}
+        </Box>
+      )}
     </Box>
   )
 }

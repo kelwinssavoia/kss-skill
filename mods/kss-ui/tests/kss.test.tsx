@@ -1,6 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { buildBoard, commandOf, events, guard, invocation, parseConfig, parseReadme, phases, withPending } from '../hooks/kss'
+import {
+  buildBoard, commandOf, describeTool, events, guard, invocation, parseConfig, parseGraph, parseLog, parseReadme, phases,
+  quotaLine, since, ticketOf, trackQuota, usedBy, withPending,
+} from '../hooks/kss'
 
 const CWD = '/repo'
 const CONFIG = 'features_root: docs/features\ndocs_root: docs/product\ndomain_docs: [CONTEXT.md, docs/adr]\n'
@@ -152,4 +155,92 @@ test('Clear & run clears, then runs the Next command by its namespaced name', as
   } finally {
     files['/repo/docs/features/012-batch-cutoff/README.md'] = readme
   }
+})
+
+const GRAPH = `| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |
+| --- | --- | --- | --- | --- | --- | --- |
+| 01 | contract | proto | — | T4 | 25 | yes |
+| 02 | csv-endpoint | api | 01 | T2 | 30 | yes |
+| 03 | export-button | web | 01, 02 | T2 | 20 | yes |
+`
+const LOG = `## Log
+
+- \`{{ts}}\` · **{{NN}}** · {{spawn|report}} · {{detail}}
+- \`2026-10-05T14:02:11Z\` · **01** · integrate · 3 commits, 4 files
+- \`2026-10-05T14:03:40Z\` · **02** · spawn · T2 in .kss/worktrees/012-batch-cutoff/02
+`
+
+test('the graph gives titles, blockers and estimates; the log its last lines', () => {
+  const g = parseGraph(GRAPH)
+  expect(g['03']).toEqual({ title: 'export-button', blockedBy: ['01', '02'], tier: 'T2', est: 20 })
+  const log = parseLog(LOG)
+  expect(log).toHaveLength(2)
+  expect(log[0]).toEqual({ at: '2026-10-05T14:02:11Z', ticket: '01', event: 'integrate', detail: '3 commits, 4 files' })
+})
+
+test('a spawn is tied to its ticket by the worktree path, and a tool call reads as one short line', () => {
+  expect(ticketOf('…\nWorktree: /repo/.kss/worktrees/012-batch-cutoff/02\n', 'executor')).toBe('02')
+  expect(ticketOf('no path', 'Review ticket 03')).toBe('03')
+  expect(describeTool('Edit', { file_path: '/repo/api/export/csv.ts' })).toBe('Edit export/csv.ts')
+  expect(describeTool('Bash', { command: 'git commit -m "feat: csv"\nmore' })).toBe('$ git commit -m "feat: csv"')
+  expect(since(0, 14 * 60_000)).toBe('14m')
+  expect(since(0, 64 * 60_000)).toBe('1h04')
+})
+
+test('the execute board shows each ticket, what its subagent is doing, and the log', async ($, on) => {
+  const dir = '/repo/docs/features/012-batch-cutoff'
+  const saved = { ...files }
+  files['/repo/.kss/current'] = JSON.stringify({
+    feature: '012-batch-cutoff',
+    phase: 'execute',
+    tickets: { '01': { state: 'integrated', turns: 22 }, '02': { state: 'running', tier: 'T2', est_turns: 30 }, '03': { state: 'blocked' } },
+    execution: { integrated: 1, total: 3 },
+  })
+  files[`${dir}/README.md`] = README.replace('/kss-grill', '/kss-execute')
+  files[`${dir}/05-tickets/graph.md`] = GRAPH
+  files[`${dir}/06-execution.md`] = LOG
+  try {
+    engine(on)
+    on('agent.spawn', () => ({ model: 'sonnet', agentId: 'ag-02' }) as never)
+    on('tool.call', () => ({ result: 'ok', text: 'ok' }) as never)
+    on('ui.open', () => ({ value: { isOpen: true } }) as never)
+    on('session.usage', () => ({ value: { startedAt: 0, context: {}, rateLimits: [{ kind: 'five_hour', percentUsed: 40 }, { kind: 'seven_day', percentUsed: 30 }] } }) as never)
+    on('session.measure', ($: unknown, e: { changed: string[] }) => ({ changed: e.changed }) as never)
+    mock.store(on)
+    await $.session.start({ cwd: CWD } as never)
+    await $.session.measure({ context: {}, rateLimits: [{ kind: 'five_hour', percentUsed: 52 }, { kind: 'seven_day', percentUsed: 32 }], changed: ['rateLimits'] } as never)
+    await $.agent.spawn({ prompt: 'ticket…\nWorktree: /repo/.kss/worktrees/012-batch-cutoff/02', description: 'Ticket 02', subagentType: 'kss:kss-sonnet-medium' } as never)
+    await $.tool.call({ tool: 'Edit', file_path: '/repo/api/export/csv.ts', old_string: 'a', new_string: 'b', agentId: 'ag-02' } as never)
+    const pane = await $.ui.mount({
+      plugin: 'kss-ui',
+      surface: 'terminal',
+      component: 'Pane',
+      requestId: 'kss-board',
+      props: { title: 'KSS', isFocused: false, bodyColumns: 100, placement: 'dock' } as never,
+    })
+    const text = flat(await pane.drawn())
+    expect(text).toContain('1/3 integrated')
+    expect(text).toContain('csv-endpoint')
+    expect(text).toContain('↳ Edit export/csv.ts')
+    expect(text).toContain('waits on 01, 02')
+    expect(text).toContain('integrate · 3 commits, 4 files')
+    expect(text).toContain('session 52% (+12 this run)')
+    expect(text).toContain('week 32% (+2 this run)')
+  } finally {
+    for (const k of Object.keys(files)) delete files[k]
+    Object.assign(files, saved)
+  }
+})
+
+test('quota: the first reading is the baseline, and a reset carries what was used before it', () => {
+  const five = (p: number, resetsAt = '2026-10-05T19:00:00Z') => ({ kind: 'five_hour', percentUsed: p, resetsAt })
+  let q = trackQuota(null, '012-x', [five(40), { kind: 'seven_day', percentUsed: 30 }])
+  q = trackQuota(q, '012-x', [five(58), { kind: 'seven_day', percentUsed: 33 }])
+  expect(q.windows.map(usedBy)).toEqual([18, 3])
+  q = trackQuota(q, '012-x', [five(4, '2026-10-06T00:00:00Z')])
+  expect(usedBy(q.windows[0]!)).toBe(22)
+  expect(usedBy(q.windows[1]!)).toBe(3)
+  expect(quotaLine(q, Date.parse('2026-10-05T22:00:00Z'))).toBe('session 4% (+22 this run) · resets in 2h00 │ week 33% (+3 this run)')
+  // Another feature starts from its own baseline.
+  expect(usedBy(trackQuota(q, '013-y', [five(10)]).windows[0]!)).toBe(0)
 })

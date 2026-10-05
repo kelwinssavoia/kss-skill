@@ -2,7 +2,7 @@
 // `.kss/config.md` and the feature README. Nothing here touches `$`, so the tests drive it directly.
 // The tracks mirror scripts/next.mjs (DESIGN.md §3.9), the one place that owns them.
 
-import type { KssBoard, KssGrill, KssGrillCategory, KssPending, KssPhase, KssTicket } from '../types'
+import type { KssBoard, KssGrill, KssGrillCategory, KssLogEntry, KssPending, KssPhase, KssQuota, KssQuotaWindow, KssTicket } from '../types'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
@@ -91,13 +91,53 @@ export function phases(size: string | null, phase: string, isClosed: boolean): K
   }))
 }
 
-function tickets(current: Json): KssTicket[] {
-  const map = obj(current.tickets)
-  if (!map) return []
-  return Object.entries(map)
-    .map(([id, v]) => {
-      const r = obj(v) ?? {}
-      return { id, state: str(r.state) ?? '—', tier: str(r.tier) ?? str(r.agent_type), turns: num(r.turns), est: num(r.est_turns) }
+export type KssGraphRow = { title: string; blockedBy: string[]; tier: string | null; est: number | null }
+
+/** `05-tickets/graph.md`'s multi-agent table: `| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |`. */
+export function parseGraph(text: string | null): Record<string, KssGraphRow> {
+  const out: Record<string, KssGraphRow> = {}
+  for (const line of (text ?? '').split('\n')) {
+    const cells = line.split('|').slice(1, -1).map(c => c.trim())
+    if (cells.length < 6 || !/^\d{2}$/.test(cells[0]!)) continue
+    const est = Number.parseInt(cells[5]!, 10)
+    out[cells[0]!] = {
+      title: cells[1] || '',
+      blockedBy: (cells[3]!.match(/\d{2}/g) ?? []).filter(id => id !== cells[0]),
+      tier: /^T\d$/.test(cells[4]!) ? cells[4]! : null,
+      est: Number.isFinite(est) ? est : null,
+    }
+  }
+  return out
+}
+
+/** The last `n` entries of `06-execution.md`'s Log, newest last. */
+export function parseLog(text: string | null, n = 6): KssLogEntry[] {
+  const out: KssLogEntry[] = []
+  for (const line of (text ?? '').split('\n')) {
+    const m = /^-\s*`([^`]+)`\s*·\s*(?:\*\*(\w+)\*\*\s*·\s*)?([^·]+?)\s*(?:·\s*(.*))?$/.exec(line.trim())
+    if (!m || m[1]!.includes('{{')) continue
+    out.push({ at: m[1]!, ticket: m[2] ?? null, event: m[3]!.trim(), detail: (m[4] ?? '').trim() })
+  }
+  return out.slice(-n)
+}
+
+function tickets(current: Json, graph: Record<string, KssGraphRow>): KssTicket[] {
+  const map = obj(current.tickets) ?? {}
+  const ids = new Set([...Object.keys(graph), ...Object.keys(map)])
+  return [...ids]
+    .map(id => {
+      const r = obj(map[id]) ?? {}
+      const g = graph[id]
+      return {
+        id,
+        title: g?.title || null,
+        state: str(r.state) ?? (g ? 'ready' : '—'),
+        tier: str(r.tier) ?? str(r.agent_type) ?? g?.tier ?? null,
+        turns: num(r.turns),
+        est: num(r.est_turns) ?? g?.est ?? null,
+        startedAt: str(r.started_at),
+        blockedBy: g?.blockedBy ?? [],
+      }
     })
     .sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -123,7 +163,9 @@ function grill(current: Json): KssGrill | null {
   }
 }
 
-export function buildBoard(current: Json | null, readme: KssReadme, tokens: number | null): KssBoard | null {
+export type KssExtra = { graph?: string | null; log?: string | null }
+
+export function buildBoard(current: Json | null, readme: KssReadme, tokens: number | null, extra: KssExtra = {}): KssBoard | null {
   const feature = current && str(current.feature)
   if (!current || !feature) return null
   const phase = str(current.phase) ?? readme.state ?? '—'
@@ -146,7 +188,7 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     // The README's Next line is rewritten when a phase ends; while it still names the running
     // phase, that phase has not finished.
     isPhaseFinished: isClosed || (nextPhase !== null && nextPhase !== phase),
-    tickets: tickets(current),
+    tickets: tickets(current, parseGraph(extra.graph ?? null)),
     integrated: execution && num(execution.integrated),
     total: execution && num(execution.total),
     last: execution && str(execution.last),
@@ -156,6 +198,8 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     turns: session && num(session.turns),
     ctx: session && num(session.ctx),
     tokens,
+    phaseStartedAt: str(current.phase_started_at),
+    log: parseLog(extra.log ?? null),
   }
 }
 
@@ -189,6 +233,96 @@ export function withPending(b: KssBoard | null, pending: KssPending | null): Kss
 export function commandOf(next: string | null): { command: string; args: string } | null {
   const m = next ? /^\/([\w:-]+)\s*(.*)$/.exec(next.trim()) : null
   return m ? { command: m[1]!, args: m[2]!.trim() } : null
+}
+
+// ── Live execution ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The ticket an executor or reviewer spawn works on. kss-execute pastes the ticket and its
+ * worktree path (`.kss/worktrees/NNN-slug/NN`) into the prompt; the description is the fallback.
+ */
+export function ticketOf(prompt: string, description: string): string | null {
+  return (
+    /worktrees\/[^/\s]+\/(\d{2})\b/.exec(prompt)?.[1] ??
+    /\bticket\s*#?(\d{2})\b/i.exec(description)?.[1] ??
+    /^#\s*(\d{2})\b/m.exec(prompt)?.[1] ??
+    null
+  )
+}
+
+const tail = (p: unknown) => (typeof p === 'string' ? p.split('/').slice(-2).join('/') : '')
+
+/** One short line for what a tool call does: `Edit api/wallet.ts`, `$ git commit -m …`. */
+export function describeTool(tool: string, input: Record<string, unknown>): string {
+  const cut = (t: string, n = 56) => (t.length > n ? t.slice(0, n - 1) + '…' : t)
+  switch (tool) {
+    case 'Read':
+    case 'Edit':
+    case 'Write':
+      return `${tool} ${tail(input.file_path)}`
+    case 'Bash':
+      return cut(`$ ${String(input.command ?? '').split('\n')[0]}`)
+    case 'Grep':
+      return cut(`Grep ${String(input.pattern ?? '')}`)
+    case 'Glob':
+      return cut(`Glob ${String(input.pattern ?? '')}`)
+    case 'Agent':
+      return cut(`Agent ${String(input.description ?? '')}`)
+    default:
+      return tool
+  }
+}
+
+// ── Quota ─────────────────────────────────────────────────────────────────────────────────────
+
+export type KssRateReading = { kind: string; percentUsed: number; resetsAt?: string }
+
+/**
+ * Folds a rate-limit reading into what this feature's execute has used. The first reading is the
+ * baseline; a window that reset (a new `resetsAt`, a lower percent) carries what was used before it.
+ */
+export function trackQuota(prev: KssQuota | null, feature: string, readings: readonly KssRateReading[]): KssQuota {
+  const before = prev && prev.feature === feature ? prev.windows : []
+  const windows = readings
+    .filter(r => r.kind === 'five_hour' || r.kind === 'seven_day')
+    .map((r): KssQuotaWindow => {
+      const w = before.find(x => x.kind === r.kind)
+      const resetsAt = r.resetsAt ?? null
+      if (!w) return { kind: r.kind, base: r.percentUsed, last: r.percentUsed, carried: 0, resetsAt }
+      const hasReset = resetsAt !== null && w.resetsAt !== null && resetsAt !== w.resetsAt && r.percentUsed < w.last
+      return hasReset
+        ? { kind: r.kind, base: 0, last: r.percentUsed, carried: w.carried + Math.max(0, w.last - w.base), resetsAt }
+        : { ...w, last: r.percentUsed, resetsAt: resetsAt ?? w.resetsAt }
+    })
+  // A window the reading left out keeps its last figures.
+  for (const w of before) if (!windows.some(x => x.kind === w.kind)) windows.push(w)
+  return { feature, windows }
+}
+
+/** Percent points of a window this run has used. */
+export const usedBy = (w: KssQuotaWindow) => Math.round((w.carried + Math.max(0, w.last - w.base)) * 10) / 10
+
+/** `session 62% (+18 this run) · resets in 2h10 │ week 41% (+6 this run)` */
+export function quotaLine(q: KssQuota | null, nowMs: number): string | null {
+  if (!q || q.windows.length === 0) return null
+  const name = (k: string) => (k === 'five_hour' ? 'session' : 'week')
+  const resets = (w: KssQuotaWindow) => {
+    const t = w.resetsAt ? Date.parse(w.resetsAt) : NaN
+    return w.kind === 'five_hour' && Number.isFinite(t) && t > nowMs ? ` · resets in ${since(nowMs, t)}` : ''
+  }
+  return [...q.windows]
+    .sort((a, b) => a.kind.localeCompare(b.kind))
+    .map(w => `${name(w.kind)} ${Math.round(w.last)}% (+${usedBy(w)} this run)${resets(w)}`)
+    .join(' │ ')
+}
+
+/** `1h04`, `14m`, `38s`. */
+export function since(fromMs: number | null, nowMs: number): string {
+  if (fromMs === null || !Number.isFinite(fromMs)) return ''
+  const s = Math.max(0, Math.round((nowMs - fromMs) / 1000))
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`
 }
 
 /** The toasts owed for the change from one board to the next: integrations, rejections, a phase ending. */
