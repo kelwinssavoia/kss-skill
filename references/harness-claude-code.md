@@ -73,8 +73,8 @@ the harness enforces it. Nothing extra needs to be said in the prompt.
 
 ## Asking the user
 
-`kss-grill` asks each question with the `AskUserQuestion` tool, one call per question, one
-question per call:
+`kss-grill` asks each question with the `AskUserQuestion` tool — the multiple-choice question tool
+its SKILL.md requires — one call per question, one question per call:
 
 | Grill field | `AskUserQuestion` |
 | --- | --- |

@@ -65,9 +65,22 @@ phase may well run in the other one (DESIGN.md §19).
    (DESIGN.md §3.3) so the board, the statusline and any harness UI can show it:
    `node .kss/scripts/current.mjs set '{"grill":{"asked":0,"total":<n>,"deferred":0,"business":{"done":0,"total":<n>},"layout":{"done":0,"total":<n>},"technical":{"done":0,"total":<n>}}}'`
    — a category with no open item is left out.
-2. Ask **one question per turn**, the way the harness adapter's **Asking the user** section says.
-   Whatever draws it, the question carries exactly these fields, and where the adapter has no
-   dialog it is printed in this exact format:
+2. Ask **one question per turn**. **When the harness gives you a multiple-choice question tool**
+   (a dialog with options and a free-text choice), you **must** ask through it — one call, one
+   question — mapping the fields like this, whatever the adapter copy in `.kss/references/` says
+   (an older copy may predate this rule):
+
+   | Field | In the question tool |
+   | --- | --- |
+   | `Qn · <category>` | the short header — `Q<n> · biz`, `Q<n> · layout`, `Q<n> · tech` (≤12 characters) |
+   | the question and `from <source>` | the question text, ending ` (from <source>)` |
+   | options a) … | the options, in the repo's order: a short `label`, the consequence in its `description` |
+   | `something else` | the tool's own free-text choice — never add it as an option |
+   | `Lean:` | ` (lean)` appended to that option's label — never on a business question |
+
+   Print the text format below instead only when there is no such tool, or when the repo offers
+   more options than the tool accepts (more than four). Never print the question as text *and*
+   open the dialog. The text format, exact:
 
    ```
    Qn · <category> · from <source>
