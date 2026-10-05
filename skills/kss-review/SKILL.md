@@ -59,6 +59,13 @@ phase may well run in the other one (DESIGN.md §19).
 4. If the PR is already merged or closed, stop with exactly:
    `PR <url> is <merged|closed>. Nothing to review.`
 
+**Enter the phase before any other work.** As soon as the preconditions pass — before reading the
+inputs, spawning anything or asking anything — run
+`node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"review","phase_started_at":"<ISO-8601 now>","explorers":null}'`.
+The board, the statusline and the metrics hooks read the phase from there, so writing it at the
+end shows the previous phase for the whole run. The `.kss/current` entry under Outputs is what
+this phase keeps up to date afterwards.
+
 ## Procedure
 
 1. **Collect.** From the cursor in `.kss/current`, gather every new review comment, review body,

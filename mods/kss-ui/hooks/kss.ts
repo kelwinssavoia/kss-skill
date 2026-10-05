@@ -2,7 +2,7 @@
 // `.kss/config.md` and the feature README. Nothing here touches `$`, so the tests drive it directly.
 // The tracks mirror scripts/next.mjs (DESIGN.md §3.9), the one place that owns them.
 
-import type { KssBoard, KssGrill, KssGrillCategory, KssPhase, KssTicket } from '../types'
+import type { KssBoard, KssGrill, KssGrillCategory, KssPending, KssPhase, KssTicket } from '../types'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
@@ -157,6 +157,38 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     ctx: session && num(session.ctx),
     tokens,
   }
+}
+
+/** `/kss-tickets 048-x` (or `/kss:kss-tickets 048-x`) as a command run → the phase it starts. */
+export function invocation(command: string, args: string): KssPending | null {
+  const phase = /^(?:kss:)?kss-([a-z-]+)$/.exec(command)?.[1]
+  const feature = /^(\d{3}-[a-z0-9-]+)/.exec(args.trim())?.[1] ?? /^(\d{3})\b/.exec(args.trim())?.[1]
+  return phase && ORDER.includes(phase) && feature ? { phase, feature } : null
+}
+
+/**
+ * The board as it will be once the phase just started writes `.kss/current`: skills write the
+ * phase on entry, but the band should not wait for the model to get there.
+ */
+export function withPending(b: KssBoard | null, pending: KssPending | null): KssBoard | null {
+  if (!b || !pending || b.phase === pending.phase) return b
+  // `/kss-tickets 048` names the feature by number alone; a different feature is another run.
+  if (short(b.feature) !== short(pending.feature)) return b
+  return {
+    ...b,
+    phase: pending.phase,
+    isClosed: false,
+    phases: phases(b.size, pending.phase, false),
+    isPhaseFinished: false,
+    grill: null,
+    explorers: null,
+  }
+}
+
+/** A Next line as a command to run: `/kss-tickets 048-x` → `{ command: 'kss-tickets', args: '048-x' }`. */
+export function commandOf(next: string | null): { command: string; args: string } | null {
+  const m = next ? /^\/([\w:-]+)\s*(.*)$/.exec(next.trim()) : null
+  return m ? { command: m[1]!, args: m[2]!.trim() } : null
 }
 
 /** The toasts owed for the change from one board to the next: integrations, rejections, a phase ending. */

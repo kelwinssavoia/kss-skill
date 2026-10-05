@@ -59,6 +59,13 @@ phase may well run in the other one (DESIGN.md §19).
    `NNN-slug is size S — investigation is not part of its track.` followed by the line from
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --after clarify`.
 
+**Enter the phase before any other work.** As soon as the preconditions pass — before reading the
+inputs, spawning anything or asking anything — run
+`node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"investigate","phase_started_at":"<ISO-8601 now>","explorers":null}'`.
+The board, the statusline and the metrics hooks read the phase from there, so writing it at the
+end shows the previous phase for the whole run. The `.kss/current` entry under Outputs is what
+this phase keeps up to date afterwards.
+
 ## Procedure
 
 1. Read the inputs and derive the questions from the brief:

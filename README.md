@@ -122,7 +122,7 @@ The full contract is [DESIGN.md §19](DESIGN.md#19-harnesses).
 Enable it per project via `enabledPlugins` in `.claude/settings.json` (project or user level).
 
 Optional, Claude Code only: `/plugin install kss-ui@kss-skill` adds the **kss-ui** mod — a live
-board (`/kss`), a progress band above the prompt with a **Run next** button, toasts, and a guard
+board (`/kss`), a progress band above the prompt with **Clear & run** / **Run here** buttons for the next phase, toasts, and a guard
 that denies the reads a phase's "Do not read" list forbids. It only reads `.kss/current` and the
 README, so every skill works the same without it ([DESIGN.md §23](DESIGN.md)).
 

@@ -59,6 +59,13 @@ phase may well run in the other one (DESIGN.md §19).
    `Undecided: <question>. Run kss-grill NNN-slug; the plan cannot choose this.`
    Never resolve such a question by picking the likely option.
 
+**Enter the phase before any other work.** As soon as the preconditions pass — before reading the
+inputs, spawning anything or asking anything — run
+`node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"plan","phase_started_at":"<ISO-8601 now>","explorers":null}'`.
+The board, the statusline and the metrics hooks read the phase from there, so writing it at the
+end shows the previous phase for the whole run. The `.kss/current` entry under Outputs is what
+this phase keeps up to date afterwards.
+
 ## Procedure
 
 1. **List the facts you are missing** before spawning anything: signatures, model and message

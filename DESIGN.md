@@ -187,7 +187,7 @@ statusline falls back.
 | Key | Written by | Meaning |
 | --- | --- | --- |
 | `feature` | every skill on entry | `NNN-slug`; its folder is `<features_root>/<feature>` |
-| `phase` | every skill on entry | one of the skill names without the `kss-` prefix |
+| `phase` | every skill on entry — the first command after its preconditions pass, never at the end | one of the skill names without the `kss-` prefix |
 | `harness` | `scripts/harness.mjs`, on entry to every skill | `claude-code` or `codex` — which harness is running this phase (§19). The metrics hooks copy it onto every line they write |
 | `phase_started_at` | every skill on entry | ISO 8601 |
 | `ticket` | `kss-execute` | the ticket a subagent's cost is attributed to; absent outside execute |
@@ -1422,11 +1422,14 @@ nothing else.
 
 | Piece | What it shows or does |
 | --- | --- |
-| Band above the prompt | `kss 012 ✓clarify ✓investigate ▸grill spec …`, one progress line for the running phase (the grill queue, `3/5 integrated · running 04`, explorers out, the review round) and the README's `Next:` with **Run next** once the phase has finished. Hidden with **Hide** or `/kss band` |
+| Band above the prompt | `kss 012 ✓clarify ✓investigate ▸grill spec …`, one progress line for the running phase (the grill queue, `3/5 integrated · running 04`, explorers out, the review round) and the README's `Next:` with two buttons once the phase has finished: **Clear & run** (`/clear`, then the Next command — what every summary says is safe) and **Run here** (the Next command in the same context). Hidden with **Hide** or `/kss band` |
 | Pane — `/kss` | The board: every phase of the track, the grill queue by category with the question being asked, the ticket table, tokens, turns and context, and Next |
 | `/kss next` | Puts the Next command in the prompt — no copying it out of a summary after `/clear` |
 | Toasts | A ticket integrated or rejected; a phase finished (the README's Next moved past it); artifacts still uncommitted after a phase printed `Safe to /clear.` (§3.8) |
 | Read guard | A `Read` on the main loop that the running phase's **Do not read** list forbids is denied with the rule as the reason. `phase-files` (default) covers the feature folder's phase files; `strict` also denies application source outside the features root, `.kss/`, `.claude/`, `docs/`, `docs_root`, `domain_docs`, `CONTEXT.md`, `CLAUDE.md` and `AGENTS.md`; `off` disables it. Subagents are never guarded — explorers and executors read source by design. A `Bash` `cat` is not caught: the guard backs the rule, it does not replace it |
+
+The band does not wait for `.kss/current`: a `/kss-<phase> NNN-slug` run — typed or from a button —
+shows that phase at once, until the end of that turn, by which time the skill has written it.
 
 "The phase finished" is read off the README: a skill rewrites its `Next:` line from `next.mjs` when
 it ends, so while `Next:` still names the running phase, that phase is not done.

@@ -45,8 +45,11 @@ export type KssBoard = {
   tokens: number | null
 }
 
+/** A phase the person just started with `/kss-<phase> NNN-slug`, shown until `.kss/current` says so too. */
+export type KssPending = { feature: string; phase: string }
+
 declare module 'claude-code' {
   interface PluginState {
-    'kss-ui': { board: KssBoard | null; isBandHidden: boolean }
+    'kss-ui': { board: KssBoard | null; isBandHidden: boolean; pending: KssPending | null }
   }
 }

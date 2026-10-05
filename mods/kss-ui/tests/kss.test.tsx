@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { buildBoard, events, guard, parseConfig, parseReadme, phases } from '../hooks/kss'
+import { buildBoard, commandOf, events, guard, invocation, parseConfig, parseReadme, phases, withPending } from '../hooks/kss'
 
 const CWD = '/repo'
 const CONFIG = 'features_root: docs/features\ndocs_root: docs/product\ndomain_docs: [CONTEXT.md, docs/adr]\n'
@@ -110,4 +110,46 @@ test('a Read the grill must not do is denied on the main loop only', async ($, o
   expect(JSON.stringify(main)).toContain('does not read 03-spec.md')
   const sub = await $.tool.call({ tool: 'Read', file_path: spec, agentId: 'a1' } as never)
   expect(JSON.stringify(sub)).not.toContain('does not read')
+})
+
+test('a typed /kss-<phase> shows that phase before .kss/current catches up', () => {
+  const b = buildBoard({ ...CURRENT, phase: 'plan', grill: undefined }, parseReadme(README.replace('/kss-grill', '/kss-tickets')), null)
+  expect(b?.isPhaseFinished).toBe(true)
+  expect(invocation('kss-status', '012')).toBeNull()
+  const s = invocation('kss:kss-tickets', '012-batch-cutoff')!
+  const shown = withPending(b, s)!
+  expect(shown.phase).toBe('tickets')
+  expect(shown.isPhaseFinished).toBe(false)
+  expect(shown.phases.find(p => p.name === 'plan')?.mark).toBe('done')
+  expect(withPending(b, invocation('kss-tickets', '012'))?.phase).toBe('tickets')
+  expect(withPending(b, invocation('kss-tickets', '013-other'))?.phase).toBe('plan')
+  expect(commandOf('/kss-tickets 012-batch-cutoff')).toEqual({ command: 'kss-tickets', args: '012-batch-cutoff' })
+})
+
+test('Clear & run clears, then runs the Next command by its namespaced name', async ($, on) => {
+  const readme = files['/repo/docs/features/012-batch-cutoff/README.md']!
+  files['/repo/docs/features/012-batch-cutoff/README.md'] = readme.replace('/kss-grill', '/kss-spec')
+  try {
+    engine(on)
+    const ran: string[] = []
+    on('command.list', () => ({ value: [{ name: 'clear' }, { name: 'kss:kss-spec' }] }) as never)
+    on('command.run', ($, e) => {
+      ran.push(`${e.command} ${e.args}`.trim())
+      return { text: '' }
+    })
+    await $.session.start({ cwd: CWD } as never)
+    const band = await $.ui.mount({
+      plugin: 'kss-ui',
+      surface: 'terminal',
+      component: 'AbovePrompt',
+      props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 100, scroll: { offset: 0, bodyRows: 6 }, view: {} } as never,
+    })
+    expect(await band.find({ key: 'run' })).toBeDefined()
+    await band.press({ key: 'clear-run' })
+    expect(ran).toEqual(['clear', 'kss:kss-spec 012-batch-cutoff'])
+    // The run started the phase: the band shows spec before .kss/current does.
+    expect(flat(await band.drawn())).toContain('▸spec')
+  } finally {
+    files['/repo/docs/features/012-batch-cutoff/README.md'] = readme
+  }
 })

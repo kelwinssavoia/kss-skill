@@ -58,6 +58,13 @@ phase may well run in the other one (DESIGN.md §19).
    When `03-spec.md` is absent (an S track), write from the brief alone and say so under
    `## What changed`.
 
+**Enter the phase before any other work.** As soon as the preconditions pass — before reading the
+inputs, spawning anything or asking anything — run
+`node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"docs-product","phase_started_at":"<ISO-8601 now>","explorers":null}'`.
+The board, the statusline and the metrics hooks read the phase from there, so writing it at the
+end shows the previous phase for the whole run. The `.kss/current` entry under Outputs is what
+this phase keeps up to date afterwards.
+
 ## Procedure
 
 1. Read the inputs. Take the user stories and the FR outcomes as the source of "what changed" —
