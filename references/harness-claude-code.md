@@ -71,6 +71,23 @@ Sending work back to an agent — a failed report gate, a reviewer's findings, a
 `kss-explorer` and every `kss-reviewer*` agent are declared with a read-only tool set in their agent files, so
 the harness enforces it. Nothing extra needs to be said in the prompt.
 
+## Asking the user
+
+`kss-grill` asks each question with the `AskUserQuestion` tool, one call per question, one
+question per call:
+
+| Grill field | `AskUserQuestion` |
+| --- | --- |
+| `Qn · <category>` | `header` — `Q<n> · biz`, `Q<n> · layout` or `Q<n> · tech` (≤12 characters) |
+| `from <source>` and the question | `question` — the question, then ` (from <source>)` |
+| options a) … | `options`, in the repo's order; each `description` says the consequence |
+| `something else` | the dialog's own free-text choice — never add it as an option |
+| `Lean:` | ` (lean)` appended to that option's `label`; never on a business question |
+
+The tool takes 2–4 options. With more than four found in the repo, or when the tool is not
+available, print the text format the skill gives instead. The answer is recorded exactly as from
+a typed reply.
+
 ## Running commands
 
 The coordinator has `Bash` and runs the final suite itself, or hands the exact command to a
@@ -92,5 +109,6 @@ cursor in `.kss/current`.
 | Hook manifest | `hooks/hooks.json`, declared by the plugin manifest and merged automatically while the plugin is enabled |
 | Hook events KSS uses | `SubagentStop`, `SessionEnd`, `Stop` |
 | Statusline | `statusLine` in the user-level `~/.claude/settings.json` (DESIGN.md §18) |
+| Optional UI mod | `kss-ui` — a live board pane, a band above the prompt, toasts and a per-phase read guard (DESIGN.md §23); it reads `.kss/current` and the README, so nothing depends on it |
 | Transcript the metrics hooks read | Claude Code transcript JSONL; a turn is an assistant message with `usage`, deduplicated by `message.id` |
 | Plugin root inside a hook | `${CLAUDE_PLUGIN_ROOT}` — set for hook commands only, never for a skill's shell |

@@ -234,6 +234,11 @@ Anything else: the last 10 lines plus every line matching error|failed|✕|✗. 
 These four preambles are the Codex packaging of the role definitions in the plugin's
 `agents/kss-*.md`, which are the source when the two drift (DESIGN.md §19.3).
 
+## Asking the user
+
+Codex has no question dialog: `kss-grill` prints each question in the text format the skill gives,
+and the user answers with the option letter or in their own words.
+
 ## Running commands
 
 The coordinator has the shell and runs the final suite itself, or hands the exact command to a

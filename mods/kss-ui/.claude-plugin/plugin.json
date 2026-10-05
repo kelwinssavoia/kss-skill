@@ -1,0 +1,22 @@
+{
+  "name": "kss-ui",
+  "version": "0.1.0",
+  "description": "KSS in Claude Code: a live board pane, a progress band above the prompt, the grill queue, and a per-phase read guard. Reads .kss/current and the feature README; owns no state of its own.",
+  "author": {
+    "name": "Kelwin Savoia"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "guard": {
+      "type": "string",
+      "title": "KSS read guard",
+      "description": "phase-files: deny reading the phase files a phase must not read. strict: also deny source files outside the KSS and docs folders. off: no guard.",
+      "options": [
+        "phase-files",
+        "strict",
+        "off"
+      ],
+      "default": "phase-files"
+    }
+  }
+}

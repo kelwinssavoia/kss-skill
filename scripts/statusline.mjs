@@ -239,6 +239,16 @@ function line(current, dir) {
     return `${head} · ${r} explorers running · ${back}/${total} returned`
   }
 
+  if (phase === 'grill' && current.grill && typeof current.grill === 'object') {
+    // `grill` (DESIGN.md §3.3) is the queue kss-grill keeps as it asks.
+    const g = current.grill
+    const asked = Number.isFinite(g.asked) ? g.asked : 0
+    const total = Number.isFinite(g.total) ? g.total : 0
+    const parts = [head, `Q${asked}/${total} ${bar(asked, total)}`.trim()]
+    if (Number.isFinite(g.deferred) && g.deferred > 0) parts.push(`${g.deferred} deferred`)
+    return parts.join(' · ')
+  }
+
   if (phase === 'review' && current.review) {
     const parts = [head]
     if (Number.isFinite(current.review.round)) parts.push(`round ${current.review.round} done`)

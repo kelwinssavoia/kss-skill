@@ -151,3 +151,16 @@ test('a hanging backup is killed with its whole process group within the timeout
     s.done()
   }
 })
+
+test('the grill prints its queue from .kss/current.grill', () => {
+  const s = sandbox()
+  try {
+    writeFileSync(
+      join(s.cwd, '.kss', 'current'),
+      JSON.stringify({ feature: '012-x', phase: 'grill', grill: { asked: 4, total: 10, deferred: 1 } }),
+    )
+    assert.equal(run(s.cwd, s.home).out, 'kss 012 · grill · Q4/10 ████░░░░░░ · 1 deferred')
+  } finally {
+    s.done()
+  }
+})

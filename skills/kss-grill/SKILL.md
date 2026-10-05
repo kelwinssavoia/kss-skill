@@ -61,8 +61,13 @@ phase may well run in the other one (DESIGN.md §19).
 ## Procedure
 
 1. Read the inputs and build the queue of open items, ordered **business → layout → technical**,
-   keeping the investigation's order inside each category.
-2. Ask **one question per turn**, in this exact format:
+   keeping the investigation's order inside each category. Publish the queue in `.kss/current`
+   (DESIGN.md §3.3) so the board, the statusline and any harness UI can show it:
+   `node .kss/scripts/current.mjs set '{"grill":{"asked":0,"total":<n>,"deferred":0,"business":{"done":0,"total":<n>},"layout":{"done":0,"total":<n>},"technical":{"done":0,"total":<n>}}}'`
+   — a category with no open item is left out.
+2. Ask **one question per turn**, the way the harness adapter's **Asking the user** section says.
+   Whatever draws it, the question carries exactly these fields, and where the adapter has no
+   dialog it is printed in this exact format:
 
    ```
    Qn · <category> · from <source>
@@ -92,7 +97,10 @@ phase may well run in the other one (DESIGN.md §19).
    - a new or conflicting **term** is fixed in one turn and written to `CONTEXT.md`;
    - an **architectural, data or contract** decision becomes an ADR under `docs/adr/`, which the
      `D-NN`'s `Links:` field points at.
-9. Write each `D-NN` as it is decided, so an interrupted grill loses nothing.
+9. Write each `D-NN` as it is decided, so an interrupted grill loses nothing. Before asking,
+   set `grill.asked` to the question's number and `grill.current` to `Qn · <category> · <the
+   question, cut to 60 characters>`; after the answer, bump the category's `done` (and `deferred`
+   for a `DF-`). One `current.mjs set` per change — it deep-merges.
 10. **Closing turn**, verbatim shape:
     `Decided <n>, deferred <n>, overrode <ids or none>. Anything to revisit?`
     A revisit re-asks that item and rewrites its `D-`; otherwise finish.
@@ -126,7 +134,8 @@ phase may well run in the other one (DESIGN.md §19).
   ```
 - `.kss/current` (DESIGN.md §3.3):
   `node .kss/scripts/current.mjs set '{"feature":"NNN-slug","phase":"grill","phase_started_at":"<ISO-8601>","explorers":null}'`
-  — and, only while the one fact-finding explorer is out,
+  — the `grill` queue described in Procedure steps 1 and 9, cleared with `'{"grill":null}'` after
+  the closing turn — and, only while the one fact-finding explorer is out,
   `node .kss/scripts/current.mjs set '{"explorers":{"running":1,"returned":0}}'`, cleared with
   `'{"explorers":null}'` when it returns. `explorers` is always that object or absent, never a
   bare number.
