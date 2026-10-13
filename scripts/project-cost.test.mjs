@@ -30,12 +30,13 @@ test('an agent lands within 25% of what feature 026 actually spent on it', () =>
   assert.ok(Math.abs(usd - 7.41) / 7.41 < 0.25, `projected $${usd.toFixed(2)} against an actual $7.41`)
 })
 
-test('an Opus agent costs more than the same work on Sonnet', () => {
+test('an Opus agent costs more than the same work on Sonnet, and Sonnet more than Haiku', () => {
   assert.ok(agentCost(50, 'opus').usd > agentCost(50, 'sonnet').usd)
+  assert.ok(agentCost(50, 'sonnet').usd > agentCost(50, 'haiku').usd * 10, 'Haiku 5.5 is ~20x cheaper than Sonnet 5.5')
 })
 
 test('the tier to model map matches references/tiers.md', () => {
-  assert.deepEqual(TIER_MODEL, { T1: 'sonnet', T2: 'sonnet', T3: 'sonnet', T4: 'opus', T5: 'opus' })
+  assert.deepEqual(TIER_MODEL, { T1: 'haiku', T2: 'sonnet', T3: 'sonnet', T4: 'opus', T5: 'opus' })
 })
 
 test('every model in the tier map has a price', () => {
