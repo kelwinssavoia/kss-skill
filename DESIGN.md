@@ -418,15 +418,17 @@ It then:
 | `kss-sonnet-high` | sonnet | high | executor; may spawn helpers |
 | `kss-opus-medium` | opus | medium | executor; may spawn helpers |
 | `kss-opus-high` | opus | high | executor; may spawn helpers |
-| `kss-haiku` | haiku | — | executor; may spawn helpers. No effort: Haiku rejects the parameter. Never a default — only a `models.tiers` row for `T1`–`T3` spawns it |
+| `kss-haiku-high` | haiku | high | executor; may spawn helpers. Default `T1`; Haiku never executes `T4`/`T5` |
+| `kss-haiku-medium` | haiku | medium | executor; may spawn helpers. For a `models.tiers` row, `T1`–`T3` only |
+| `kss-haiku` | haiku | medium | legacy name of `kss-haiku-medium`, kept for existing `models.tiers` rows |
 | `kss-reviewer` | opus | high | read-only; review depth `full` by default |
 | `kss-reviewer-opus-medium` | opus | medium | read-only; same brief, for `models.review` |
 | `kss-reviewer-sonnet-high` | sonnet | high | read-only; same brief, for `models.review` |
 | `kss-reviewer-sonnet-medium` | sonnet | medium | read-only; review depth `light` by default |
 | `kss-reviewer-sonnet-low` | sonnet | low | read-only; same brief, for `models.review` |
-| `kss-explorer` | sonnet | low | read-only |
-| `kss-runner` | sonnet | low | coordinator-only, final run: runs tests / lint / tsc; returns only summary lines and failures |
-| `kss-dispatcher` | sonnet | low | coordinator-only; runs one `dispatch.mjs run` (a ticket in the other harness's CLI) and returns its report verbatim (§21) |
+| `kss-explorer` | haiku | medium | read-only |
+| `kss-runner` | haiku | low | coordinator-only, final run: runs tests / lint / tsc; returns only summary lines and failures |
+| `kss-dispatcher` | haiku | low | coordinator-only; runs one `dispatch.mjs run` (a ticket in the other harness's CLI) and returns its report verbatim (§21) |
 
 There is **no `kss-opus-low`** by design, and nothing above `high`.
 
@@ -1264,7 +1266,7 @@ in the ticket's worktree, with the brief on stdin.
 coordinator (harness A)
   └─ dispatch.mjs pick      → "codex" | "claude-code" | local (exit 3)
   └─ writes NN.brief.md     = executor preamble (adapter B) + ticket + worktree
-  └─ spawns `dispatcher`    (light, local subagent: sonnet-low / gpt-5.4-mini-low)
+  └─ spawns `dispatcher`    (light, local subagent: haiku-low / gpt-5.4-mini-low)
        └─ dispatch.mjs run  → spawns CLI B in the worktree, brief on stdin
             claude -p --model … --effort … --output-format json --permission-mode acceptEdits
                       --allowedTools Read Grep Glob Edit Write "Bash(git *)" --max-turns 80

@@ -341,23 +341,23 @@ executed from either harness. The tier is the portable name; each harness adapte
 
 | Tier | The ticket it belongs to | Claude Code | Codex |
 | --- | --- | --- | --- |
-| `T1` | mechanical, local work with a known pattern | `kss-sonnet-low` | `gpt-5.6-luna` · low |
+| `T1` | mechanical, local work with a known pattern | `kss-haiku-high` | `gpt-5.6-luna` · low |
 | `T2` | bounded multi-file implementation following explicit patterns; the normal default | `kss-sonnet-medium` | `gpt-5.6-terra` · medium |
-| `T3` | demanding same-area reconciliation with decisions already made | `kss-sonnet-high` | `gpt-5.6-terra` · high |
+| `T3` | demanding same-area reconciliation with decisions already made | `kss-sonnet-medium` | `gpt-5.6-terra` · high |
 | `T4` | real technical judgement, unresolved semantics, or meaningful cross-layer reconciliation | `kss-opus-medium` | `gpt-6-astra` · medium |
 | `T5` | long-horizon integration, difficult diagnosis, unresolved cross-service state/failure semantics, or escalation after failure | `kss-opus-high` | `gpt-6-astra` · high |
-| `explorer` | one bounded read-only question, `file:line` evidence | `kss-explorer` | `gpt-5.4-mini` · low |
+| `explorer` | one bounded read-only question, `file:line` evidence | `kss-explorer` (haiku · medium) | `gpt-5.4-mini` · low |
 | `explorer-deep` | the same, on a contract / tenant / money question | `kss-opus-medium` | `gpt-6-astra` · medium |
 | `reviewer` | one finished ticket's diff — approve or reject + findings; depth `full` | `kss-reviewer` | `gpt-6-astra` · high |
 | `reviewer` | the same, depth `light` — only on Jev's `review_depth`, never with domain risk | `kss-reviewer-sonnet-medium` | `gpt-5.6-terra` · medium |
-| `runner` | coordinator-only, final run — the given command, summarised | `kss-runner` | `gpt-5.4-mini` · low |
-| `dispatcher` | coordinator-only — runs one ticket in the *other* harness's CLI, returns its report | `kss-dispatcher` | `gpt-5.4-mini` · low |
+| `runner` | coordinator-only, final run — the given command, summarised | `kss-runner` (haiku · low) | `gpt-5.4-mini` · low |
+| `dispatcher` | coordinator-only — runs one ticket in the *other* harness's CLI, returns its report | `kss-dispatcher` (haiku · low) | `gpt-5.4-mini` · low |
 
-Escalation is **one tier at a time**, `T1 → T5`, never past it. Tickets written before tiers carry
+Escalation is **one tier at a time**, `T1 → T5`, never past it. On Claude Code `T2` and `T3` map to the same pair (Sonnet 5.5 · medium — Anthropic's starting point for well-specified agentic coding, and KSS tickets are fully specified). An escalation `T2 → T3` there is therefore a retry with the findings pasted in; a second failure goes to `T4`. Tickets written before tiers carry
 `Model` + `Effort`; they are translated on the fly, never rewritten
 ([`references/tiers.md`](references/tiers.md)).
 
-On Claude Code the plugin ships those agents — plus `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-high` and `kss-reviewer-opus-medium`, so `models.review` can name any pair, and `kss-haiku`, an executor with no effort setting that `models.tiers` may map `T1`–`T3` to — registered as `kss:kss-*` while it is enabled —
+On Claude Code the plugin ships those agents — plus `kss-reviewer-sonnet-low`, `kss-reviewer-sonnet-high` and `kss-reviewer-opus-medium`, so `models.review` can name any pair, and `kss-sonnet-low`, `kss-sonnet-high`, `kss-haiku-medium` (plus the legacy `kss-haiku`) for `models.tiers` rows — Haiku only on `T1`–`T3` — registered as `kss:kss-*` while it is enabled —
 that prefix is the name to spawn them by. `kss-init` copies them into the project's
 `.claude/agents/` **only when the plugin is not available** (a vendored install, where they answer
 to the bare name); a project copy stops following releases and drifts. On Codex there is no agent
@@ -428,7 +428,7 @@ and per person lives in **`.kss/config.local.json`**, written by `/kss-config`, 
   "models": {
     "allowed": { "claude-code": ["haiku", "sonnet", "opus"], "codex": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"] },
     "efforts": ["low", "medium", "high"],
-    "tiers": { "T1": { "claude-code": "kss-haiku" }, "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } },
+    "tiers": { "T1": { "claude-code": "kss-haiku-medium" }, "T2": { "claude-code": "kss-sonnet-high", "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "low" } } },
     "review": {                          // reviewer per review depth — scripts/review.mjs resolves it
       "full":  { "claude-code": { "model": "opus",   "effort": "high"   }, "codex": { "model": "gpt-6-astra",   "reasoning_effort": "high"   } },
       "light": { "claude-code": { "model": "sonnet", "effort": "medium" }, "codex": { "model": "gpt-5.6-terra", "reasoning_effort": "medium" } }

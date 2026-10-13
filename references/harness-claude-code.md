@@ -22,24 +22,24 @@ concurrently — that is how the continuous frontier spawns everything that just
 
 | Tier / role | `subagent_type` |
 | --- | --- |
-| `T1` | `kss-sonnet-low` |
+| `T1` | `kss-haiku-high` |
 | `T2` | `kss-sonnet-medium` |
-| `T3` | `kss-sonnet-high` |
+| `T3` | `kss-sonnet-medium` (same pair as `T2`: an escalation `T2 → T3` is a retry with findings; the next goes to `T4`) |
 | `T4` | `kss-opus-medium` |
 | `T5` | `kss-opus-high` |
-| `explorer` | `kss-explorer` |
+| `explorer` | `kss-explorer` (Haiku 5.5 · medium) |
 | `explorer-deep` | `kss-opus-medium`, with the read-only instruction in the prompt |
 | `reviewer` | `kss-reviewer` (depth `full`) · `kss-reviewer-sonnet-medium` (depth `light`) — whatever `review.mjs pick` names |
-| `runner` | `kss-runner` |
-| `dispatcher` | `kss-dispatcher` — one `dispatch.mjs run` command, report back verbatim |
+| `runner` | `kss-runner` (Haiku 5.5 · low) |
+| `dispatcher` | `kss-dispatcher` (Haiku 5.5 · low) — one `dispatch.mjs run` command, report back verbatim |
 
 **Local overrides.** `node .kss/scripts/jev.mjs config` prints `models.tiers`; a row like
 `"T2": {"claude-code": "kss-sonnet-high"}` replaces the agent for that tier on this machine only.
 The name must be one of the executor agents (or its `kss:` form) — anything else is refused, and
-the table above stands. The ticket and the graph keep saying `T2`. Besides the five in the table
-there is **`kss-haiku`**: Claude Haiku, which takes no effort parameter, so the agent carries none and
-a cross-harness run passes no `--effort`. It is never in the default ladder and may only replace
-`T1`, `T2` or `T3` — a `T4`/`T5` row naming it is refused and the adapter row stands.
+the table above stands. The ticket and the graph keep saying `T2`. Besides the agents in the table
+there are `kss-sonnet-low`, `kss-sonnet-high`, `kss-haiku-medium` and the legacy `kss-haiku` (Haiku
+5.5 · medium). Haiku 5.5 takes an effort like the others, but may only replace `T1`, `T2` or `T3` —
+a `T4`/`T5` row naming it is refused and the adapter row stands.
 
 **Reviewer per depth.** `models.review.<full|light>.claude-code` names the reviewer for each review
 depth, as `{"model": "sonnet", "effort": "high"}` or as an agent name. Five reviewer agents carry

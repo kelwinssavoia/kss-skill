@@ -96,36 +96,57 @@ test('buildCommand: claude -p and codex exec with the tier pair and the config f
   assert.throws(() => buildCommand({ harness: 'nope', worktree: '/w', tier: 'T1', cross: DEFAULTS }), /unknown harness|no tier/)
 })
 
-test('pairFor: kss-haiku is a T1–T3 executor with no effort, since Haiku rejects the effort parameter', () => {
-  const byName = { T1: { 'claude-code': 'kss-haiku' } }
-  assert.deepEqual(pairFor('claude-code', 'T1', byName), { model: 'haiku', effort: null })
-  assert.deepEqual(pairFor('claude-code', 'T2', { T2: { 'claude-code': 'kss:kss-haiku' } }), { model: 'haiku', effort: null })
-  // A pair naming haiku never inherits the tier's effort, nor keeps one it was given.
-  assert.deepEqual(pairFor('claude-code', 'T1', { T1: { 'claude-code': { model: 'haiku' } } }), { model: 'haiku', effort: null })
-  assert.deepEqual(pairFor('claude-code', 'T3', { T3: { 'claude-code': { model: 'haiku', effort: 'high' } } }), { model: 'haiku', effort: null })
+test('TIER_DEFAULTS on Claude Code: Haiku 5.5 high at T1, Sonnet medium at T2 and T3, Opus medium/high at T4/T5', () => {
+  assert.deepEqual(pairFor('claude-code', 'T1', {}), { model: 'haiku', effort: 'high' })
+  assert.deepEqual(pairFor('claude-code', 'T2', {}), { model: 'sonnet', effort: 'medium' })
+  assert.deepEqual(pairFor('claude-code', 'T3', {}), { model: 'sonnet', effort: 'medium' })
+  assert.deepEqual(pairFor('claude-code', 'T4', {}), { model: 'opus', effort: 'medium' })
+  assert.deepEqual(pairFor('claude-code', 'T5', {}), { model: 'opus', effort: 'high' })
+})
+
+test('pairFor: Haiku 5.5 takes an effort, and stays confined to T1–T3', () => {
+  assert.deepEqual(pairFor('claude-code', 'T2', { T2: { 'claude-code': 'kss:kss-haiku-high' } }), { model: 'haiku', effort: 'high' })
+  assert.deepEqual(pairFor('claude-code', 'T1', { T1: { 'claude-code': 'kss-haiku-medium' } }), { model: 'haiku', effort: 'medium' })
+  // The legacy agent name still resolves, to Haiku's default effort.
+  assert.deepEqual(pairFor('claude-code', 'T1', { T1: { 'claude-code': 'kss-haiku' } }), { model: 'haiku', effort: 'medium' })
+  // A pair naming haiku keeps the effort it was given, or inherits the tier's.
+  assert.deepEqual(pairFor('claude-code', 'T3', { T3: { 'claude-code': { model: 'haiku', effort: 'low' } } }), { model: 'haiku', effort: 'low' })
+  assert.deepEqual(pairFor('claude-code', 'T2', { T2: { 'claude-code': { model: 'haiku' } } }), { model: 'haiku', effort: 'medium' })
   // T4 and T5 carry real judgement: a haiku override there is refused and the adapter row stands.
-  assert.deepEqual(pairFor('claude-code', 'T4', { T4: { 'claude-code': 'kss-haiku' } }), { model: 'opus', effort: 'medium' })
-  assert.deepEqual(pairFor('claude-code', 'T5', { T5: { 'claude-code': { model: 'haiku' } } }), { model: 'opus', effort: 'high' })
+  assert.deepEqual(pairFor('claude-code', 'T4', { T4: { 'claude-code': 'kss-haiku-high' } }), { model: 'opus', effort: 'medium' })
+  assert.deepEqual(pairFor('claude-code', 'T5', { T5: { 'claude-code': { model: 'haiku', effort: 'max' } } }), { model: 'opus', effort: 'high' })
 })
 
-test('buildCommand: a haiku run passes --model haiku and no --effort', () => {
-  const c = buildCommand({ harness: 'claude-code', worktree: '/w', tier: 'T1', cross: DEFAULTS, overrides: { T1: { 'claude-code': 'kss-haiku' } } })
+test('buildCommand: a T1 run on Claude Code passes --model haiku --effort high', () => {
+  const c = buildCommand({ harness: 'claude-code', worktree: '/w', tier: 'T1', cross: DEFAULTS, overrides: {} })
   assert.equal(c.argv[c.argv.indexOf('--model') + 1], 'haiku')
-  assert.equal(c.argv.includes('--effort'), false)
+  assert.equal(c.argv[c.argv.indexOf('--effort') + 1], 'high')
 })
 
-test('kss-haiku ships: model haiku, no effort line, the executor brief verbatim, listed in plugin.json', () => {
+test('Haiku agents ship with an effort line, the executor brief verbatim, listed in plugin.json', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..')
   const body = (t) => t.slice(t.indexOf('---', 3) + 3)
-  const haiku = readFileSync(join(root, 'agents', 'kss-haiku.md'), 'utf8')
+  const head = (t) => t.slice(0, t.indexOf('---', 3))
   const low = readFileSync(join(root, 'agents', 'kss-sonnet-low.md'), 'utf8')
-  assert.match(haiku, /^name: kss-haiku$/m)
-  assert.match(haiku, /^model: haiku$/m)
-  assert.doesNotMatch(haiku.slice(0, haiku.indexOf('---', 3)), /^effort:/m)
-  assert.match(haiku, /^tools: Read, Grep, Glob, Bash, Edit, Write, Agent\(kss-explorer\)$/m)
-  assert.equal(body(haiku), body(low))
   const plugin = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'))
-  assert.ok(plugin.agents.includes('./agents/kss-haiku.md'))
+  for (const [name, effort] of [['kss-haiku', 'medium'], ['kss-haiku-medium', 'medium'], ['kss-haiku-high', 'high']]) {
+    const a = readFileSync(join(root, 'agents', `${name}.md`), 'utf8')
+    assert.match(a, new RegExp(`^name: ${name}$`, 'm'))
+    assert.match(head(a), /^model: haiku$/m)
+    assert.match(head(a), new RegExp(`^effort: ${effort}$`, 'm'))
+    assert.match(a, /^tools: Read, Grep, Glob, Bash, Edit, Write, Agent\(kss-explorer\)$/m)
+    assert.equal(body(a), body(low), `${name} carries the executor brief`)
+    assert.ok(plugin.agents.includes(`./agents/${name}.md`), `${name} is listed in plugin.json`)
+  }
+})
+
+test('explorer runs on Haiku medium; runner and dispatcher on Haiku low', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const head = (n) => { const t = readFileSync(join(root, 'agents', `${n}.md`), 'utf8'); return t.slice(0, t.indexOf('---', 3)) }
+  for (const [name, effort] of [['kss-explorer', 'medium'], ['kss-runner', 'low'], ['kss-dispatcher', 'low']]) {
+    assert.match(head(name), /^model: haiku$/m, `${name} model`)
+    assert.match(head(name), new RegExp(`^effort: ${effort}$`, 'm'), `${name} effort`)
+  }
 })
 
 test('parseClaude: the result line gives report, usage, turns, cost', () => {

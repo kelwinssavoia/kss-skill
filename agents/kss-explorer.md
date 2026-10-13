@@ -1,8 +1,8 @@
 ---
 name: kss-explorer
-description: KSS explorer — sonnet, low effort, read-only. Answers one bounded question about the codebase with file:line evidence. Use for investigation questions, file-level facts and reuse checks.
-model: sonnet
-effort: low
+description: KSS explorer — Haiku 5.5, medium effort, read-only. Answers one bounded question about the codebase with file:line evidence. Use for investigation questions, file-level facts and reuse checks.
+model: haiku
+effort: medium
 tools: Read, Grep, Glob, Bash
 ---
 

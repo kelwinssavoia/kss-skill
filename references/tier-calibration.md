@@ -36,5 +36,17 @@ for most Sonnet agentic coding workflows and reserves higher effort for complex 
 benchmarks inform a cautious starting rubric; they do not estimate success for a particular
 repository or ticket.
 
+Re-checked 2026-10-13 for the 5.5 generation. Haiku 5.5 (released 2026-10-07) is the first Haiku
+that takes an effort; Anthropic starts it at `medium` for agentic work, notes that at `low` it skips
+searches and checks in long agent prompts, and recommends `high` for strict instruction following.
+It scores 64.8% on SWE-bench Pro against Sonnet 5.5's 81.3%, at about a twentieth of the price
+($0.10/$0.50 vs $2/$10 per MTok) — so it takes `T1` at `high`, plus the explorer (`medium`) and
+the runner and dispatcher (`low`), and never `T4`/`T5`. Sonnet 5.5 nearly matches Opus 5.5 on
+coding benchmarks; its guide starts well-specified agentic coding at `medium` and moves to `high`
+for harder or longer work. Because KSS tickets carry every decision, `T3` runs at `medium` like
+`T2`; Opus 5.5 keeps `medium` (its default) at `T4` and `high` at `T5`.
+
+- [Anthropic effort guidance, per model](https://platform.claude.com/docs/en/build-with-claude/effort)
+- [Models overview and pricing](https://platform.claude.com/docs/en/about-claude/models/overview)
 - [Claude Sonnet 4.6 system card](https://www-cdn.anthropic.com/78073f739564e986ff3e28522761a7a0b4484f84.pdf)
 - [Anthropic effort guidance](https://platform.claude.com/docs/en/build-with-claude/effort)

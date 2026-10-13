@@ -1,7 +1,8 @@
 ---
 name: kss-haiku
-description: KSS executor — haiku, no effort setting (Haiku does not take one). One layer, 1-2 files, copying an existing pattern. Never in the default ladder; spawned only when models.tiers maps T1, T2 or T3 to it.
+description: KSS executor — Haiku 5.5, medium effort. Legacy name kept for existing models.tiers rows; prefer kss-haiku-medium or kss-haiku-high. T1–T3 only.
 model: haiku
+effort: medium
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent(kss-explorer)
 ---
 
