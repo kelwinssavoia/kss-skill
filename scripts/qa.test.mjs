@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   extractSections, requirementMap, parseDotenv, buildServiceEnv, serviceLevels, validatePlan, combine,
   overallVerdict, buildDriverPrompt, renderReport, renderPlanMd, DEFAULTS, authConfig, personaRoles,
-  dbCommand, schemaName, DB_DEFAULTS,
+  dbCommand, schemaName, DB_DEFAULTS, LIVE, liveRecord,
 } from './qa.mjs'
 import { buildQaJudge, DEFAULTS as JEV_DEFAULTS, deepMerge } from './jev.mjs'
 
@@ -165,4 +165,13 @@ test('databases: psql is only the default, and the schema keeps its own format',
 test('the planner prompt names no stack', () => {
   const tpl = readFileSync(join(HERE, '../templates/qa/planner.md'), 'utf8')
   assert.doesNotMatch(tpl, /prisma|postgres|keycloak|merchant|realm/i)
+})
+
+test('live.json names the scenario being driven and the Chrome to watch (DESIGN.md §24.5)', () => {
+  assert.equal(LIVE, '.kss/qa/.runtime/live.json')
+  const r = liveRecord({ runId: '20261013-2240', scenario: { id: 'S-02', title: 'Export a batch' }, evidence: '/f/qa/runs/20261013-2240/S-02', cdp: 'http://127.0.0.1:9555', now: '2026-10-13T22:40:00.000Z' })
+  assert.deepEqual(r, {
+    runId: '20261013-2240', scenario: 'S-02', title: 'Export a batch', evidence: '/f/qa/runs/20261013-2240/S-02',
+    cdp: 'http://127.0.0.1:9555', startedAt: '2026-10-13T22:40:00.000Z',
+  })
 })
