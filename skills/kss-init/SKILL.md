@@ -193,7 +193,7 @@ On confirmation, write — in this order:
    feature specified from Codex and executed from Claude Code finds its adapter already in the
    project. Overwrite freely, same as the scripts.
 5. **Claude Code only** — `.claude/agents/`, and **only when the plugin's agents are not already
-   available**. The plugin ships the fourteen (`kss-haiku`, `kss-sonnet-low`, `kss-sonnet-medium`,
+   available**. The plugin ships the sixteen (`kss-haiku-high`, `kss-haiku-medium`, `kss-haiku`, `kss-sonnet-low`, `kss-sonnet-medium`,
    `kss-sonnet-high`, `kss-opus-medium`, `kss-opus-high`, `kss-reviewer`, `kss-reviewer-sonnet-low`,
    `kss-reviewer-sonnet-medium`, `kss-reviewer-sonnet-high`, `kss-reviewer-opus-medium`, `kss-explorer`,
    `kss-runner`, `kss-dispatcher`) and registers them as `kss:kss-*` while it is enabled: when they are in the agent

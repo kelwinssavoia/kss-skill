@@ -47,21 +47,21 @@ folder can see the equivalence without opening either adapter.
 
 | Tier | Claude Code agent | Codex model · reasoning effort |
 | --- | --- | --- |
-| `T1` | `kss-sonnet-low` | `gpt-5.6-luna` · `low` |
+| `T1` | `kss-haiku-high` | `gpt-5.6-luna` · `low` |
 | `T2` | `kss-sonnet-medium` | `gpt-5.6-terra` · `medium` |
-| `T3` | `kss-sonnet-high` | `gpt-5.6-terra` · `high` |
+| `T3` | `kss-sonnet-medium` | `gpt-5.6-terra` · `high` |
 | `T4` | `kss-opus-medium` | `gpt-6-astra` · `medium` |
 | `T5` | `kss-opus-high` | `gpt-6-astra` · `high` |
 
-For Claude Code, this is Sonnet low/medium/high at T1/T2/T3 and Opus medium/high at T4/T5.
-`kss-haiku` (Claude Haiku, no effort setting) exists for `models.tiers` to map `T1`–`T3` to; it is
-never a default and never `T4`/`T5`.
-| `explorer` | `kss-explorer` | `gpt-5.4-mini` · `low`, read-only |
+For Claude Code, this is Haiku 5.5 high at T1, Sonnet 5.5 medium at T2 and T3, and Opus 5.5
+medium/high at T4/T5. Haiku 5.5 takes an effort (`kss-haiku-medium`, `kss-haiku-high`); it may
+execute `T1`–`T3` only, never `T4`/`T5`. On Claude Code `T2` and `T3` map to the same pair (Sonnet 5.5 · medium — Anthropic's starting point for well-specified agentic coding, and KSS tickets are fully specified). An escalation `T2 → T3` there is therefore a retry with the findings pasted in; a second failure goes to `T4`.
+| `explorer` | `kss-explorer` (Haiku 5.5 · medium) | `gpt-5.4-mini` · `low`, read-only |
 | `explorer-deep` | `kss-opus-medium`, prompted read-only | `gpt-6-astra` · `medium`, read-only |
 | `reviewer` (depth `full`) | `kss-reviewer` | `gpt-6-astra` · `high`, read-only |
 | `reviewer` (depth `light`) | `kss-reviewer-sonnet-medium` | `gpt-5.6-terra` · `medium`, read-only |
-| `runner` | `kss-runner` | `gpt-5.4-mini` · `low` |
-| `dispatcher` | `kss-dispatcher` | `gpt-5.4-mini` · `low` |
+| `runner` | `kss-runner` (Haiku 5.5 · low) | `gpt-5.4-mini` · `low` |
+| `dispatcher` | `kss-dispatcher` (Haiku 5.5 · low) | `gpt-5.4-mini` · `low` |
 
 A harness whose model list has moved on overrides the right-hand column in its own adapter. The
 left column — the tier — never changes, which is the whole point.
@@ -70,7 +70,7 @@ A **machine** may override a row too: `models.tiers` in the gitignored `.kss/con
 (written by `kss-config`) names, per tier and per harness, the agent (Claude Code) or the
 `{model, reasoning_effort}` (Codex) to spawn instead. The adapter reads it before the first spawn;
 the ticket still says `T3`. Names must be in `models.allowed` / `models.efforts`, and a `T5` is
-never mapped to less than the adapter's own `T5`. `haiku` is accepted for `T1`–`T3` only.
+never mapped to less than the adapter's own `T5`. `haiku` is accepted for `T1`–`T3` only, with any effort.
 
 The reviewer has its own map, `models.review`, keyed by **review depth** rather than tier: `full`
 (the default, and forced whenever the ticket touches a contract, wire, authorization, tenant
