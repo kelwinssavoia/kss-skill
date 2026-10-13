@@ -861,7 +861,8 @@ the plan.**
 - **Continuous frontier**: spawn every ticket whose blockers are `integrated`, the moment they
   are. Never group tickets into waves.
 - One worktree per ticket at **`.kss/worktrees/NNN-slug/NN`** (relative to the repository root),
-  off the feature branch; branch `NNN-slug/NN-ticket`. `.kss/worktrees/` is gitignored by
+  off the feature branch; branch `NNN-slug.NN-ticket` — a dot, because git cannot hold a ref
+  `NNN-slug/…` next to the feature branch `NNN-slug` (measured 2026-10-13: `cannot lock ref`). `.kss/worktrees/` is gitignored by
   `kss-init`.
 - The brief is the ticket file pasted in, plus the worktree path.
 - The tier comes from the graph; the harness adapter turns it into a spawn (§19).
@@ -1476,7 +1477,7 @@ worktree, and parallel features need nothing new from the skills:
 | --- | --- | --- |
 | The project | the repository the user opened | whatever is checked out |
 | A session | `<parent>/<repo>.kss-sessions/<slug>` — a sibling directory, so no tool running in the project ever globs into it | created detached at `base_branch`; `kss-clarify` then creates and checks out `<branch_prefix>NNN-slug` there, exactly as in a terminal |
-| A ticket | `<session>/.kss/worktrees/NNN-slug/NN` — unchanged (§14.1) | `NNN-slug/NN-ticket` |
+| A ticket | `<session>/.kss/worktrees/NNN-slug/NN` — unchanged (§14.1) | `NNN-slug.NN-ticket` |
 
 On creation the app copies the gitignored files a phase needs and a fresh checkout lacks:
 `.kss/config.local.json` and the root `.env*` files. Removing a session runs `git worktree remove`

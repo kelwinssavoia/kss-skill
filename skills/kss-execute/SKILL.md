@@ -87,10 +87,11 @@ this phase keeps up to date afterwards.
 
    ```bash
    git worktree add "$(git rev-parse --show-toplevel)/.kss/worktrees/NNN-slug/NN" \
-     -b <branch_prefix>NNN-slug/NN-ticket <feature-branch>
+     -b <branch_prefix>NNN-slug.NN-ticket <feature-branch>
    ```
 
-   The branch is exactly `NNN-slug/NN-ticket` (prefixed by `branch_prefix` when set). Record the
+   The branch is exactly `NNN-slug.NN-ticket` (prefixed by `branch_prefix` when set) — a dot,
+   never a slash: git cannot create `NNN-slug/…` while the feature branch `NNN-slug` exists. Record the
    absolute worktree path in `.kss/current` as `tickets.<NN>.worktree`; that is what tells a
    resumed run whether a `running` ticket is still alive.
 4. **Spawn.** The tier comes from the graph (`T1`–`T5`); the **harness adapter** says what to spawn
@@ -310,7 +311,7 @@ review and docs as optional.
 ## Rules
 
 - Continuous frontier, never waves: a ticket is spawned the moment its blockers are `integrated`.
-- One worktree per ticket at `.kss/worktrees/NNN-slug/NN`, branch `NNN-slug/NN-ticket` off the
+- One worktree per ticket at `.kss/worktrees/NNN-slug/NN`, branch `NNN-slug.NN-ticket` off the
   feature branch.
 - `.kss/current` follows DESIGN.md §3.3: `tickets` is a map keyed by `NN`, and the run roll-up is
   the top-level `execution` key — never `session`, and never an array of tickets.

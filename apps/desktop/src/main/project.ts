@@ -25,7 +25,7 @@ export function configField(text: string | null, key: string): string | null {
 
 export const sessionsDirOf = (root: string) => join(dirname(root), `${basename(root)}.kss-sessions`)
 
-/** `012-batch-cutoff` from a feature branch; ticket branches (`012-x/03-ticket`) and others are not features. */
+/** `012-batch-cutoff` from a feature branch; ticket branches (`012-x.03-ticket`) and others are not features. */
 export function featureOfBranch(branch: string | null, prefix: string): string | null {
   if (!branch) return null
   const b = prefix && branch.startsWith(prefix) ? branch.slice(prefix.length) : branch

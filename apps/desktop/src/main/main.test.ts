@@ -46,7 +46,7 @@ test('worktree porcelain', () => {
 test('features from branches; ticket branches are not features', () => {
   assert.equal(featureOfBranch('012-batch-cutoff', ''), '012-batch-cutoff')
   assert.equal(featureOfBranch('feat/012-batch-cutoff', 'feat/'), '012-batch-cutoff')
-  assert.equal(featureOfBranch('012-batch-cutoff/03-ticket', ''), null)
+  assert.equal(featureOfBranch('012-batch-cutoff.03-ticket', ''), null)
   assert.equal(featureOfBranch('main', ''), null)
   assert.equal(featureOfBranch(null, ''), null)
   assert.ok(isTicketWorktree('/r.kss-sessions/x/.kss/worktrees/012-x/03'))
@@ -192,8 +192,7 @@ test('a session is a worktree with its own board; tickets are inspected in their
   sh(path, 'add', '.')
   sh(path, 'commit', '-qm', 'docs')
   const wt = join(path, '.kss/worktrees/012-csv-export/03')
-  // Not `012-csv-export/03-ticket`: git cannot hold that ref next to the `012-csv-export` branch.
-  sh(path, 'worktree', 'add', '-q', '-b', '012-csv-export-03-ticket', wt)
+  sh(path, 'worktree', 'add', '-q', '-b', '012-csv-export.03-ticket', wt)
   writeFileSync(join(wt, 'csv.ts'), 'export {}\n')
   sh(wt, 'add', '.')
   sh(wt, 'commit', '-qm', 'feat: csv')
