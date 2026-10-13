@@ -49,7 +49,8 @@ export function attach(id: string, host: HTMLElement) {
     e = { term, fit, el, exited: null }
     entries.set(id, e)
   }
-  host.appendChild(e.el)
+  // A host shows one terminal: the one attached last.
+  if (e.el.parentElement !== host || host.childElementCount !== 1) host.replaceChildren(e.el)
   requestAnimationFrame(() => {
     try {
       e!.fit.fit()

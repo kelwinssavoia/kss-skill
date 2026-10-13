@@ -6,11 +6,14 @@ import { api } from './api.ts'
 import { Board } from './components/Board.tsx'
 import { Inspector } from './components/Inspector.tsx'
 import { NewSession } from './components/NewSession.tsx'
+import { QaPanel } from './components/QaPanel.tsx'
 import { SessionHeader } from './components/SessionHeader.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { TerminalTabs } from './components/TerminalTabs.tsx'
 import { Welcome } from './components/Welcome.tsx'
 import { dispose } from './terminals.ts'
+
+export type View = 'terminals' | 'qa'
 
 export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string) => Promise<void>
 
@@ -23,6 +26,7 @@ export function App() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [isCreating, setCreating] = useState(false)
   const [inspecting, setInspecting] = useState<string | null>(null)
+  const [views, setViews] = useState<Record<string, View>>({})
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -110,6 +114,8 @@ export function App() {
     prefs?.harnessByPhase[project.root]?.[phase] ?? (project.harnesses.claude ? 'claude-code' : 'codex')
 
   const next = parseNext(session?.board?.next ?? null)
+  const view: View = (selected && views[selected]) || 'terminals'
+  const setView = (v: View) => selected && setViews(x => ({ ...x, [selected]: v }))
 
   return (
     <div className="shell">
@@ -131,6 +137,8 @@ export function App() {
             harnessFor={harnessFor}
             onRun={run}
             next={next}
+            view={view}
+            onView={setView}
           />
         )}
         <TerminalTabs
@@ -139,9 +147,11 @@ export function App() {
           onActivate={id => selected && setActive(a => ({ ...a, [selected]: id }))}
           onClose={close}
           empty={session ? <EmptyTerminals session={session} project={project} onRun={run} harnessFor={harnessFor} /> : null}
+          shown={view === 'terminals'}
         />
+        {session && <QaPanel session={session} terms={sessionTerms} onRun={run} visible={view === 'qa'} />}
       </main>
-      {session?.board && <Board board={session.board} onInspect={setInspecting} />}
+      {session?.board && view === 'terminals' && <Board board={session.board} onInspect={setInspecting} />}
       {isCreating && <NewSession project={project} onCancel={() => setCreating(false)} onCreate={create} />}
       {inspecting && session?.feature && (
         <Inspector session={session.path} feature={session.feature} ticket={inspecting} board={session.board} onClose={() => setInspecting(null)} />

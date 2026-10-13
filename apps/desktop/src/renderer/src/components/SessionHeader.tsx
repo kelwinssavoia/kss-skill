@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { optionalOf } from '../../../shared/commands.ts'
 import type { Harness, ProjectInfo, Session } from '../../../shared/types.ts'
-import type { Run } from '../App.tsx'
+import type { Run, View } from '../App.tsx'
 
 type Props = {
   project: ProjectInfo
@@ -10,6 +10,8 @@ type Props = {
   next: { phase: string; args: string } | null
   harnessFor: (phase: string) => Harness
   onRun: Run
+  view: View
+  onView: (v: View) => void
 }
 
 function HarnessToggle({ value, onChange, project }: { value: Harness; onChange: (h: Harness) => void; project: ProjectInfo }) {
@@ -21,7 +23,7 @@ function HarnessToggle({ value, onChange, project }: { value: Harness; onChange:
   )
 }
 
-export function SessionHeader({ project, session, next, harnessFor, onRun }: Props) {
+export function SessionHeader({ project, session, next, harnessFor, onRun, view, onView }: Props) {
   const b = session.board
   const [harness, setHarness] = useState<Harness>(next ? harnessFor(next.phase) : 'claude-code')
   useEffect(() => setHarness(next ? harnessFor(next.phase) : project.harnesses.claude ? 'claude-code' : 'codex'), [next?.phase, session.path])
@@ -39,6 +41,12 @@ export function SessionHeader({ project, session, next, harnessFor, onRun }: Pro
           {b && <span className="pill dim">{b.phase}{b.harness ? ` · ${b.harness}` : ''}</span>}
         </div>
         <div className="sh-path" title={session.path}>{session.path}</div>
+        {session.feature && (
+          <div className="seg view-seg">
+            <button className={view === 'terminals' ? 'on' : ''} onClick={() => onView('terminals')}>Terminals</button>
+            <button className={view === 'qa' ? 'on' : ''} onClick={() => onView('qa')} title="Blind acceptance test: plan, environment, scenarios, live browser">QA</button>
+          </div>
+        )}
       </div>
       <div className="sh-actions">
         {next && (

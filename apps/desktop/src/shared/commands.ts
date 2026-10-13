@@ -15,6 +15,16 @@ export const label = (h: Harness) => (h === 'codex' ? 'Codex' : 'Claude')
 
 export function launchOf(spec: TerminalSpec, shell: string): Launch {
   if (spec.kind === 'shell') return { file: shell, args: ['-l'], title: 'Terminal' }
+  if (spec.kind === 'qa') {
+    if (!spec.qa) throw new Error('a qa terminal needs a step')
+    const { step, feature, only, force } = spec.qa
+    const args = ['.kss/scripts/qa.mjs', step]
+    // down and status act on whatever environment is up; every other step names the feature.
+    if (step !== 'down' && step !== 'status') args.push('--feature', feature)
+    if (only) args.push('--only', only)
+    if (force) args.push('--force')
+    return { file: 'node', args, title: `qa ${step}${only ? ` ${only}` : ''}` }
+  }
   const h = spec.harness ?? 'claude-code'
   if (spec.kind === 'chat') return { file: binOf(h), args: [], title: `${label(h)} chat` }
   if (!spec.phase) throw new Error('a phase terminal needs a phase')

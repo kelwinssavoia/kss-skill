@@ -25,7 +25,7 @@ export function createTerminal(spec: TerminalSpec, sink: Sink): TerminalInfo {
     env: env as Record<string, string>,
   })
   const id = randomUUID()
-  const info: TerminalInfo = { id, cwd: spec.cwd, title: launch.title, kind: spec.kind, harness: spec.kind === 'shell' ? null : spec.harness ?? 'claude-code' }
+  const info: TerminalInfo = { id, cwd: spec.cwd, title: launch.title, kind: spec.kind, harness: spec.kind === 'shell' || spec.kind === 'qa' ? null : spec.harness ?? 'claude-code' }
   terms.set(id, { proc, info })
   proc.onData(d => sink.data(id, d))
   proc.onExit(({ exitCode }) => {

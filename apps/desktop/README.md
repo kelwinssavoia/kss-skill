@@ -34,7 +34,10 @@ environment once at start-up, because an app launched from the Dock does not inh
 | **Board** | The kss-ui model (`mods/kss-ui/hooks/kss.ts`, imported): phases of the track, grill queue, tickets with turns vs estimate, the execution log, tokens |
 | **Subagent inspector** | Click a ticket: its **objective** (the ticket file: goal, FRs, files, tests, and its log entries), its **changes** (commits since the feature branch, committed and uncommitted diff, new files) and its **activity** (the subagent's brief, every tool call, what it says it is doing, turns and tokens — from the Claude Code or Codex transcript found by the worktree path) |
 
-Not yet: the QA panel (§24.5 — per-scenario run with the live browser).
+| **QA** | The **QA** view of a session runs `kss-qa` one step at a time — Plan, Up, ▶ per scenario, Judge, Report, Down — each as `qa.mjs` in a terminal shown under the list. A scenario being driven is streamed live from the driver's Chrome (CDP screencast); every recorded step shows its screenshot, expected and observed values; the driver's verdict, Jev's and the issues follow. One QA environment at a time across all sessions: **Up** is refused while another session holds it |
+
+The live view needs the project's `.kss/scripts/qa.mjs` to write `.kss/qa/.runtime/live.json`;
+an older copy shows a notice — run `kss-init` again to update the scripts.
 
 ## Layout
 

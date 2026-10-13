@@ -2,7 +2,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
-import type { Harness, Prefs, ProjectInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
+import type { Harness, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
 
 const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
   const h = (_e: unknown, ...args: unknown[]) => fn(...(args as A))
@@ -25,6 +25,10 @@ const api = {
   resize: (id: string, cols: number, rows: number) => ipcRenderer.send('term:resize', id, cols, rows),
   kill: (id: string): Promise<void> => ipcRenderer.invoke('term:kill', id),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
+  qaInfo: (session: string, feature: string | null): Promise<QaInfo> => ipcRenderer.invoke('qa:info', session, feature),
+  qaImage: (path: string): Promise<string | null> => ipcRenderer.invoke('qa:image', path),
+  qaWatch: (session: string | null): Promise<void> => ipcRenderer.invoke('qa:watch', session),
+  onQaFrame: (fn: (f: QaFrame) => void) => on('qa:frame', fn),
   onSessions: (fn: (s: Session[]) => void) => on('sessions', fn),
   onData: (fn: (id: string, data: string) => void) => on('term:data', fn),
   onExit: (fn: (id: string, code: number) => void) => on('term:exit', fn),

@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 
 import type { Harness, ProjectInfo, Session, TerminalSpec } from '../shared/types.ts'
+import { LiveView } from './live.ts'
+import { holder, imageData, qaInfo } from './qa.ts'
 import { sessionBoard } from './board.ts'
 import { loginEnv, which } from './env.ts'
 import { inspectTicket } from './inspector.ts'
@@ -19,6 +21,13 @@ let project: ProjectInfo | null = null
 let lastSessions = ''
 let timer: NodeJS.Timeout | null = null
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json')
+const live = new LiveView(frame => send('qa:frame', frame))
+
+async function sessionPaths(): Promise<string[]> {
+  if (!project) return []
+  const { sessions: wts } = await projectWorktrees(project)
+  return [project.root, ...wts.map(w => w.path)]
+}
 
 const send = (channel: string, ...args: unknown[]) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
@@ -94,9 +103,19 @@ function handlers() {
     void poll()
   })
   ipcMain.handle('ticket:inspect', (_e, session: string, feature: string, id: string) => inspectTicket(session, featureDirOf(session, feature), feature, id))
-  ipcMain.handle('term:create', (_e, spec: TerminalSpec) =>
-    createTerminal(spec, { data: (id, d) => send('term:data', id, d), exit: (id, code) => send('term:exit', id, code) }),
-  )
+  ipcMain.handle('term:create', async (_e, spec: TerminalSpec) => {
+    if (spec.kind === 'qa' && spec.qa?.step === 'up') {
+      const other = holder(spec.cwd, await sessionPaths())
+      if (other) throw new Error(`the QA environment is up in ${other} — run qa down there first`)
+    }
+    return createTerminal(spec, { data: (id, d) => send('term:data', id, d), exit: (id, code) => send('term:exit', id, code) })
+  })
+  ipcMain.handle('qa:info', async (_e, session: string, feature: string | null) => {
+    const dir = feature ? sessionBoard(session, feature).featureDir : null
+    return qaInfo(session, dir, feature, await sessionPaths())
+  })
+  ipcMain.handle('qa:image', async (_e, path: string) => imageData(path, await sessionPaths()))
+  ipcMain.handle('qa:watch', (_e, session: string | null) => live.watch(session))
   ipcMain.on('term:write', (_e, id: string, data: string) => writeTerminal(id, data))
   ipcMain.on('term:resize', (_e, id: string, cols: number, rows: number) => resizeTerminal(id, cols, rows))
   ipcMain.handle('term:kill', (_e, id: string) => killTerminal(id))
@@ -124,7 +143,7 @@ app.whenReady().then(() => {
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
 })
 
-app.on('before-quit', () => killAll())
+app.on('before-quit', () => (live.stop(), killAll()))
 app.on('window-all-closed', () => {
   killAll()
   if (process.platform !== 'darwin') app.quit()

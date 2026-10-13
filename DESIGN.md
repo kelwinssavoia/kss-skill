@@ -1543,7 +1543,11 @@ The QA panel is a front for `scripts/qa.mjs` (§22), one step per button, each a
 4. **Judge**, **Report**, **Down** — the remaining steps; the verdict and `report.md` are shown.
 
 One QA environment runs at a time, across all sessions: the compose project and the host ports of
-`.kss/qa.config.json` are fixed, so the app holds a lock and shows which session owns the stack.
+`.kss/qa.config.json` are fixed. The lock is the runtime itself — a session whose
+`.kss/qa/.runtime/state.json` has a live pid holds the stack — so it survives an app restart and
+covers a `qa.mjs up` typed in a terminal; the app refuses **Up** in any other session and names the
+holder. A project whose `.kss/scripts/qa.mjs` predates `live.json` gets every step but the live
+picture, and a notice to re-run `kss-init`.
 
 ### 24.6 What it is not
 
