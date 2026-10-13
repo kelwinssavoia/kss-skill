@@ -29,13 +29,14 @@ const OUT_PER_TURN = 140 // output tokens per turn
 
 /** USD per million tokens. Update when the price list moves. */
 export const PRICES = {
+  haiku: { in: 0.1, out: 0.5, cache_read: 0.01, cache_write: 0.125 },
   sonnet: { in: 2, out: 10, cache_read: 0.2, cache_write: 2.5 },
-  opus: { in: 5, out: 25, cache_read: 0.5, cache_write: 6.25 },
+  opus: { in: 4, out: 20, cache_read: 0.2, cache_write: 5 },
   fable: { in: 10, out: 50, cache_read: 0.25, cache_write: 12.5 },
 }
 
 /** Which model a tier spawns. Mirrors `.kss/references/tiers.md`. */
-export const TIER_MODEL = { T1: 'sonnet', T2: 'sonnet', T3: 'sonnet', T4: 'opus', T5: 'opus' }
+export const TIER_MODEL = { T1: 'haiku', T2: 'sonnet', T3: 'sonnet', T4: 'opus', T5: 'opus' }
 
 /** The agents every ticket pays for besides its executor. */
 export const REVIEWER_TURNS = 25
@@ -70,7 +71,7 @@ export function project(tickets, opts = {}) {
     const est = Number(t.est_turns) || 0
     const executor = agentCost(Math.round(est * overrun), model)
     const reviewer = agentCost(REVIEWER_TURNS, 'opus')
-    const integrator = agentCost(INTEGRATOR_TURNS, 'sonnet')
+    const integrator = agentCost(INTEGRATOR_TURNS, TIER_MODEL.T1)
     rows.push({
       id: String(t.id ?? '?'),
       tier,

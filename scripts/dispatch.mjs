@@ -35,9 +35,9 @@ export const LOCAL_CONFIG = '.kss/config.local.json'
 /** Mirrors `references/tiers.md`; `models.tiers` in the local config overrides a row. */
 export const TIER_DEFAULTS = {
   'claude-code': {
-    T1: { model: 'sonnet', effort: 'low' },
+    T1: { model: 'haiku', effort: 'high' },
     T2: { model: 'sonnet', effort: 'medium' },
-    T3: { model: 'sonnet', effort: 'high' },
+    T3: { model: 'sonnet', effort: 'medium' },
     T4: { model: 'opus', effort: 'medium' },
     T5: { model: 'opus', effort: 'high' },
   },
@@ -57,12 +57,13 @@ const AGENT_TO_PAIR = {
   'kss-sonnet-high': { model: 'sonnet', effort: 'high' },
   'kss-opus-medium': { model: 'opus', effort: 'medium' },
   'kss-opus-high': { model: 'opus', effort: 'high' },
-  // Haiku rejects the effort parameter, so its agent carries none and its runs pass no --effort.
-  'kss-haiku': { model: 'haiku', effort: null },
+  'kss-haiku-medium': { model: 'haiku', effort: 'medium' },
+  'kss-haiku-high': { model: 'haiku', effort: 'high' },
+  // Legacy name from before Haiku 5.5 took an effort: Haiku's default, medium.
+  'kss-haiku': { model: 'haiku', effort: 'medium' },
 }
 
-/** Models that take no effort, and the tiers they may execute. */
-const NO_EFFORT_MODELS = ['haiku']
+/** Haiku executes T1–T3 only; T4/T5 carry real judgement. */
 const HAIKU_TIERS = ['T1', 'T2', 'T3']
 
 export const DEFAULTS = {
@@ -179,10 +180,8 @@ export function pairFor(harness, tier, overrides) {
     let pair = base
     if (typeof o === 'string') pair = AGENT_TO_PAIR[o.replace(/^kss:/, '')] || base
     else if (isObj(o) && typeof o.model === 'string') pair = { model: o.model, effort: typeof o.effort === 'string' ? o.effort : base.effort }
-    if (NO_EFFORT_MODELS.includes(pair.model)) {
-      // T4/T5 carry real judgement: a haiku override there is refused and the adapter row stands.
-      return HAIKU_TIERS.includes(tier) ? { model: pair.model, effort: null } : base
-    }
+    // T4/T5 carry real judgement: a haiku override there is refused and the adapter row stands.
+    if (pair.model === 'haiku' && !HAIKU_TIERS.includes(tier)) return base
     return pair
   }
   if (isObj(o) && typeof o.model === 'string') return { model: o.model, effort: typeof o.reasoning_effort === 'string' ? o.reasoning_effort : base.effort }

@@ -1,7 +1,7 @@
 ---
 name: kss-runner
-description: KSS runner — sonnet, low effort, coordinator-only, final run. Runs exactly the command it is given (tests, lint, tsc, build) and returns only the summary lines and the failures. Never edits code.
-model: sonnet
+description: KSS runner — Haiku 5.5, low effort, coordinator-only, final run. Runs exactly the command it is given (tests, lint, tsc, build) and returns only the summary lines and the failures. Never edits code.
+model: haiku
 effort: low
 tools: Bash, Read, Grep
 ---

@@ -50,7 +50,7 @@ test('a ticket pays for an executor, a reviewer and an integrator', () => {
   const p = project([{ id: '01', tier: 'T3', est_turns: 35 }])
   assert.equal(p.agents, 3)
   assert.equal(p.rows[0].parts.reviewer.model, 'opus')
-  assert.equal(p.rows[0].parts.integrator.model, 'sonnet')
+  assert.equal(p.rows[0].parts.integrator.model, 'haiku', 'the integrator is the T1 agent')
 })
 
 test('the projection applies the measured overrun to the estimate', () => {

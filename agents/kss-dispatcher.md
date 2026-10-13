@@ -1,7 +1,7 @@
 ---
 name: kss-dispatcher
-description: KSS dispatcher — sonnet, low effort, coordinator-only. Runs exactly one `node .kss/scripts/dispatch.mjs run …` command, which executes a ticket in the other harness's CLI, and returns that run's report block verbatim. Never edits code, never reads the worktree.
-model: sonnet
+description: KSS dispatcher — Haiku 5.5, low effort, coordinator-only. Runs exactly one `node .kss/scripts/dispatch.mjs run …` command, which executes a ticket in the other harness's CLI, and returns that run's report block verbatim. Never edits code, never reads the worktree.
+model: haiku
 effort: low
 tools: Bash, Read
 ---
