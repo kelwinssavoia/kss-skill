@@ -25,7 +25,18 @@ export function createTerminal(spec: TerminalSpec, sink: Sink): TerminalInfo {
     env: env as Record<string, string>,
   })
   const id = randomUUID()
-  const info: TerminalInfo = { id, cwd: spec.cwd, title: launch.title, kind: spec.kind, harness: spec.kind === 'shell' || spec.kind === 'qa' ? null : spec.harness ?? 'claude-code' }
+  const isCli = spec.kind === 'chat' || spec.kind === 'phase'
+  const info: TerminalInfo = {
+    id,
+    cwd: spec.cwd,
+    title: launch.title,
+    kind: spec.kind,
+    harness: isCli ? spec.harness ?? 'claude-code' : null,
+    phase: spec.phase ?? null,
+    conversation: spec.resume ?? spec.sessionId ?? null,
+    tab: spec.tab ?? null,
+    resumed: !!spec.resume,
+  }
   terms.set(id, { proc, info })
   proc.onData(d => sink.data(id, d))
   proc.onExit(({ exitCode }) => {
@@ -36,6 +47,26 @@ export function createTerminal(spec: TerminalSpec, sink: Sink): TerminalInfo {
 }
 
 export const writeTerminal = (id: string, data: string) => terms.get(id)?.proc.write(data)
+
+/**
+ * Types a message into a CLI and sends it. The Enter goes on its own a moment later: text and a
+ * carriage return in one write read as a paste, and a pasted newline does not submit.
+ */
+export function submitTerminal(id: string, text: string) {
+  const t = terms.get(id)
+  if (!t) throw new Error('that terminal has exited')
+  t.proc.write(text.replace(/\s*\n\s*/g, ' ').trim())
+  setTimeout(() => terms.get(id)?.proc.write('\r'), 150)
+}
+
+export function setConversation(id: string, conversation: string): TerminalInfo | null {
+  const t = terms.get(id)
+  if (!t) return null
+  t.info = { ...t.info, conversation }
+  return t.info
+}
+
+export const liveTerminals = () => [...terms.values()].map(t => t.info)
 
 export function resizeTerminal(id: string, cols: number, rows: number) {
   const t = terms.get(id)

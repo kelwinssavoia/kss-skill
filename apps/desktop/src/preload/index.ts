@@ -12,6 +12,7 @@ const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
 
 const api = {
   prefs: (): Promise<Prefs> => ipcRenderer.invoke('prefs:get'),
+  setBypass: (on: boolean): Promise<void> => ipcRenderer.invoke('prefs:bypass', on),
   setHarness: (phase: string, h: Harness): Promise<void> => ipcRenderer.invoke('prefs:harness', phase, h),
   pickProject: (): Promise<ProjectInfo | null> => ipcRenderer.invoke('project:pick'),
   openProject: (root: string): Promise<ProjectInfo> => ipcRenderer.invoke('project:open', root),
@@ -23,7 +24,10 @@ const api = {
   createTerminal: (spec: TerminalSpec): Promise<TerminalInfo> => ipcRenderer.invoke('term:create', spec),
   write: (id: string, data: string) => ipcRenderer.send('term:write', id, data),
   resize: (id: string, cols: number, rows: number) => ipcRenderer.send('term:resize', id, cols, rows),
-  kill: (id: string): Promise<void> => ipcRenderer.invoke('term:kill', id),
+  close: (id: string, tab: string | null): Promise<void> => ipcRenderer.invoke('term:close', id, tab),
+  submit: (id: string, text: string): Promise<void> => ipcRenderer.invoke('term:submit', id, text),
+  restoreTabs: (session: string): Promise<TerminalInfo[]> => ipcRenderer.invoke('tabs:restore', session),
+  onTermInfo: (fn: (t: TerminalInfo) => void) => on('term:info', fn),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
   qaInfo: (session: string, feature: string | null): Promise<QaInfo> => ipcRenderer.invoke('qa:info', session, feature),
   qaImage: (path: string): Promise<string | null> => ipcRenderer.invoke('qa:image', path),

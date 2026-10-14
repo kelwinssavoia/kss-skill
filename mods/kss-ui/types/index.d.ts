@@ -29,6 +29,18 @@ export type KssLive = {
 
 export type KssGrillCategory = { done: number; total: number }
 
+export type KssGrillOption = { key: string; label: string; description: string | null; lean: boolean }
+
+/** The question on screen, published by kss-grill in app mode (`--app`, DESIGN.md §24.7). */
+export type KssGrillQuestion = {
+  n: number
+  category: string | null
+  source: string | null
+  text: string
+  /** Empty for a free-text-only question (a deferral's owner and date, the closing turn's revisit). */
+  options: KssGrillOption[]
+}
+
 export type KssGrill = {
   asked: number
   total: number
@@ -37,6 +49,7 @@ export type KssGrill = {
   layout: KssGrillCategory | null
   technical: KssGrillCategory | null
   current: string | null
+  question: KssGrillQuestion | null
 }
 
 export type KssBoard = {

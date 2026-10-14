@@ -34,6 +34,14 @@ test('a Next line naming another phase means the running one finished', () => {
   expect(b.nextPhase).toBe('spec')
 })
 
+test('a bare Next line (no backticks) is read up to its note', () => {
+  const bare = README.replace('`/kss-grill 012-batch-cutoff`', '/kss-spec 012-batch-cutoff (optional first: /kss-review-decisions 012-batch-cutoff)  <!-- from scripts/next.mjs, never typed by hand -->')
+  const r = parseReadme(bare)
+  expect(r.next).toBe('/kss-spec 012-batch-cutoff (optional first: /kss-review-decisions 012-batch-cutoff)')
+  expect(buildBoard(CURRENT, r, null)!.isPhaseFinished).toBe(true)
+  expect(parseReadme(README).next).toBe('/kss-grill 012-batch-cutoff')
+})
+
 test('an off-track phase is shown in its place', () => {
   expect(phases('M', 'grill', false).map(p => p.name).slice(0, 3)).toEqual(['clarify', 'investigate', 'grill'])
 })

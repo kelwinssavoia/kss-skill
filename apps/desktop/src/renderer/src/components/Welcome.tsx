@@ -1,8 +1,11 @@
+import logo from '../../../../build/icon.svg'
+
 export function Welcome({ recent, onPick, onOpen, error }: { recent: string[]; onPick: () => void; onOpen: (root: string) => void; error: string | null }) {
   return (
     <div className="welcome">
       <div className="welcome-card">
         <div className="brand">
+          <img className="brand-logo" src={logo} alt="" />
           <span className="brand-mark">kss</span>
           <span className="brand-sub">phase-based development, in parallel</span>
         </div>

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- KSS, drawn as monoline strokes (no font needed): K in light grey, SS in orange, on graphite. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b3e44"/>
+      <stop offset="1" stop-color="#1d1f23"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".08"/>
+      <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="orange" gradientUnits="userSpaceOnUse" x1="0" y1="-40" x2="0" y2="360">
+      <stop offset="0" stop-color="#ffa24a"/>
+      <stop offset="1" stop-color="#f26b0f"/>
+    </linearGradient>
+    <linearGradient id="grey" gradientUnits="userSpaceOnUse" x1="0" y1="-40" x2="0" y2="360">
+      <stop offset="0" stop-color="#eceef1"/>
+      <stop offset="1" stop-color="#b4b8bf"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+    <filter id="lift" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+
+  <!-- macOS icon grid: 824px body on a 1024px canvas -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#sheen)"/>
+    <rect x="101.5" y="101.5" width="821" height="821" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity=".10" stroke-width="3"/>
+  </g>
+
+  <!-- letters on a 754×384 grid, centred -->
+  <g transform="translate(512 492) scale(.74) translate(-385 -160)" fill="none" stroke-width="64" stroke-linecap="round" stroke-linejoin="round" filter="url(#lift)">
+    <g stroke="url(#grey)">
+      <path d="M0 0 V320"/>
+      <path d="M168 0 L22 168"/>
+      <path d="M78 104 L172 320"/>
+    </g>
+    <g stroke="url(#orange)">
+      <path d="M459 40 A80 80 0 1 0 390 160 A80 80 0 1 1 321 280"/>
+      <path d="M739 40 A80 80 0 1 0 670 160 A80 80 0 1 1 601 280"/>
+    </g>
+  </g>
+
+  <!-- the orange bar under the mark -->
+  <rect x="332" y="728" width="360" height="18" rx="9" fill="#f26b0f" opacity=".9"/>
+</svg>

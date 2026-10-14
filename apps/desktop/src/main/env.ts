@@ -18,11 +18,23 @@ export function parseEnv0(text: string): Record<string, string> {
   return out
 }
 
+/**
+ * What a running Claude Code or Codex session sets for its own children. An app started from inside
+ * one (`npm start`, `open` from its shell) inherits them, and a CLI that sees them thinks it is a
+ * subagent: Claude Code then stops saving transcripts, so nothing could be resumed (§24.3).
+ */
+const SESSION_MARKERS = /^(CLAUDECODE|CLAUDE_PID|CLAUDE_EFFORT|CLAUDE_CODE_(ENTRYPOINT|EXECPATH|SESSION_ID|CHILD_SESSION|SESSION_ATTENDED|SSE_PORT|MESSAGING_\w+)|CODEX_(SANDBOX\w*|THREAD_ID|SESSION_ID|MANAGED_BY_\w+))$/
+
+export function withoutSessionMarkers(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !SESSION_MARKERS.test(k)))
+}
+
 export function loginEnv(): NodeJS.ProcessEnv {
   if (cached) return cached
-  const r = spawnSync(shellOf(), ['-ilc', 'env -0'], { encoding: 'utf8', timeout: 8000, env: process.env })
+  const base = withoutSessionMarkers(process.env)
+  const r = spawnSync(shellOf(), ['-ilc', 'env -0'], { encoding: 'utf8', timeout: 8000, env: base })
   const resolved = r.status === 0 && r.stdout ? parseEnv0(r.stdout) : {}
-  cached = { ...process.env, ...resolved, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'kss-desktop' }
+  cached = { ...withoutSessionMarkers({ ...base, ...resolved }), TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'kss-desktop' }
   return cached
 }
 

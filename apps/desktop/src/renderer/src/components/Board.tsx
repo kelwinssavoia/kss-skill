@@ -14,7 +14,7 @@ export function Board({ board: b, onInspect }: { board: KssBoard; onInspect: (ti
   return (
     <aside className="board">
       <h3>{b.feature}</h3>
-      <Phases phases={b.phases} />
+      <Phases board={b} />
       <div className="stats">
         <div><span>tokens</span>{human(b.tokens)}</div>
         <div><span>turns</span>{human(b.turns)}</div>

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { parseNext } from '../../shared/commands.ts'
 import type { Harness, Prefs, ProjectInfo, Session, TerminalInfo, TerminalSpec } from '../../shared/types.ts'
 import { api } from './api.ts'
 import { Board } from './components/Board.tsx'
+import { GrillPanel } from './components/GrillPanel.tsx'
 import { Inspector } from './components/Inspector.tsx'
 import { NewSession } from './components/NewSession.tsx'
 import { QaPanel } from './components/QaPanel.tsx'
@@ -13,9 +14,10 @@ import { TerminalTabs } from './components/TerminalTabs.tsx'
 import { Welcome } from './components/Welcome.tsx'
 import { dispose } from './terminals.ts'
 
-export type View = 'terminals' | 'qa'
+export type View = 'terminals' | 'grill' | 'qa'
 
-export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string) => Promise<void>
+/** `focus: false` opens the terminal without making it the session's active tab. */
+export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string, opts?: { focus?: boolean }) => Promise<void>
 
 export function App() {
   const [project, setProject] = useState<ProjectInfo | null>(null)
@@ -33,8 +35,18 @@ export function App() {
     void api.prefs().then(setPrefs)
     // The poll only pushes changes, so a reloaded renderer asks for the current list itself.
     void api.project().then(async p => p && (setProject(p), setSessions(await api.sessions())))
-    return api.onSessions(setSessions)
+    const offInfo = api.onTermInfo(info => setTerms(t => t.map(x => (x.id === info.id ? info : x))))
+    const offSessions = api.onSessions(setSessions)
+    return () => (offInfo(), offSessions())
   }, [])
+
+  // A session's saved conversations come back the first time it is shown in this run of the app.
+  const restored = useRef(new Set<string>())
+  useEffect(() => {
+    if (!selected || restored.current.has(selected)) return
+    restored.current.add(selected)
+    void api.restoreTabs(selected).then(list => setTerms(t => [...t, ...list.filter(n => !t.some(x => x.id === n.id))]))
+  }, [selected])
 
   useEffect(() => {
     if (project && !selected) setSelected(project.root)
@@ -59,13 +71,15 @@ export function App() {
   }
 
   const run: Run = useCallback(
-    async (spec, cwd) => {
+    async (spec, cwd, opts) => {
       const where = cwd ?? selected
       if (!where) return
       try {
         const info = await api.createTerminal({ ...spec, cwd: where })
         setTerms(t => [...t, info])
-        setActive(a => ({ ...a, [where]: info.id }))
+        if (opts?.focus !== false) setActive(a => ({ ...a, [where]: info.id }))
+        // The grill is answered in its panel.
+        if (spec.kind === 'phase' && spec.phase === 'grill') setViews(v => ({ ...v, [where]: 'grill' }))
         if (spec.kind === 'phase' && spec.phase && spec.harness) {
           await api.setHarness(spec.phase, spec.harness)
           setPrefs(await api.prefs())
@@ -78,7 +92,7 @@ export function App() {
   )
 
   const close = async (id: string) => {
-    await api.kill(id)
+    await api.close(id, terms.find(t => t.id === id)?.tab ?? null)
     dispose(id)
     setTerms(t => t.filter(x => x.id !== id))
   }
@@ -128,6 +142,8 @@ export function App() {
         onRemove={remove}
         onSwitch={() => open(api.pickProject())}
         terminals={terms}
+        bypass={prefs?.bypass ?? true}
+        onBypass={async on => (await api.setBypass(on), setPrefs(await api.prefs()))}
       />
       <main className="center">
         {session && (
@@ -149,9 +165,10 @@ export function App() {
           empty={session ? <EmptyTerminals session={session} project={project} onRun={run} harnessFor={harnessFor} /> : null}
           shown={view === 'terminals'}
         />
+        {session && <GrillPanel project={project} session={session} board={session.board} terms={sessionTerms} onRun={run} harness={harnessFor('grill')} visible={view === 'grill'} />}
         {session && <QaPanel session={session} terms={sessionTerms} onRun={run} visible={view === 'qa'} />}
       </main>
-      {session?.board && view === 'terminals' && <Board board={session.board} onInspect={setInspecting} />}
+      {session?.board && view !== 'qa' && <Board board={session.board} onInspect={setInspecting} />}
       {isCreating && <NewSession project={project} onCancel={() => setCreating(false)} onCreate={create} />}
       {inspecting && session?.feature && (
         <Inspector session={session.path} feature={session.feature} ticket={inspecting} board={session.board} onClose={() => setInspecting(null)} />

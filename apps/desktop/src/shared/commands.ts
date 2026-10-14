@@ -11,6 +11,21 @@ export function phasePrompt(harness: Harness, phase: string, args: string): stri
 
 export const binOf = (h: Harness) => (h === 'codex' ? 'codex' : 'claude')
 
+/** Each CLI's flag for running without permission prompts (Claude Code's bypassPermissions mode). */
+export const BYPASS: Record<Harness, string> = {
+  'claude-code': '--dangerously-skip-permissions',
+  codex: '--dangerously-bypass-approvals-and-sandbox',
+}
+
+/** A chat that may read but not change anything: the grill's side chat (DESIGN.md §24.7). */
+export const READONLY: Record<Harness, string[]> = {
+  'claude-code': ['--permission-mode', 'plan'],
+  codex: ['--sandbox', 'read-only', '--ask-for-approval', 'never'],
+}
+
+/** Phases the app answers itself get `--app`: the grill then publishes each question for the app's panel. */
+export const appArgs = (phase: string, args: string) => (phase === 'grill' && !/(^|\s)--app\b/.test(args) ? `${args.trim()} --app`.trim() : args)
+
 export const label = (h: Harness) => (h === 'codex' ? 'Codex' : 'Claude')
 
 export function launchOf(spec: TerminalSpec, shell: string): Launch {
@@ -26,9 +41,20 @@ export function launchOf(spec: TerminalSpec, shell: string): Launch {
     return { file: 'node', args, title: `qa ${step}${only ? ` ${only}` : ''}` }
   }
   const h = spec.harness ?? 'claude-code'
-  if (spec.kind === 'chat') return { file: binOf(h), args: [], title: `${label(h)} chat` }
-  if (!spec.phase) throw new Error('a phase terminal needs a phase')
-  return { file: binOf(h), args: [phasePrompt(h, spec.phase, spec.args ?? '')], title: `${spec.phase} · ${label(h)}` }
+  const bypass = !!spec.bypass && !spec.readonly
+  const flags = spec.readonly ? READONLY[h] : bypass ? [BYPASS[h]] : []
+  const mark = bypass ? ' ⚡' : ''
+  if (spec.kind === 'phase' && !spec.phase) throw new Error('a phase terminal needs a phase')
+  const title = (spec.title ?? (spec.kind === 'chat' ? `${label(h)} chat` : `${spec.phase} · ${label(h)}`)) + mark
+  if (spec.resume) {
+    // A resumed conversation carries its own history; the phase prompt is not sent again.
+    return h === 'codex'
+      ? { file: 'codex', args: ['resume', ...flags, spec.resume], title }
+      : { file: 'claude', args: [...flags, '--resume', spec.resume], title }
+  }
+  const id = h === 'claude-code' && spec.sessionId ? ['--session-id', spec.sessionId] : []
+  const prompt = spec.kind === 'phase' ? phasePrompt(h, spec.phase!, appArgs(spec.phase!, spec.args ?? '')) : spec.prompt
+  return { file: binOf(h), args: [...flags, ...id, ...(prompt ? [prompt] : [])], title }
 }
 
 /** A README `Next:` line → the phase and its arguments, whichever prefix it was written with. */
