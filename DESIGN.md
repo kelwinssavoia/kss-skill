@@ -1513,6 +1513,12 @@ Besides phases, any session can open a **chat** (the bare `claude` or `codex` CL
 in the session's worktree. Every process runs with the user's login-shell environment, resolved
 once at start-up, because an app launched from the Dock does not inherit the terminal's `PATH`.
 
+A **Bypass permissions** switch (on by default, remembered by the app) starts every new chat and
+phase in the harness's no-prompt mode: `claude --dangerously-skip-permissions` (Claude Code's
+`bypassPermissions` mode) and `codex --dangerously-bypass-approvals-and-sandbox`. Off, both CLIs
+ask as usual. It affects terminals opened after the change, never one already running; shells and
+`qa.mjs` steps have no such flag.
+
 ### 24.4 The subagent inspector
 
 During `execute`, every ticket on the board opens an inspector with three parts:

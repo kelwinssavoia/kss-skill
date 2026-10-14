@@ -10,7 +10,7 @@ import { holder, imageData, qaInfo } from './qa.ts'
 import { sessionBoard } from './board.ts'
 import { loginEnv, which } from './env.ts'
 import { inspectTicket } from './inspector.ts'
-import { loadPrefs, savePrefs, withHarness, withRecent } from './prefs.ts'
+import { loadPrefs, savePrefs, withBypass, withHarness, withRecent } from './prefs.ts'
 import { createSession, detectProject, featureOfBranch, projectWorktrees, removeSession } from './project.ts'
 import { createTerminal, killAll, killTerminal, resizeTerminal, terminalsIn, writeTerminal } from './pty.ts'
 
@@ -85,6 +85,7 @@ function handlers() {
     if (!project) return
     savePrefs(prefsFile(), withHarness(loadPrefs(prefsFile()), project.root, phase, h))
   })
+  ipcMain.handle('prefs:bypass', (_e, on: boolean) => savePrefs(prefsFile(), withBypass(loadPrefs(prefsFile()), on)))
   ipcMain.handle('project:pick', async () => {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory'] })
     return r.canceled || !r.filePaths[0] ? null : openProject(r.filePaths[0])
@@ -110,6 +111,8 @@ function handlers() {
       const other = holder(spec.cwd, await sessionPaths())
       if (other) throw new Error(`the QA environment is up in ${other} — run qa down there first`)
     }
+    // The bypass flag comes from the prefs here, so every chat and phase follows the switch.
+    spec = { ...spec, bypass: loadPrefs(prefsFile()).bypass }
     return createTerminal(spec, { data: (id, d) => send('term:data', id, d), exit: (id, code) => send('term:exit', id, code) })
   })
   ipcMain.handle('qa:info', async (_e, session: string, feature: string | null) => {

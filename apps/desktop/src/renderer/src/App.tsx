@@ -128,6 +128,8 @@ export function App() {
         onRemove={remove}
         onSwitch={() => open(api.pickProject())}
         terminals={terms}
+        bypass={prefs?.bypass ?? true}
+        onBypass={async on => (await api.setBypass(on), setPrefs(await api.prefs()))}
       />
       <main className="center">
         {session && (

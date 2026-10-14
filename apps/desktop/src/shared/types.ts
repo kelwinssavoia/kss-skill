@@ -39,6 +39,8 @@ export type TerminalSpec = {
   cwd: string
   kind: TerminalKind
   harness?: Harness
+  /** Start the CLI in bypass-permissions mode; set by the main process from the prefs, never by the renderer. */
+  bypass?: boolean
   /** For a phase: the skill without its prefix and its arguments, e.g. `spec` + `012-x`. */
   phase?: string
   args?: string
@@ -90,6 +92,8 @@ export type Prefs = {
   recent: string[]
   /** project root → phase → harness. */
   harnessByPhase: Record<string, Record<string, Harness>>
+  /** Chats and phases start with the harness's bypass-permissions flag. */
+  bypass: boolean
 }
 
 export type QaStep = 'plan' | 'up' | 'run' | 'judge' | 'report' | 'down' | 'status'

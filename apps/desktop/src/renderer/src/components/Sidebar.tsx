@@ -10,11 +10,13 @@ type Props = {
   onNew: () => void
   onRemove: (s: Session) => void
   onSwitch: () => void
+  bypass: boolean
+  onBypass: (on: boolean) => void
 }
 
 const Chip = ({ ok, children }: { ok: boolean; children: string }) => <span className={ok ? 'chip ok' : 'chip off'}>{children}</span>
 
-export function Sidebar({ project, sessions, selected, terminals, onSelect, onNew, onRemove, onSwitch }: Props) {
+export function Sidebar({ project, sessions, selected, terminals, onSelect, onNew, onRemove, onSwitch, bypass, onBypass }: Props) {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
@@ -27,6 +29,11 @@ export function Sidebar({ project, sessions, selected, terminals, onSelect, onNe
           <Chip ok={!!project.harnesses.codex}>codex</Chip>
           <Chip ok={project.hasQaConfig}>qa</Chip>
         </div>
+        <label className="switch" title={bypass ? 'Chats and phases start with --dangerously-skip-permissions (Claude) / --dangerously-bypass-approvals-and-sandbox (Codex). Applies to new terminals.' : 'Chats and phases ask for permissions as usual. Applies to new terminals.'}>
+          <input type="checkbox" checked={bypass} onChange={e => onBypass(e.target.checked)} />
+          <span className="track"><i /></span>
+          <span>Bypass permissions</span>
+        </label>
       </div>
       <button className="new-session" onClick={onNew} disabled={!project.hasKss} title={project.hasKss ? 'A new worktree that starts with kss-clarify' : 'Run kss-init first'}>
         + New session

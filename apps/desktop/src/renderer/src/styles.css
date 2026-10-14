@@ -73,6 +73,13 @@ button.icon.big { font-size: 22px; }
 .chips { display: flex; gap: 4px; margin-top: 6px; }
 .chip { font: 10px var(--mono); padding: 1px 6px; border-radius: 10px; border: 1px solid var(--line); }
 .chip.ok { color: var(--ok); border-color: #3a4a2c; }
+.switch { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; color: var(--dim); cursor: pointer; user-select: none; -webkit-app-region: no-drag; }
+.switch input { display: none; }
+.switch .track { width: 26px; height: 15px; border-radius: 8px; background: var(--bg-3); border: 1px solid var(--line); position: relative; transition: background .15s; flex: none; }
+.switch .track i { position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--dim); transition: transform .15s, background .15s; }
+.switch input:checked + .track { background: var(--accent-soft); border-color: var(--accent-2); }
+.switch input:checked + .track i { transform: translateX(11px); background: var(--accent); }
+.switch input:checked ~ span:last-child { color: var(--accent); }
 .chip.off { color: var(--dim); text-decoration: line-through; }
 .new-session { margin: 0 12px 10px; }
 .sessions { overflow: auto; flex: 1; padding: 0 8px; }

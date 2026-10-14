@@ -11,6 +11,12 @@ export function phasePrompt(harness: Harness, phase: string, args: string): stri
 
 export const binOf = (h: Harness) => (h === 'codex' ? 'codex' : 'claude')
 
+/** Each CLI's flag for running without permission prompts (Claude Code's bypassPermissions mode). */
+export const BYPASS: Record<Harness, string> = {
+  'claude-code': '--dangerously-skip-permissions',
+  codex: '--dangerously-bypass-approvals-and-sandbox',
+}
+
 export const label = (h: Harness) => (h === 'codex' ? 'Codex' : 'Claude')
 
 export function launchOf(spec: TerminalSpec, shell: string): Launch {
@@ -26,9 +32,11 @@ export function launchOf(spec: TerminalSpec, shell: string): Launch {
     return { file: 'node', args, title: `qa ${step}${only ? ` ${only}` : ''}` }
   }
   const h = spec.harness ?? 'claude-code'
-  if (spec.kind === 'chat') return { file: binOf(h), args: [], title: `${label(h)} chat` }
+  const flags = spec.bypass ? [BYPASS[h]] : []
+  const mark = spec.bypass ? ' ⚡' : ''
+  if (spec.kind === 'chat') return { file: binOf(h), args: flags, title: `${label(h)} chat${mark}` }
   if (!spec.phase) throw new Error('a phase terminal needs a phase')
-  return { file: binOf(h), args: [phasePrompt(h, spec.phase, spec.args ?? '')], title: `${spec.phase} · ${label(h)}` }
+  return { file: binOf(h), args: [...flags, phasePrompt(h, spec.phase, spec.args ?? '')], title: `${spec.phase} · ${label(h)}${mark}` }
 }
 
 /** A README `Next:` line → the phase and its arguments, whichever prefix it was written with. */

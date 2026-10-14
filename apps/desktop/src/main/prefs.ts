@@ -5,12 +5,12 @@ import { dirname } from 'node:path'
 
 import type { Harness, Prefs } from '../shared/types.ts'
 
-const EMPTY: Prefs = { recent: [], harnessByPhase: {} }
+const EMPTY: Prefs = { recent: [], harnessByPhase: {}, bypass: true }
 
 export function loadPrefs(file: string): Prefs {
   try {
     const p = JSON.parse(readFileSync(file, 'utf8'))
-    return { recent: Array.isArray(p.recent) ? p.recent.filter((x: unknown) => typeof x === 'string') : [], harnessByPhase: p.harnessByPhase && typeof p.harnessByPhase === 'object' ? p.harnessByPhase : {} }
+    return { recent: Array.isArray(p.recent) ? p.recent.filter((x: unknown) => typeof x === 'string') : [], harnessByPhase: p.harnessByPhase && typeof p.harnessByPhase === 'object' ? p.harnessByPhase : {}, bypass: typeof p.bypass === 'boolean' ? p.bypass : EMPTY.bypass }
   } catch {
     return structuredClone(EMPTY)
   }
@@ -27,3 +27,5 @@ export const withHarness = (p: Prefs, root: string, phase: string, h: Harness): 
   ...p,
   harnessByPhase: { ...p.harnessByPhase, [root]: { ...p.harnessByPhase[root], [phase]: h } },
 })
+
+export const withBypass = (p: Prefs, bypass: boolean): Prefs => ({ ...p, bypass })

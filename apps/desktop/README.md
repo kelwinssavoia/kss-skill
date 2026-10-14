@@ -33,6 +33,7 @@ environment once at start-up, because an app launched from the Dock does not inh
 | **Sessions** | **New session** creates a worktree in `<parent>/<repo>.kss-sessions/<slug>`, detached at `base_branch`, copies `.kss/config.local.json` and the root `.env*`, and starts `kss-clarify <request>` there. Clarify creates the feature branch. Sessions run in parallel; each has its own `.kss/current` |
 | **Phases** | **Run / Resume** the README's `Next:` in Claude or Codex — a fresh process, what `/clear` + the command is in a terminal. The harness chosen per phase is remembered per project |
 | **Chats and shells** | **Claude chat**, **Codex chat** and **Terminal** open in the session's worktree |
+| **Bypass permissions** | A switch in the sidebar, on by default: new chats and phases start with `--dangerously-skip-permissions` (Claude) or `--dangerously-bypass-approvals-and-sandbox` (Codex); their tab shows ⚡ |
 | **Board** | The kss-ui model (`mods/kss-ui/hooks/kss.ts`, imported): phases of the track, grill queue, tickets with turns vs estimate, the execution log, tokens |
 | **Subagent inspector** | Click a ticket: its **objective** (the ticket file: goal, FRs, files, tests, and its log entries), its **changes** (commits since the feature branch, committed and uncommitted diff, new files) and its **activity** (the subagent's brief, every tool call, what it says it is doing, turns and tokens — from the Claude Code or Codex transcript found by the worktree path) |
 

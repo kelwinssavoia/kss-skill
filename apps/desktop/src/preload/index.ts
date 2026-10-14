@@ -12,6 +12,7 @@ const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
 
 const api = {
   prefs: (): Promise<Prefs> => ipcRenderer.invoke('prefs:get'),
+  setBypass: (on: boolean): Promise<void> => ipcRenderer.invoke('prefs:bypass', on),
   setHarness: (phase: string, h: Harness): Promise<void> => ipcRenderer.invoke('prefs:harness', phase, h),
   pickProject: (): Promise<ProjectInfo | null> => ipcRenderer.invoke('project:pick'),
   openProject: (root: string): Promise<ProjectInfo> => ipcRenderer.invoke('project:open', root),
