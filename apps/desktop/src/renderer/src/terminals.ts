@@ -11,12 +11,13 @@ const entries = new Map<string, Entry>()
 const exitListeners = new Set<() => void>()
 
 const THEME = {
-  background: '#0b0d11',
-  foreground: '#d7dae0',
-  cursor: '#7aa2f7',
-  selectionBackground: '#2b3445',
-  black: '#1b1e25', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#c0caf5',
-  brightBlack: '#565f89', brightRed: '#ff899d', brightGreen: '#b3e07f', brightYellow: '#f0c27b', brightBlue: '#8db0ff', brightMagenta: '#c9aaff', brightCyan: '#97dcff', brightWhite: '#e3e8ff',
+  background: '#121315',
+  foreground: '#e4e5e8',
+  cursor: '#f58a2e',
+  cursorAccent: '#121315',
+  selectionBackground: '#4a3523',
+  black: '#27292d', red: '#ef6461', green: '#8fcf6f', yellow: '#e8c547', blue: '#6fa8dc', magenta: '#c792ea', cyan: '#6cc4c4', white: '#d6d7da',
+  brightBlack: '#6b6e75', brightRed: '#ff817e', brightGreen: '#a9e08a', brightYellow: '#f5d76e', brightBlue: '#8cbcf0', brightMagenta: '#d7a8f5', brightCyan: '#8ad8d8', brightWhite: '#f4f4f6',
 }
 
 api.onData((id, data) => entries.get(id)?.term.write(data))

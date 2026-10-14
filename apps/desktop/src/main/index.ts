@@ -132,7 +132,7 @@ function createWindow() {
     minHeight: 600,
     title: 'KSS',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#0f1115',
+    backgroundColor: '#17181b',
     icon: ICON,
     webPreferences: { preload: join(import.meta.dirname, '../preload/index.cjs'), sandbox: false, contextIsolation: true },
   })
