@@ -33,7 +33,7 @@ export function TerminalTabs({ terms, active, onActivate, onClose, empty, shown 
             return (
               <div key={t.id} className={t.id === current?.id ? 'tab on' : 'tab'} onClick={() => onActivate(t.id)}>
                 <span className={`dot ${code === null ? 'live' : 'dead'}`} />
-                <span className="tab-title">{t.title}</span>
+                <span className="tab-title" title={t.conversation ? `conversation ${t.conversation}` : undefined}>{t.resumed ? '↺ ' : ''}{t.title}</span>
                 <button className="icon" onClick={e => (e.stopPropagation(), onClose(t.id))}>×</button>
               </div>
             )

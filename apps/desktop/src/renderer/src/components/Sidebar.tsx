@@ -52,7 +52,7 @@ export function Sidebar({ project, sessions, selected, terminals, onSelect, onNe
                 )}
               </div>
               <div className="session-meta">{s.branch ?? 'detached'}{b ? ` · ${b.phase}${b.isPhaseFinished && !b.isClosed ? ' ✓' : ''}` : ''}</div>
-              {b && <Phases phases={b.phases} compact />}
+              {b && <Phases board={b} compact />}
               {b && b.phase === 'execute' && b.total ? (
                 <div className="mini-bar"><i style={{ width: `${Math.round(((b.integrated ?? 0) / b.total) * 100)}%` }} /></div>
               ) : null}

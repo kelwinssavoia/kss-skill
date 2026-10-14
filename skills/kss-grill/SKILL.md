@@ -1,7 +1,7 @@
 ---
 name: kss-grill
 description: KSS interview phase — ask the user every open decision from the investigation, one per turn, business then layout then technical, and record the answers as D- entries. Run it after kss-investigate on an L track, or on M when open items remain.
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
@@ -99,6 +99,21 @@ this phase keeps up to date afterwards.
    Lean: <only when there is one>
    ```
 
+   **App mode — the arguments include `--app`** (kss-desktop started this phase and answers it from
+   its panel, DESIGN.md §24.7). Then, for **every** question you put to the user in this phase — the
+   open items, a derived question, a deferral's owner and date, the closing turn:
+   - **never open the multiple-choice dialog**, even when the harness has one — the app cannot
+     click it. Print the text format below;
+   - **before printing it**, publish it with one `current.mjs set`, the options in the order printed:
+     `node .kss/scripts/current.mjs set '{"grill":{"question":{"n":<n>,"category":"business|layout|technical","source":"<source>","text":"<the question>","options":[{"key":"a","label":"<short label>","description":"<its consequence>","lean":false}, …]}}}'`
+     — `something else` is not an option there (the app always offers free text); `lean: true` on
+     the lean option only, never on a business question; `options: []` for a free-text-only
+     question (owner and date, the closing turn's "anything to revisit?"). Escape the JSON for the
+     shell (`'\''` for a quote inside the single-quoted argument);
+   - the answer arrives as a plain message: `b) <label>` for an option, anything else is a free
+     answer. Treat both exactly as a typed answer.
+   Clear it with `'{"grill":{"question":null}}'` before the closing summary.
+
    `something else` is always the last option. **A `Lean:` is never offered for a business
    question** — business options are consequences, not recommendations; state the consequence of
    each option instead. Omit the `Lean:` line entirely when there is no lean.
@@ -195,6 +210,7 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
 - Order is business → layout → technical, one question per turn, no cap on the count.
 - The question format is fixed, `something else` is always an option, and `Lean:` is never offered
   for a business question.
+- With `--app`: no dialog; every question is published as `grill.question` before it is printed.
 - Never ask the user for a repository fact — spawn one `explorer` for it. The grill
   spawns nothing else.
 - At most one derived question per answer; further branches go to Deferred or back to

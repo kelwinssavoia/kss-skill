@@ -195,7 +195,7 @@ statusline falls back.
 | `tickets.<NN>` | `kss-execute` | a **map keyed by ticket id**; each value is `{state, tier, started_at, turns, est_turns, worktree}`, `state` exactly `blocked` \| `ready` \| `running` \| `reviewing` \| `rejected` \| `integrated` |
 | `execution` | `kss-execute` | roll-up of the run: `integrated`, `total`, `critical_path`, `last` (the last event, as printed on the board) |
 | `review` | `kss-review` | `round`, `watching` (the watch target the statusline prints, absent when not watching) and `cursor` `{last_comment_at, last_ci_at}`, which the next round reads from; `pr`, `state`, `open` and `held` are optional extras |
-| `grill` | `kss-grill` | the interview queue: `asked`, `total`, `deferred`, one `{done, total}` per category with open items, and `current` (`Qn · <category> · <question, ≤60 chars>`). Set when the queue is built, updated per question, cleared after the closing turn |
+| `grill` | `kss-grill` | the interview queue: `asked`, `total`, `deferred`, one `{done, total}` per category with open items, and `current` (`Qn · <category> · <question, ≤60 chars>`); in app mode also `question` — `{n, category, source, text, options: [{key, label, description, lean}]}`, the question on screen (§24.7). Set when the queue is built, updated per question, cleared after the closing turn |
 | `explorers` | `kss-investigate`, `kss-plan`, `kss-grill` | always the object `{running, returned}` — the size of the fan-out and how many are back, for the statusline. Never a bare number; absent when nothing is out |
 
 Every key is optional; a reader treats a missing key as unknown and prints `—`. Writers merge
@@ -1519,6 +1519,15 @@ phase in the harness's no-prompt mode: `claude --dangerously-skip-permissions` (
 ask as usual. It affects terminals opened after the change, never one already running; shells and
 `qa.mjs` steps have no such flag.
 
+**Conversations come back.** Every chat and phase tab is remembered per session, in the app's own
+data (`tabs.json` beside the prefs, never in the repository), with its harness conversation id:
+Claude Code's is given at start (`--session-id <uuid>`), Codex's is read from the rollout it
+writes under `~/.codex/sessions` (the newest whose `session_meta.cwd` is the session and that no
+other tab claimed). The first time a session is shown after the app starts, each remembered tab
+that is not open is resumed — `claude --resume <id>`, `codex resume <id>` — marked ↺. Closing a
+tab forgets it; quitting the app does not. A conversation that never got a first message has
+nothing to resume and is dropped.
+
 ### 24.4 The subagent inspector
 
 During `execute`, every ticket on the board opens an inspector with three parts:
@@ -1561,3 +1570,21 @@ picture, and a notice to re-run `kss-init`.
 Not an editor and not a replacement for the CLIs: it opens no file for editing, holds no model
 key, and calls no model itself. Not required: every skill, hook and script behaves the same
 whether or not the app is running.
+
+### 24.7 The grill in the app
+
+The app starts the grill as `kss-grill NNN-slug --app`. In app mode the skill never opens the
+harness's multiple-choice dialog; before printing each question it publishes it as
+`.kss/current` → `grill.question` (`{n, category, source, text, options: [{key, label,
+description, lean}]}`, §3.3). The **Grill** view shows that question as a card — its options as
+buttons, a free-text box for "something else" — and a click types `b) <label>` into the grill's
+own terminal and sends it: the answer reaches the model exactly as if typed, so the skill's rules
+(derived questions, deferrals with owner and date, ADRs, overrides) are unchanged. Free-text-only
+questions (a deferral's owner and date, the closing turn) publish `options: []`.
+
+Below the card, a **side chat** opens with the grill in the same harness, read-only (Claude Code in
+plan mode, Codex in its read-only sandbox), briefed to read `grill.question` again before every
+reply. It is where the user asks what an option implies or what the code does today; it never
+answers the grill and is a separate conversation, so the grill's context stays clean. The grill's
+terminal stays one click away. A `kss-grill` from before app mode asks through its dialog and
+publishes no question; the app then shows the terminal with a notice to update the plugin.

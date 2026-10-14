@@ -2,7 +2,7 @@
 // `.kss/config.md` and the feature README. Nothing here touches `$`, so the tests drive it directly.
 // The tracks mirror scripts/next.mjs (DESIGN.md §3.9), the one place that owns them.
 
-import type { KssBoard, KssGrill, KssGrillCategory, KssLogEntry, KssPending, KssPhase, KssQuota, KssQuotaWindow, KssTicket } from '../types'
+import type { KssBoard, KssGrill, KssGrillCategory, KssGrillOption, KssGrillQuestion, KssLogEntry, KssPending, KssPhase, KssQuota, KssQuotaWindow, KssTicket } from '../types'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
@@ -54,8 +54,20 @@ export function parseReadme(text: string | null): KssReadme {
     size: /\*\*Size:\*\*\s*([SML])\b/.exec(t)?.[1] ?? null,
     track: /\*\*Track:\*\*\s*([^·\n]+)/.exec(t)?.[1]?.trim() ?? null,
     state: /\*\*State:\*\*\s*([a-z][a-z-]*)/.exec(t)?.[1] ?? null,
-    next: /\*\*Next:\*\*\s*`([^`]+)`/.exec(t)?.[1]?.trim() ?? null,
+    next: nextLine(t),
   }
+}
+
+/**
+ * The README's Next command: in backticks as the template writes it, or bare up to the line's
+ * `<!-- … -->` note, as a phase that copied next.mjs's output verbatim leaves it.
+ */
+function nextLine(t: string): string | null {
+  const line = /^\*\*Next:\*\*[ \t]*(.*)$/m.exec(t)?.[1]
+  if (!line) return null
+  const ticked = /^`([^`]+)`/.exec(line.trim())?.[1]
+  const v = (ticked ?? line.replace(/<!--.*$/, '')).trim()
+  return v || null
 }
 
 /** `metrics.jsonl` → the summed `tokens.cumulative`, as the statusline counts it. */
@@ -148,6 +160,18 @@ function category(v: unknown): KssGrillCategory | null {
   return r && total !== null ? { done: num(r.done) ?? 0, total } : null
 }
 
+function question(v: unknown): KssGrillQuestion | null {
+  const q = obj(v)
+  const text = q && str(q.text)
+  if (!q || !text) return null
+  const options: KssGrillOption[] = (Array.isArray(q.options) ? q.options : []).flatMap((o: unknown, i: number) => {
+    const r = obj(o)
+    const label = r && str(r.label)
+    return r && label ? [{ key: str(r.key) ?? String.fromCharCode(97 + i), label, description: str(r.description), lean: r.lean === true }] : []
+  })
+  return { n: num(q.n) ?? 0, category: str(q.category), source: str(q.source), text, options }
+}
+
 /** `.kss/current.grill`, written by kss-grill as it asks (DESIGN.md §3.3). */
 function grill(current: Json): KssGrill | null {
   const g = obj(current.grill)
@@ -160,6 +184,7 @@ function grill(current: Json): KssGrill | null {
     layout: category(g.layout),
     technical: category(g.technical),
     current: str(g.current),
+    question: question(g.question),
   }
 }
 

@@ -46,11 +46,50 @@ export type TerminalSpec = {
   args?: string
   /** For `qa`: one step of scripts/qa.mjs (DESIGN.md §24.5). */
   qa?: { step: QaStep; feature: string; only?: string; force?: boolean }
+  /** For a chat: its first message, e.g. the grill side chat's briefing. */
+  prompt?: string
+  /** For a chat: read-only — Claude Code in plan mode, Codex in its read-only sandbox; never bypass. */
+  readonly?: boolean
+  /** A title shown instead of the derived one. */
+  title?: string
+  /** Resume this conversation (`claude --resume <id>`, `codex resume <id>`) instead of starting one. */
+  resume?: string
+  /** Claude Code only: the id the new conversation gets (`--session-id`); set by the main process. */
+  sessionId?: string
+  /** The saved tab this terminal belongs to (DESIGN.md §24.3); set by the main process. */
+  tab?: string
   cols?: number
   rows?: number
 }
 
-export type TerminalInfo = { id: string; cwd: string; title: string; kind: TerminalKind; harness: Harness | null }
+export type TerminalInfo = {
+  id: string
+  cwd: string
+  title: string
+  kind: TerminalKind
+  harness: Harness | null
+  phase: string | null
+  /** The harness's conversation id, once known; what a reopened session resumes. */
+  conversation: string | null
+  tab: string | null
+  /** True when this terminal is a resumed conversation. */
+  resumed: boolean
+}
+
+/** A chat or phase tab remembered per session, so its conversation comes back when the session reopens. */
+export type SavedTab = {
+  key: string
+  cwd: string
+  kind: 'chat' | 'phase'
+  harness: Harness
+  phase: string | null
+  args: string | null
+  /** The tab's own title, when it had one; otherwise derived again on resume. */
+  title: string | null
+  readonly: boolean
+  conversation: string | null
+  createdAt: string
+}
 
 export type ActivityEntry = { at: string | null; kind: 'prompt' | 'text' | 'tool' | 'result'; text: string }
 

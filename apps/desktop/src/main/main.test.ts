@@ -7,7 +7,7 @@ import { test } from 'node:test'
 
 import { launchOf, optionalOf, parseNext, phasePrompt } from '../shared/commands.ts'
 import { sessionBoard } from './board.ts'
-import { parseEnv0 } from './env.ts'
+import { parseEnv0, withoutSessionMarkers } from './env.ts'
 import { parseWorktrees } from './git.ts'
 import { inspectTicket, parseTicket, section } from './inspector.ts'
 import { configField, createSession, detectProject, featureOfBranch, isTicketWorktree, projectWorktrees, removeSession, sessionSlug } from './project.ts'
@@ -226,4 +226,9 @@ test('a session is a worktree with its own board; tickets are inspected in their
   sh(path, 'worktree', 'remove', '--force', wt)
   await removeSession(project, path, false)
   assert.equal(existsSync(path), false)
+})
+
+test("a parent harness session's markers never reach the CLIs; the user's own settings do", () => {
+  const env = withoutSessionMarkers({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_MESSAGING_TOKEN: 't', CLAUDE_CODE_USE_BEDROCK: '1', CODEX_SANDBOX: 'seatbelt', CODEX_HOME: '/c' })
+  assert.deepEqual(Object.keys(env).sort(), ['CLAUDE_CODE_USE_BEDROCK', 'CODEX_HOME', 'PATH'])
 })
