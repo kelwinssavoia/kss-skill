@@ -498,8 +498,10 @@ It then proposes a **Size** and a **Track**:
 
 The user confirms the size. The final question asks for the feature name.
 
-`NNN` is derived as the highest existing number + 1, or `next_number` when that is greater. The
-slug is kebab-case.
+`NNN` is derived as the highest number among the existing feature folders **and** the local branches
+named `<branch_prefix>NNN-*`, + 1, or `next_number` when that is greater. Branches are shared by
+every worktree of a repository, so features started in parallel sessions (§24.2) do not collide.
+The slug is kebab-case.
 
 The skill prints `Creating <folder> and branch <prefix>NNN-slug from <base>. Confirm?` —
 **nothing is created before confirmation**. On confirmation it creates the folder, creates and
@@ -859,7 +861,8 @@ the plan.**
 - **Continuous frontier**: spawn every ticket whose blockers are `integrated`, the moment they
   are. Never group tickets into waves.
 - One worktree per ticket at **`.kss/worktrees/NNN-slug/NN`** (relative to the repository root),
-  off the feature branch; branch `NNN-slug/NN-ticket`. `.kss/worktrees/` is gitignored by
+  off the feature branch; branch `NNN-slug.NN-ticket` — a dot, because git cannot hold a ref
+  `NNN-slug/…` next to the feature branch `NNN-slug` (measured 2026-10-13: `cannot lock ref`). `.kss/worktrees/` is gitignored by
   `kss-init`.
 - The brief is the ticket file pasted in, plus the worktree path.
 - The tier comes from the graph; the harness adapter turns it into a spawn (§19).
@@ -1444,3 +1447,111 @@ it ends, so while `Next:` still names the running phase, that phase is not done.
 `claude --plugin-dir <repo>/mods/kss-ui` for one session. The guard mode is the plugin's `guard`
 option in the config menu. `kss-init` mentions the mod on Claude Code and installs nothing for it.
 
+
+---
+
+## 24. `kss-desktop` — the desktop app (optional)
+
+### 24.1 The idea
+
+The skills run in a terminal, one phase per session, one feature per working copy. `kss-desktop`
+(`apps/desktop/`, Electron) is the place where all of that is visible and driveable at once: open a
+repository the way an editor opens a folder, see every feature and where it stands, start a new
+one, run each phase in Claude Code or Codex, follow several features in parallel, open a plain
+chat or a shell next to them, inspect what each subagent is doing, and drive `kss-qa` one scenario
+at a time while watching the browser.
+
+It follows §19 and §23 strictly: **it is a reader and a launcher, never a writer of KSS state.**
+Every phase still runs in the harness's own CLI, with the harness's own plugin and hooks, so
+everything a phase writes — the feature folder, `.kss/current`, `metrics.jsonl` — is written exactly
+as it is from a terminal, and a feature started in the app can be continued from a terminal and
+vice versa. The app writes only its own preferences (recent projects, harness per phase) in its
+user-data directory, and the git worktrees it creates for sessions.
+
+### 24.2 Sessions are worktrees
+
+`.kss/current` is gitignored, hence **one per working copy**. A session is therefore one git
+worktree, and parallel features need nothing new from the skills:
+
+| | Where | Branch |
+| --- | --- | --- |
+| The project | the repository the user opened | whatever is checked out |
+| A session | `<parent>/<repo>.kss-sessions/<slug>` — a sibling directory, so no tool running in the project ever globs into it | created detached at `base_branch`; `kss-clarify` then creates and checks out `<branch_prefix>NNN-slug` there, exactly as in a terminal |
+| A ticket | `<session>/.kss/worktrees/NNN-slug/NN` — unchanged (§14.1) | `NNN-slug.NN-ticket` |
+
+On creation the app copies the gitignored files a phase needs and a fresh checkout lacks:
+`.kss/config.local.json` and the root `.env*` files. Removing a session runs `git worktree remove`
+and refuses a dirty worktree unless the user forces it.
+
+The app lists the project plus every worktree in the sessions directory, and reads, for each, its
+`.kss/current`, the feature `README.md`, `graph.md`, `06-execution.md` and `metrics.jsonl` — the
+same files and the same model (`mods/kss-ui/hooks/kss.ts`, imported, never copied) the mod draws
+from, so the board in the app and the board in the mod cannot disagree.
+
+**Feature numbers across sessions.** Each session computes `NNN` from its own checkout, so two
+sessions started from the same `base_branch` would both pick the same number. `kss-clarify`
+therefore also counts the local branches named `<branch_prefix>NNN-*` (§7) — branches are shared
+by every worktree of a repository, so the moment one session confirms, the next one sees it.
+
+### 24.3 Running a phase
+
+A phase is a **pseudo-terminal running the harness's interactive CLI** in the session's
+worktree, with the phase as the first prompt:
+
+| Harness | Command |
+| --- | --- |
+| Claude Code | `claude "/kss-<phase> NNN-slug"` |
+| Codex | `codex "$kss-<phase> NNN-slug"` |
+
+The terminal is a real one (`node-pty` + `xterm.js`), so the grill's multiple-choice questions,
+permission prompts, the statusline and the `kss-ui` mod all work unchanged. The app reads the
+README's `Next:` line and offers it as **Run next** (a new process: what `/clear` + the command is
+in a terminal) in the harness the user picks for that phase; the choice per phase is remembered
+per project. A new session starts with `kss-clarify <request>`.
+
+Besides phases, any session can open a **chat** (the bare `claude` or `codex` CLI) or a **shell**,
+in the session's worktree. Every process runs with the user's login-shell environment, resolved
+once at start-up, because an app launched from the Dock does not inherit the terminal's `PATH`.
+
+### 24.4 The subagent inspector
+
+During `execute`, every ticket on the board opens an inspector with three parts:
+
+| Part | Source |
+| --- | --- |
+| **Objective** | the ticket file `05-tickets/NN-*.md`: Goal, Requirements covered, Files, Tests, tier and estimate; the reviewer's verdicts and the report from `06-execution.md` once they exist |
+| **Changes** | the ticket's worktree (`tickets.NN.worktree` in `.kss/current`): commits since the feature branch (`git log <feature>..HEAD`), the diff stat, every file's diff (committed plus uncommitted), refreshed while it runs |
+| **Activity** | the subagent's transcript: its brief, every tool call (`Edit api/export/csv.ts`), the assistant's text between them — the summary of what it is doing, in its own words — and its turns and tokens |
+
+The transcript is found by the worktree path, which every brief contains (§14.1): a Claude Code
+subagent writes `~/.claude/projects/<slug(session)>/<session-id>/subagents/agent-*.jsonl`; a
+cross-harness ticket (§21) writes the foreign CLI's own transcript with the ticket worktree as its
+cwd — `~/.claude/projects/<slug(worktree)>/*.jsonl` or a Codex rollout under
+`~/.codex/sessions/` whose `session_meta.cwd` is the worktree. Both formats are parsed defensively,
+as `kss-lib.mjs` parses them (§6): a format change loses the activity feed, never the board.
+
+### 24.5 QA
+
+The QA panel is a front for `scripts/qa.mjs` (§22), one step per button, each a visible process:
+
+1. **Plan** — `qa.mjs plan`; the scenarios of `qa/plan.json` are listed with their persona, steps
+   and exact expected values.
+2. **Up** — `qa.mjs up`; `qa.mjs status` is polled for each service's readiness, with its log.
+3. **▶ per scenario** — `qa.mjs run --only S-NN`; the scenario's steps appear as they are
+   recorded, with their screenshots, and the live page is streamed from the driver's Chrome over
+   CDP (`Page.startScreencast`). `qa.mjs run` writes the endpoint of the Chrome it launched to
+   `.kss/qa/.runtime/live.json` (`{scenario, cdp, startedAt}`) and removes it when the scenario ends.
+4. **Judge**, **Report**, **Down** — the remaining steps; the verdict and `report.md` are shown.
+
+One QA environment runs at a time, across all sessions: the compose project and the host ports of
+`.kss/qa.config.json` are fixed. The lock is the runtime itself — a session whose
+`.kss/qa/.runtime/state.json` has a live pid holds the stack — so it survives an app restart and
+covers a `qa.mjs up` typed in a terminal; the app refuses **Up** in any other session and names the
+holder. A project whose `.kss/scripts/qa.mjs` predates `live.json` gets every step but the live
+picture, and a notice to re-run `kss-init`.
+
+### 24.6 What it is not
+
+Not an editor and not a replacement for the CLIs: it opens no file for editing, holds no model
+key, and calls no model itself. Not required: every skill, hook and script behaves the same
+whether or not the app is running.

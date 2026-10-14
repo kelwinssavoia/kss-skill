@@ -44,6 +44,12 @@ const jev = await import('./jev.mjs')
 
 export const QA_CONFIG = '.kss/qa.config.json'
 export const RUNTIME = '.kss/qa/.runtime'
+/** The scenario being driven right now and its Chrome's CDP endpoint, for a live view (DESIGN.md §24.5). */
+export const LIVE = `${RUNTIME}/live.json`
+
+export function liveRecord({ runId, scenario, evidence, cdp, now = new Date().toISOString() }) {
+  return { runId, scenario: scenario.id, title: scenario.title, evidence, cdp, startedAt: now }
+}
 
 export const DEFAULTS = {
   version: 1,
@@ -841,6 +847,7 @@ async function cmdDown(cwd) {
     log(`stopped ${n}`)
   }
   for (const pid of state?.chromes || []) await killTree(pid)
+  rmSync(resolve(cwd, LIVE), { force: true })
   const r = compose(cwd, cfg, 'down', ...(cfg.compose.down_volumes ? ['-v'] : []), '--remove-orphans')
   log(r.code === 0 ? 'docker compose down' : `docker compose down failed: ${r.err.trim().slice(-300)}`)
   rmSync(sp, { force: true })
@@ -909,6 +916,7 @@ async function cmdRun(cwd, opts) {
     const chrome = await launchChrome(cfg, profile)
     state.chromes = [...(state.chromes || []), chrome.pid]
     writeJsonFile(sp, state)
+    writeJsonFile(resolve(cwd, LIVE), liveRecord({ runId, scenario: s, evidence: ev, cdp: chrome.url }))
     const env = { ...process.env, BU_NAME: `kssqa-${runId.replace(/[^0-9]/g, '')}-${s.id}`, BU_CDP_URL: chrome.url, BH_AGENT_WORKSPACE: bu, KSS_QA_EVIDENCE: ev, BH_RECORD: '0' }
     log(`${s.id} ${s.title} — driving with ${cfg.models.driver}`)
     const r = await runClaude({
@@ -925,6 +933,7 @@ async function cmdRun(cwd, opts) {
     })
     sh('browser-use', ['--reload'], { env })
     await killTree(chrome.pid)
+    rmSync(resolve(cwd, LIVE), { force: true })
     state.chromes = state.chromes.filter((p) => p !== chrome.pid)
     writeJsonFile(sp, state)
     rmSync(profile, { recursive: true, force: true })

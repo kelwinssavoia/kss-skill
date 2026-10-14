@@ -78,8 +78,10 @@ phase may well run in the other one (DESIGN.md §19).
 
    The user confirms or changes the size. This turn does not count against the 5 questions.
 4. **The final question asks for the feature name.** Nothing else follows it.
-5. Derive the identifier. `NNN` is the highest existing number under `features_root` **+ 1**, or
-   `next_number` from the config when that is greater. Zero-padded to three digits. The slug is
+5. Derive the identifier. `NNN` is the highest number among the folders under `features_root`
+   **and** the local branches `git branch --list '<branch_prefix>[0-9][0-9][0-9]-*'` (shared by every
+   worktree, so parallel sessions do not collide) **+ 1**, or `next_number` from the config when
+   that is greater. Zero-padded to three digits. The slug is
    the feature name in kebab-case.
 6. Print exactly:
    `Creating <features_root>/NNN-slug and branch <branch_prefix>NNN-slug from <base_branch>. Confirm?`
@@ -154,7 +156,7 @@ feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the
 - Stop if the branch already exists or the worktree is dirty.
 - The expected outcome is one sentence and must be verifiable.
 - A fact that needs the code is an Open fact, never a guess.
-- `NNN` = highest existing under `features_root` + 1, or `next_number` when greater.
+- `NNN` = highest of the `features_root` folders and the `<branch_prefix>NNN-*` local branches + 1, or `next_number` when greater.
 - Write only `00-brief.md` and the Brief block of `README.md`; never another phase's file or block.
 - `README.md` stays under 4k chars; overflow goes to `notes/` and is linked.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's

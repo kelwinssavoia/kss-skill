@@ -126,6 +126,11 @@ board (`/kss`), a progress band above the prompt with **Clear & run** / **Run he
 that denies the reads a phase's "Do not read" list forbids. It only reads `.kss/current` and the
 README, so every skill works the same without it ([DESIGN.md §23](DESIGN.md)).
 
+Optional, desktop: **kss-desktop** (`apps/desktop/`, Electron) opens a repository, runs several
+features in parallel — one git worktree each — runs every phase in Claude Code or Codex inside an
+embedded terminal, and inspects each subagent's objective, diff and activity during execute. See
+[apps/desktop/README.md](apps/desktop/README.md) and [DESIGN.md §24](DESIGN.md).
+
 ### Codex
 
 Add the repository as a marketplace and install the same plugin — the manifest Codex reads is
