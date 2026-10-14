@@ -18,6 +18,7 @@ npm run dev        # electron-vite with hot reload
 npm run build && npm start
 npm test           # node --test, the main-process logic
 npm run typecheck
+npm run install-app  # build KSS.app (dist/) and install it in /Applications, ad-hoc signed
 npm run icon       # re-render build/icon.png and icon.icns after editing build/icon.svg
 ```
 

@@ -12,7 +12,9 @@
     "icon": "electron scripts/icon.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"src/**/*.test.ts\"",
-    "postinstall": "node scripts/fix-node-pty.mjs"
+    "postinstall": "node scripts/fix-node-pty.mjs",
+    "dist": "electron-vite build && electron-builder --mac --dir",
+    "install-app": "npm run dist && node scripts/install-app.mjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -26,10 +28,33 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^44.7.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.7"
+  },
+  "build": {
+    "appId": "dev.kss.desktop",
+    "productName": "KSS",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": "dir",
+      "identity": null
+    }
   }
 }
