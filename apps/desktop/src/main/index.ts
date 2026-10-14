@@ -20,6 +20,8 @@ let win: BrowserWindow | null = null
 let project: ProjectInfo | null = null
 let lastSessions = ''
 let timer: NodeJS.Timeout | null = null
+// build/ holds the icon in dev and preview; a packaged app gets it from its bundle (build/icon.icns).
+const ICON = join(import.meta.dirname, '../../build/icon.png')
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json')
 const live = new LiveView(frame => send('qa:frame', frame))
 
@@ -131,6 +133,7 @@ function createWindow() {
     title: 'KSS',
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f1115',
+    icon: ICON,
     webPreferences: { preload: join(import.meta.dirname, '../preload/index.cjs'), sandbox: false, contextIsolation: true },
   })
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -138,6 +141,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && !app.isPackaged) app.dock?.setIcon(ICON)
   handlers()
   createWindow()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())

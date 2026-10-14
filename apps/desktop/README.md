@@ -18,6 +18,7 @@ npm run dev        # electron-vite with hot reload
 npm run build && npm start
 npm test           # node --test, the main-process logic
 npm run typecheck
+npm run icon       # re-render build/icon.png and icon.icns after editing build/icon.svg
 ```
 
 `claude` and/or `codex` must be on the `PATH` of your login shell. The app resolves that
@@ -46,4 +47,5 @@ src/main/       Electron main: project + sessions (git worktrees), board, inspec
 src/preload/    the IPC bridge (window.kss)
 src/renderer/   React UI, xterm.js terminals
 src/shared/     types and the pure command builders shared by both sides
+build/          the logo: icon.svg is the source; icon.png and icon.icns are rendered from it
 ```
