@@ -42,12 +42,6 @@ test('a bare Next line (no backticks) is read up to its note', () => {
   expect(parseReadme(README).next).toBe('/kss-grill 012-batch-cutoff')
 })
 
-test('a Next line runs as its command; the advice in parentheses is not an argument', () => {
-  expect(commandOf('/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')).toEqual({ command: 'kss-execute', args: '061-x --ticket 15 --ticket 16' })
-  expect(commandOf('/kss-review 061-x (optional first: /kss-qa 061-x)')).toEqual({ command: 'kss-review', args: '061-x' })
-  expect(commandOf('/kss-review 061-x (finish: /kss-review 061-x --done)')).toEqual({ command: 'kss-review', args: '061-x' })
-})
-
 test('an off-track phase is shown in its place', () => {
   expect(phases('M', 'grill', false).map(p => p.name).slice(0, 3)).toEqual(['clarify', 'investigate', 'grill'])
 })
@@ -257,4 +251,10 @@ test('quota: the first reading is the baseline, and a reset carries what was use
   expect(quotaLine(q, Date.parse('2026-10-05T22:00:00Z'))).toBe('session 4% (+22 this run) · resets in 2h00 │ week 33% (+3 this run)')
   // Another feature starts from its own baseline.
   expect(usedBy(trackQuota(q, '013-y', [five(10)]).windows[0]!)).toBe(0)
+})
+
+test('a Next line runs as its command; the advice in parentheses is not an argument', () => {
+  expect(commandOf('/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')).toEqual({ command: 'kss-execute', args: '061-x --ticket 15 --ticket 16' })
+  expect(commandOf('/kss-review 061-x (optional first: /kss-qa 061-x)')).toEqual({ command: 'kss-review', args: '061-x' })
+  expect(commandOf('/kss-review 061-x (finish: /kss-review 061-x --done)')).toEqual({ command: 'kss-review', args: '061-x' })
 })
