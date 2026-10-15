@@ -177,6 +177,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/grill.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): grill"`. Then
@@ -194,6 +199,7 @@ Deferred: <DF-id — question · owner · date, one per line, or none>
 Terms: <terms written to CONTEXT.md, or none>
 ADRs: <paths, or none>
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-grill
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after grill>
 ```
@@ -222,8 +228,9 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
   become ADRs in `docs/adr/`, linked from the `D-`.
 - Closing turn: "Decided N, deferred N, overrode …. Anything to revisit?"
 - On M the grill runs only when there are open items; on L it always runs.
-- Write only `02-decisions.md`, `auto-decisions.md` statuses, `CONTEXT.md`, `docs/adr/` and the
+- Write only `02-decisions.md`, `auto-decisions.md` statuses, `report/grill.json` (+ `report/index.html`), `CONTEXT.md`, `docs/adr/` and the
   Decisions block of `README.md`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/grill.json` per `.kss/references/report.md`, then `report.mjs`.

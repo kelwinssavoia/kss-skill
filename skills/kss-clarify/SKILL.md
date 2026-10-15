@@ -122,6 +122,11 @@ phase may well run in the other one (DESIGN.md §19).
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/clarify.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): clarify"`. Then
@@ -138,6 +143,7 @@ Brief: <the expected-outcome sentence>
 Open facts: <n>
 Branch: <branch> → <base_branch>
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-clarify
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after clarify>
 ```
@@ -157,8 +163,9 @@ feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the
 - The expected outcome is one sentence and must be verifiable.
 - A fact that needs the code is an Open fact, never a guess.
 - `NNN` = highest of the `features_root` folders and the `<branch_prefix>NNN-*` local branches + 1, or `next_number` when greater.
-- Write only `00-brief.md` and the Brief block of `README.md`; never another phase's file or block.
+- Write only `00-brief.md`, `report/clarify.json` (+ the generated `report/index.html`) and the Brief block of `README.md`; never another phase's file or block.
 - `README.md` stays under 4k chars; overflow goes to `notes/` and is linked.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/clarify.json` per `.kss/references/report.md`, then `report.mjs`.

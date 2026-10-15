@@ -28,7 +28,7 @@ identifiers, skill instructions. Two settings, on two levels, decide the rest.
 
 | Level | File | Key | Governs | Absent |
 | --- | --- | --- | --- | --- |
-| User, never committed | `~/.kss/preferences.md` | `conversation_language` | Everything a skill prints: boards, questions, summaries, progress, explanations | Follow the language the user writes in |
+| User, never committed | `~/.kss/preferences.md` | `conversation_language` | Everything a skill prints: boards, questions, summaries, progress, explanations — and the phase reports (§25), which are written for the person running KSS | Follow the language the user writes in |
 | Project, committed | `.kss/config.md` | `docs_language` | The *content* of every artifact KSS writes into the repo: feature `README.md`, `00-brief.md` … `06-execution.md`, `notes/`, ADRs, glossary entries, `kss-docs-tech`/`kss-docs-product`, ticket files, PR body | Follow the conversation's language |
 
 The fallback chain for a document is therefore `docs_language` → `conversation_language` → the
@@ -112,6 +112,7 @@ Every skill can also be run on its own, given a feature id `NNN-<slug>`.
   06-execution.md
   07-review.md
   metrics.jsonl
+  report/                the explained report (§25): <phase>.json per phase, index.html built from them
   notes/                 detail that exceeds a file's cap — linked, never inlined
 ```
 
@@ -1588,3 +1589,31 @@ reply. It is where the user asks what an option implies or what the code does to
 answers the grill and is a separate conversation, so the grill's context stays clean. The grill's
 terminal stays one click away. A `kss-grill` from before app mode asks through its dialog and
 publishes no question; the app then shows the terminal with a notice to update the plugin.
+
+## 25. The explained report
+
+Every phase ends by explaining itself to a human: what it did and every decision it took or
+recorded, with the reason and the alternatives rejected. The artifacts hold all of it, but spread
+over a dozen files written for the next phase; the report is written for the person.
+
+**Content from the model, page from a script.** Before its commit, a phase writes
+`<features_root>/NNN-slug/report/<phase>.json` — `summary`, `did`, `decisions` (`id`, `title`,
+`decision`, `why`, `rejected`, `kind`, `status`, `source`), optional `highlights`, `open`, `risks`,
+`artifacts` — following `.kss/references/report.md`, which also says what each phase puts in it.
+It then runs `node .kss/scripts/report.mjs <features_root>/NNN-slug`, which validates every phase
+file (refusing one with the reason, so the phase fixes it) and rebuilds `report/index.html`: one
+self-contained page — no network, its own CSP — with the track, an overview timeline, each phase
+(`#phase-<name>`), and all decisions together, searchable and filterable by kind. Cost per phase
+comes from `metrics.jsonl` and the Next line from the README; the model writes neither. The model
+spends a few hundred tokens of JSON per phase; the look never drifts.
+
+**Language.** The report is written in `conversation_language` (§1), not `docs_language`: it
+explains the run to the person running it. The page's own labels follow the report's `lang`
+(English, Portuguese and Spanish built in; English otherwise).
+
+**Safety.** Report text is model-written and quotes the repository, so the page embeds it as
+escaped JSON and builds every element with `textContent` — nothing in a report becomes markup.
+
+`report/` is committed with the phase's artifacts. A project set up before reports has no
+`report.mjs`; its phases skip the step and say to run `kss-init` again. kss-desktop shows the
+page in the session's **Report** view and opens it on the phase that just finished (§24).

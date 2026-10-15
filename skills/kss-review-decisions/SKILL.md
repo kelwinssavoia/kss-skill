@@ -118,6 +118,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/review-decisions.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): review-decisions"`. Then
@@ -134,6 +139,7 @@ Reopened: <ids or none>
 Overridden: <AD-id → D-id, …, or none>
 Open for the grill: <n>
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-review-decisions
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after review-decisions>
 ```
@@ -155,7 +161,8 @@ spec; run after the spec, at the spec again — it rewrites only the affected FR
 - Nothing is ever deleted — statuses change in place.
 - The skill is optional and may run after the grill or the spec; then the README records
   `decisions changed after spec: AD-xx → D-yy` and only the affected FRs are rewritten later.
-- Write only `auto-decisions.md`, `02-decisions.md` and the Decisions block of `README.md`.
+- Write only `auto-decisions.md`, `02-decisions.md`, `report/review-decisions.json` (+ `report/index.html`) and the Decisions block of `README.md`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/review-decisions.json` per `.kss/references/report.md`, then `report.mjs`.

@@ -47,6 +47,9 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
             {(b?.phase === 'grill' || b?.nextPhase === 'grill' || view === 'grill') && (
               <button className={view === 'grill' ? 'on' : ''} onClick={() => onView('grill')} title="Answer the grill's questions with a click, with a side chat to ask about each">Grill</button>
             )}
+            {session.report && (
+              <button className={view === 'report' ? 'on' : ''} onClick={() => onView('report')} title="What each phase did and every decision, explained">Report</button>
+            )}
             <button className={view === 'qa' ? 'on' : ''} onClick={() => onView('qa')} title="Blind acceptance test: plan, environment, scenarios, live browser">QA</button>
           </div>
         )}
