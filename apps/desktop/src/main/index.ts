@@ -12,6 +12,7 @@ import { reportOf, reportUrl, SCHEME, servable } from './report.ts'
 import { holder, imageData, qaInfo } from './qa.ts'
 import { sessionBoard } from './board.ts'
 import { loginEnv, which } from './env.ts'
+import { executeOverview } from './execute.ts'
 import { inspectTicket } from './inspector.ts'
 import { loadPrefs, savePrefs, withBypass, withHarness, withRecent } from './prefs.ts'
 import { createSession, detectProject, featureOfBranch, projectWorktrees, removeSession } from './project.ts'
@@ -19,6 +20,10 @@ import { createTerminal, killAll, killTerminal, liveTerminals, resizeTerminal, s
 import { claudeConversationExists, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
 const POLL_MS = 1500
+
+// A second copy (development, a test) keeps its prefs and saved tabs apart from the installed
+// app's: sharing tabs.json would resume the other copy's conversations a second time.
+if (process.env.KSS_USER_DATA) app.setPath('userData', process.env.KSS_USER_DATA)
 
 let win: BrowserWindow | null = null
 let project: ProjectInfo | null = null
@@ -182,6 +187,12 @@ function handlers() {
     await removeSession(project, path, force)
     saveTabs(tabsFile(), withoutSession(loadTabs(tabsFile()), path))
     void poll()
+  })
+  ipcMain.handle('execute:overview', async (_e, session: string) => {
+    const s = sessionBoard(session, null)
+    const feature = s.feature
+    if (!feature || !s.board || !s.featureDir) return null
+    return executeOverview(session, s.featureDir, s.board)
   })
   ipcMain.handle('ticket:inspect', (_e, session: string, feature: string, id: string) => inspectTicket(session, featureDirOf(session, feature), feature, id))
   ipcMain.handle('term:create', async (_e, spec: TerminalSpec) => {

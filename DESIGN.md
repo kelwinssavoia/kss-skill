@@ -1590,6 +1590,31 @@ answers the grill and is a separate conversation, so the grill's context stays c
 terminal stays one click away. A `kss-grill` from before app mode asks through its dialog and
 publishes no question; the app then shows the terminal with a notice to update the plugin.
 
+### 24.8 Following an execute
+
+A run of `kss-execute` prints a great deal, most of it the coordinator's bookkeeping. The
+**Execute** view (opened by itself when the app starts the phase) shows the run instead, from the
+files execute already writes and the subagents' own transcripts — the terminal stays one click
+away:
+
+- **Progress**: integrated / total, the count per state, elapsed time and tokens, the latest
+  `execution.last`, and the critical path with each ticket's state.
+- **Now**: one card per ticket being implemented, reviewed or sent back — its Goal (what it
+  implements), the agent on it (executor, reviewer or integrator, from Claude Code's
+  `agent-*.meta.json`; a cross-harness CLI is the executor), turns against the estimate, tokens,
+  its last words in its own voice and its last command, the diff so far against the feature
+  branch, and the ticket's latest log event. An implementing ticket shows its executor even when
+  the reviewer that sent it back is newer.
+- **Plan**: the tickets by dependency wave (`Blocked by` depth in `graph.md`, ranges such as
+  `01–13` expanded).
+- **Coordinator log**: `06-execution.md`'s events as sentences, coloured by outcome.
+- **Detail** of the selected ticket: goal, its own timeline, the agent's last steps, and the
+  inspector (§24.4) for the full diff and transcript.
+
+Messages the coordinator sends a running agent are shown as such, never as the agent's words;
+harness reminders are dropped. Every git read the app makes takes no optional locks, since it
+polls worktrees that agents are committing in.
+
 ## 25. The explained report
 
 Every phase ends by explaining itself to a human: what it did and every decision it took or

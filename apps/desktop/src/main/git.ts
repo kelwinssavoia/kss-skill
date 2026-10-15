@@ -1,4 +1,6 @@
 // Thin git helpers. Every call is `git -C <cwd> …` with execFile — no shell, no quoting.
+// Reads never take optional locks: the app polls worktrees that agents are committing in, and a
+// `git diff` that refreshed the index would race them for `index.lock`.
 
 import { execFile } from 'node:child_process'
 
@@ -6,7 +8,7 @@ export type GitResult = { ok: boolean; stdout: string; stderr: string }
 
 export function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<GitResult> {
   return new Promise(resolve => {
-    execFile('git', ['-C', cwd, ...args], { env: env ?? process.env, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile('git', ['--no-optional-locks', '-C', cwd, ...args], { env: env ?? process.env, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
       resolve({ ok: !err, stdout: String(stdout), stderr: String(stderr) })
     })
   })

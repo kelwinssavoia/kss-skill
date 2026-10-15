@@ -95,7 +95,8 @@ export type SavedTab = {
   createdAt: string
 }
 
-export type ActivityEntry = { at: string | null; kind: 'prompt' | 'text' | 'tool' | 'result'; text: string }
+/** `prompt` the brief, `message` anything sent to the agent later (the coordinator), `text` the agent's own words. */
+export type ActivityEntry = { at: string | null; kind: 'prompt' | 'message' | 'text' | 'tool' | 'result'; text: string }
 
 export type TicketObjective = {
   file: string | null
@@ -196,3 +197,51 @@ export type QaInfo = {
 }
 
 export type QaFrame = { session: string; scenario: string; data: string }
+
+// ── Execute view (DESIGN.md §24.8) ──────────────────────────────────────────────────────────────
+
+export type ExecState = 'blocked' | 'ready' | 'running' | 'reviewing' | 'rejected' | 'integrated'
+
+/** What a ticket's current subagent is doing, read from its transcript. */
+export type ExecAgent = {
+  role: 'executor' | 'reviewer' | 'integrator'
+  turns: number
+  tokens: number
+  model: string | null
+  updatedAt: string | null
+  /** The last thing it said it is doing, in its own words. */
+  saying: string | null
+  /** Its last tool call, described. */
+  doing: string | null
+  recent: ActivityEntry[]
+}
+
+export type ExecTicket = {
+  id: string
+  title: string | null
+  state: string
+  tier: string | null
+  est: number | null
+  blockedBy: string[]
+  startedAt: string | null
+  /** The ticket's Goal, cut short: what is being implemented. */
+  goal: string | null
+  agent: ExecAgent | null
+  diff: { files: number; added: number; deleted: number; uncommitted: number } | null
+  events: { at: string; event: string; detail: string }[]
+}
+
+export type ExecOverview = {
+  feature: string
+  phaseStartedAt: string | null
+  integrated: number
+  total: number
+  criticalPath: string[]
+  last: string | null
+  tokens: number | null
+  tickets: ExecTicket[]
+  /** Tickets by dependency depth: wave 1 needs nothing, wave n needs something from wave n-1. */
+  waves: string[][]
+  log: { at: string; ticket: string | null; event: string; detail: string }[]
+}
+

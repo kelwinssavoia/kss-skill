@@ -22,6 +22,8 @@ npm run install-app  # build KSS.app (dist/) and install it in /Applications, ad
 npm run icon       # re-render build/icon.png and icon.icns after editing build/icon.svg
 ```
 
+A second copy (e.g. testing a change while the installed app is in the middle of a run) should keep its own data: `KSS_USER_DATA=/tmp/kss-dev npx electron .` — sharing `tabs.json` would resume the other copy's conversations again.
+
 `claude` and/or `codex` must be on the `PATH` of your login shell. The app resolves that
 environment once at start-up, because an app launched from the Dock does not inherit it.
 
@@ -33,6 +35,7 @@ environment once at start-up, because an app launched from the Dock does not inh
 | **Sessions** | **New session** creates a worktree in `<parent>/<repo>.kss-sessions/<slug>`, detached at `base_branch`, copies `.kss/config.local.json` and the root `.env*`, and starts `kss-clarify <request>` there. Clarify creates the feature branch. Sessions run in parallel; each has its own `.kss/current` |
 | **Phases** | **Run / Resume** the README's `Next:` in Claude or Codex — a fresh process, what `/clear` + the command is in a terminal. The harness chosen per phase is remembered per project |
 | **Chats and shells** | **Claude chat**, **Codex chat** and **Terminal** open in the session's worktree |
+| **Execute** | Follow a run without the terminal: progress, what each ticket implements, what its agent says and does now, the diff so far, waves and the coordinator log in plain words (DESIGN.md §24.8) |
 | **Report** | Each phase explains itself in `report/<phase>.json` (DESIGN.md §25); `report.mjs` builds one interactive page per feature, and the app opens it on the phase that just finished |
 | **Bypass permissions** | A switch in the sidebar, on by default: new chats and phases start with `--dangerously-skip-permissions` (Claude) or `--dangerously-bypass-approvals-and-sandbox` (Codex); their tab shows ⚡ |
 | **Board** | The kss-ui model (`mods/kss-ui/hooks/kss.ts`, imported): phases of the track, grill queue, tickets with turns vs estimate, the execution log, tokens |

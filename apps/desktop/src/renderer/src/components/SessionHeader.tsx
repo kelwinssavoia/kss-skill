@@ -44,6 +44,9 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
         {session.feature && (
           <div className="seg view-seg">
             <button className={view === 'terminals' ? 'on' : ''} onClick={() => onView('terminals')}>Terminals</button>
+            {(b?.phase === 'execute' || b?.nextPhase === 'execute' || (b?.tickets.length ?? 0) > 0 || view === 'execute') && (
+              <button className={view === 'execute' ? 'on' : ''} onClick={() => onView('execute')} title="Follow the run: progress, what each ticket implements, what its agent is doing">Execute</button>
+            )}
             {(b?.phase === 'grill' || b?.nextPhase === 'grill' || view === 'grill') && (
               <button className={view === 'grill' ? 'on' : ''} onClick={() => onView('grill')} title="Answer the grill's questions with a click, with a side chat to ask about each">Grill</button>
             )}
