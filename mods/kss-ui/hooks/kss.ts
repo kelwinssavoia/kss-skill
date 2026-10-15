@@ -257,7 +257,8 @@ export function withPending(b: KssBoard | null, pending: KssPending | null): Kss
 /** A Next line as a command to run: `/kss-tickets 048-x` → `{ command: 'kss-tickets', args: '048-x' }`. */
 export function commandOf(next: string | null): { command: string; args: string } | null {
   const m = next ? /^\/([\w:-]+)\s*(.*)$/.exec(next.trim()) : null
-  return m ? { command: m[1]!, args: m[2]!.trim() } : null
+  // `(optional first: …)` and a loop back's `(then: …)` are advice, not arguments (DESIGN.md §3.9).
+  return m ? { command: m[1]!, args: m[2]!.replace(/\s*\((?:optional first|then):[^)]*\)\s*/g, ' ').trim() } : null
 }
 
 // ── Live execution ────────────────────────────────────────────────────────────────────────────

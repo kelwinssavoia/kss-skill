@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { appArgs, launchOf } from '../shared/commands.ts'
-import { marks } from '../shared/board.ts'
+import { appArgs, launchOf, parseNext } from '../shared/commands.ts'
+import { marks, thenOf } from '../shared/board.ts'
 import type { SavedTab } from '../shared/types.ts'
 import { claudeConversationExists, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
@@ -77,4 +77,14 @@ test('a finished phase reads as done, and the phase Next names as waiting', () =
   const b = { phases: [...phases], isClosed: false, isPhaseFinished: true, nextPhase: 'grill' }
   assert.deepEqual(marks(b).map(p => p.mark), ['done', 'done', 'next'])
   assert.deepEqual(marks({ ...b, isPhaseFinished: false }).map(p => p.mark), ['done', 'current', 'todo'])
+})
+
+test('a loop back: the earlier phase is the one waiting, the running one is not done, and it runs with its tickets', () => {
+  const phases = [{ name: 'execute', mark: 'done' }, { name: 'review', mark: 'current' }, { name: 'docs-tech', mark: 'todo' }] as const
+  const b = { phases: [...phases], isClosed: false, isPhaseFinished: true, nextPhase: 'execute' }
+  assert.deepEqual(marks(b).map(p => p.mark), ['next', 'current', 'todo'])
+  const line = '/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)'
+  assert.deepEqual(parseNext(line), { phase: 'execute', args: '061-x --ticket 15 --ticket 16' })
+  assert.equal(thenOf(line), 'review')
+  assert.equal(thenOf('/kss-review 061-x (optional first: /kss-qa 061-x)'), null)
 })

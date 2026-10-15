@@ -42,6 +42,11 @@ test('a bare Next line (no backticks) is read up to its note', () => {
   expect(parseReadme(README).next).toBe('/kss-grill 012-batch-cutoff')
 })
 
+test('a Next line runs as its command; the advice in parentheses is not an argument', () => {
+  expect(commandOf('/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')).toEqual({ command: 'kss-execute', args: '061-x --ticket 15 --ticket 16' })
+  expect(commandOf('/kss-review 061-x (optional first: /kss-qa 061-x)')).toEqual({ command: 'kss-review', args: '061-x' })
+})
+
 test('an off-track phase is shown in its place', () => {
   expect(phases('M', 'grill', false).map(p => p.name).slice(0, 3)).toEqual(['clarify', 'investigate', 'grill'])
 })

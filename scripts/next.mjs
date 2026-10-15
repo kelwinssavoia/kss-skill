@@ -6,6 +6,10 @@
 //       print the `Next:` line a skill ends with, for the feature's size (read from README.md)
 //   node .kss/scripts/next.mjs <feature-dir> --check <phase>
 //       print `on-track`, `optional` or `off-track` for running <phase> on this feature
+//   node .kss/scripts/next.mjs <feature-dir> --back <phase> [--ticket NN …] --then <phase>
+//       a phase that needs an earlier one again (review or qa opening fix tickets → execute):
+//       `Next: /kss-execute NNN-slug --ticket 15 --ticket 16 (then: /kss-review NNN-slug)`.
+//       When that phase ends, its `--after` returns to the `then` phase instead of the track.
 //
 // How a phase is invoked is the one harness-specific thing in the line: `/kss-spec` in Claude Code,
 // `$kss-spec` in Codex (DESIGN.md §19). `--harness` forces it; otherwise it is detected.
@@ -48,9 +52,9 @@ export const TRACK_LINE = {
   L: 'clarify → investigate → grill → spec → plan → tickets → execute → review → docs-tech → docs-product',
 }
 
-/** `{ size, state, feature }` from the README header, or nulls for what is missing. */
+/** `{ size, state, feature, next }` from the README header, or nulls for what is missing. */
 export function readHeader(dir) {
-  const out = { size: null, state: null, feature: null }
+  const out = { size: null, state: null, feature: null, next: null }
   try {
     const p = join(dir, 'README.md')
     if (!existsSync(p)) return out
@@ -61,6 +65,8 @@ export function readHeader(dir) {
     if (size) out.size = size[1]
     if (state) out.state = state[1]
     if (title) out.feature = title[1]
+    const line = /^\*\*Next:\*\*[ \t]*(.*)$/m.exec(text)?.[1]
+    if (line) out.next = ((/^`([^`]+)`/.exec(line.trim())?.[1]) ?? line.replace(/<!--.*$/, '')).trim() || null
   } catch {
     /* fall through with nulls */
   }
@@ -88,13 +94,36 @@ export function nextPhase(size, after, opts = {}) {
   return TRACKS[size].find((p) => ORDER.indexOf(p) > pos) || null
 }
 
+/**
+ * A loop back: the Next line runs an earlier phase again, with its arguments, and names the phase
+ * that asked for it, which the loop returns to (DESIGN.md §3.9).
+ */
+export function backLine(phase, feature, opts = {}) {
+  if (!ORDER.includes(phase)) throw new Error(`unknown phase ${phase}`)
+  if (opts.then && !ORDER.includes(opts.then)) throw new Error(`unknown phase ${opts.then}`)
+  const id = feature || 'NNN-slug'
+  const p = PREFIX[opts.harness] || '/'
+  const extra = (opts.tickets ?? []).map((t) => ` --ticket ${String(t).padStart(2, '0')}`).join('')
+  return `Next: ${p}kss-${phase} ${id}${extra}${opts.then ? ` (then: ${p}kss-${opts.then} ${id})` : ''}`
+}
+
+/** The `then` phase of a loop back the README's Next line holds for `phase`, if any. */
+export function pendingReturn(next, phase) {
+  if (!next) return null
+  const m = /^[/$](?:kss:)?kss-([a-z-]+)\b.*\(then:\s*[/$](?:kss:)?kss-([a-z-]+)\b[^)]*\)/.exec(next)
+  return m && m[1] === phase && ORDER.includes(m[2]) ? m[2] : null
+}
+
 /** How a phase is typed, per harness: `/kss-spec` here, `$kss-spec` there (DESIGN.md §19). */
 export const PREFIX = { 'claude-code': '/', codex: '$' }
 
 export function nextLine(size, after, feature, opts = {}) {
-  const next = nextPhase(size, after, opts)
   const id = feature || 'NNN-slug'
   const p = PREFIX[opts.harness] || '/'
+  // A loop back ends where it was opened: the fix tickets done, the review (or qa) runs again.
+  const back = pendingReturn(opts.readmeNext, after)
+  if (back) return `Next: ${p}kss-${back} ${id}`
+  const next = nextPhase(size, after, opts)
   if (next) {
     let line = `Next: ${p}kss-${next} ${id}`
     if (next === 'grill' && size === 'L' && Number(opts.auto) > 0) {
@@ -135,7 +164,7 @@ async function main() {
   const argv = process.argv.slice(2)
   const dir = argv[0] && !argv[0].startsWith('--') ? argv[0] : null
   if (!dir) {
-    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] [--harness <name>] | --check <phase>')
+    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] [--harness <name>] | --check <phase> | --back <phase> [--ticket NN …] --then <phase>')
     process.exit(1)
   }
   const h = readHeader(dir)
@@ -152,6 +181,21 @@ async function main() {
     process.stdout.write(check(h.size, checkPhase) + '\n')
     return
   }
+  const back = arg(argv, '--back')
+  if (back) {
+    if (!ORDER.includes(back)) {
+      console.error(`next.mjs: unknown phase ${back}`)
+      process.exit(1)
+    }
+    const then = arg(argv, '--then')
+    if (then && !ORDER.includes(then)) {
+      console.error(`next.mjs: unknown phase ${then}`)
+      process.exit(1)
+    }
+    const tickets = argv.flatMap((a, i) => (a === '--ticket' && /^\d{1,2}$/.test(argv[i + 1] ?? '') ? [argv[i + 1]] : []))
+    process.stdout.write(backLine(back, h.feature, { tickets, then, harness: await resolveHarness(argv) }) + '\n')
+    return
+  }
   const after = arg(argv, '--after')
   if (!after || !ORDER.includes(after)) {
     console.error(`next.mjs: --after must be one of ${ORDER.join(', ')}`)
@@ -161,6 +205,7 @@ async function main() {
     auto: arg(argv, '--auto'),
     escalate: arg(argv, '--escalate'),
     state: h.state,
+    readmeNext: h.next,
     harness: await resolveHarness(argv),
   }
   process.stdout.write(nextLine(h.size, after, h.feature, opts) + '\n')

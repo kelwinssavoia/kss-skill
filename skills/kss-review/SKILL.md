@@ -91,9 +91,17 @@ this phase keeps up to date afterwards.
    `D-`/`AD-`, or have the user override it via `kss-review-decisions` and *then* fix it, with
    the spec marked for revision in the README.
 5. **Fix.** Write the fix tickets into `05-tickets/`, numbered after the last existing ticket,
-   grouped by file, and run them through `kss-execute NNN-slug --ticket NN`. Every gate applies
+   grouped by file; they run through `kss-execute NNN-slug --ticket NN …`, where every gate applies
    — report shape, commit order (test committed first), reviewer verdict, integration; the tests
    themselves run only in the coordinator's single run after integration.
+   **The loop back** (DESIGN.md §3.9): `kss-execute` is started by the user only — its skill cannot
+   be invoked by a model, so never try, and never reproduce its work by other means. Write the fix
+   tickets, add them to `05-tickets/graph.md`, commit them (`docs(NNN): review round <n> fix tickets`), then
+   set the README header's `**Next:**` to the output of
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then review`
+   and print that line as the last line of the turn. The board and kss-desktop show it as the next
+   step; when execute ends, its Next returns to `review` by itself.
+   The round ends there; steps 6–7 run in the next round, once the fix tickets are integrated.
 6. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.
@@ -214,7 +222,8 @@ with `Watching PR <url> — next check in <n>m.`
 - The triage table is printed and confirmed in exactly one turn.
 - A finding contradicting a decision is disputed or overridden, never silently fixed.
 - Fix tickets are numbered after the last ticket, grouped by file, executed via `kss-execute`
-  with all the gates.
+  with all the gates — started by the user from the Next line (`--back execute … --then review`),
+  never invoked by this skill.
 - Resolve only the threads that were fixed or answered; disputes and deferrals stay open.
 - Push only to the PR branch, never to `base_branch`.
 - `--watch` uses whatever the adapter names, never a polling subagent; it dies with the session and
