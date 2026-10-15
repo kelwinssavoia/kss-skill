@@ -42,6 +42,12 @@ test('a bare Next line (no backticks) is read up to its note', () => {
   expect(parseReadme(README).next).toBe('/kss-grill 012-batch-cutoff')
 })
 
+test('the graph is the table under its own header; a later table with ticket rows is ignored', () => {
+  const g = parseGraph('| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |\n| --- | --- | --- | --- | --- | --- | --- |\n| 05 | Write path | service | 01, 03 | T3 | 45 | yes |\n\n## Projection\n\n| # | Turns | Model |\n| 05 | 6 | — | x | y | z |\n')
+  expect(g['05']).toEqual({ title: 'Write path', blockedBy: ['01', '03'], tier: 'T3', est: 45 })
+  expect(parseGraph('| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |\n| 14 | Integration | integration | 01–03 | T4 | 30 | yes |\n')['14']!.blockedBy).toEqual(['01', '02', '03'])
+})
+
 test('an off-track phase is shown in its place', () => {
   expect(phases('M', 'grill', false).map(p => p.name).slice(0, 3)).toEqual(['clarify', 'investigate', 'grill'])
 })

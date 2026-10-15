@@ -2,7 +2,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
-import type { Harness, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
+import type { ExecOverview, Harness, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
 
 const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
   const h = (_e: unknown, ...args: unknown[]) => fn(...(args as A))
@@ -21,6 +21,7 @@ const api = {
   createSession: (request: string): Promise<string> => ipcRenderer.invoke('sessions:create', request),
   removeSession: (path: string, force: boolean): Promise<void> => ipcRenderer.invoke('sessions:remove', path, force),
   inspect: (session: string, feature: string, id: string): Promise<TicketInspection> => ipcRenderer.invoke('ticket:inspect', session, feature, id),
+  executeOverview: (session: string): Promise<ExecOverview | null> => ipcRenderer.invoke('execute:overview', session),
   createTerminal: (spec: TerminalSpec): Promise<TerminalInfo> => ipcRenderer.invoke('term:create', spec),
   write: (id: string, data: string) => ipcRenderer.send('term:write', id, data),
   resize: (id: string, cols: number, rows: number) => ipcRenderer.send('term:resize', id, cols, rows),

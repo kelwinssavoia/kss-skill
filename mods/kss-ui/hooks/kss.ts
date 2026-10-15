@@ -103,18 +103,42 @@ export function phases(size: string | null, phase: string, isClosed: boolean): K
   }))
 }
 
+/** `01, 03` → both; `01–13` (a range, as the integration ticket writes it) → every id in it. */
+function blockers(cell: string): string[] {
+  const out: string[] = []
+  for (const m of cell.matchAll(/(\d{2})(?:\s*[–—-]\s*(\d{2}))?/g)) {
+    const a = Number(m[1])
+    const b = m[2] ? Number(m[2]) : a
+    for (let i = a; i <= b && i - a < 100; i++) out.push(String(i).padStart(2, '0'))
+  }
+  return [...new Set(out)]
+}
+
 export type KssGraphRow = { title: string; blockedBy: string[]; tier: string | null; est: number | null }
 
-/** `05-tickets/graph.md`'s multi-agent table: `| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |`. */
+/**
+ * `05-tickets/graph.md`'s multi-agent table: `| # | Ticket | Layer | Blocked by | Tier | Est. turns | Worktree |`.
+ * Only rows under that header count: other tables in the file (a projection, a cost table) also
+ * start their rows with a ticket number, and must not overwrite the graph.
+ */
 export function parseGraph(text: string | null): Record<string, KssGraphRow> {
   const out: Record<string, KssGraphRow> = {}
+  let inGraph = false
   for (const line of (text ?? '').split('\n')) {
+    if (!line.trim().startsWith('|')) {
+      inGraph = false
+      continue
+    }
     const cells = line.split('|').slice(1, -1).map(c => c.trim())
-    if (cells.length < 6 || !/^\d{2}$/.test(cells[0]!)) continue
+    if (/^blocked by$/i.test(cells[3] ?? '')) {
+      inGraph = true
+      continue
+    }
+    if (!inGraph || cells.length < 6 || !/^\d{2}$/.test(cells[0]!) || out[cells[0]!]) continue
     const est = Number.parseInt(cells[5]!, 10)
     out[cells[0]!] = {
       title: cells[1] || '',
-      blockedBy: (cells[3]!.match(/\d{2}/g) ?? []).filter(id => id !== cells[0]),
+      blockedBy: blockers(cells[3]!).filter(id => id !== cells[0]),
       tier: /^T\d$/.test(cells[4]!) ? cells[4]! : null,
       est: Number.isFinite(est) ? est : null,
     }

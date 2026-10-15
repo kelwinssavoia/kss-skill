@@ -4,6 +4,7 @@ import { parseNext } from '../../shared/commands.ts'
 import type { Harness, Prefs, ProjectInfo, Session, TerminalInfo, TerminalSpec } from '../../shared/types.ts'
 import { api } from './api.ts'
 import { Board } from './components/Board.tsx'
+import { ExecutePanel } from './components/ExecutePanel.tsx'
 import { GrillPanel } from './components/GrillPanel.tsx'
 import { Inspector } from './components/Inspector.tsx'
 import { NewSession } from './components/NewSession.tsx'
@@ -15,7 +16,7 @@ import { TerminalTabs } from './components/TerminalTabs.tsx'
 import { Welcome } from './components/Welcome.tsx'
 import { dispose } from './terminals.ts'
 
-export type View = 'terminals' | 'grill' | 'qa' | 'report'
+export type View = 'terminals' | 'execute' | 'grill' | 'qa' | 'report'
 
 /** `focus: false` opens the terminal without making it the session's active tab. */
 export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string, opts?: { focus?: boolean }) => Promise<void>
@@ -96,6 +97,8 @@ export function App() {
         if (opts?.focus !== false) setActive(a => ({ ...a, [where]: info.id }))
         // The grill is answered in its panel.
         if (spec.kind === 'phase' && spec.phase === 'grill') setViews(v => ({ ...v, [where]: 'grill' }))
+        // So is execute: its terminal is one click away in the view.
+        if (spec.kind === 'phase' && spec.phase === 'execute') setViews(v => ({ ...v, [where]: 'execute' }))
         if (spec.kind === 'phase' && spec.phase && spec.harness) {
           await api.setHarness(spec.phase, spec.harness)
           setPrefs(await api.prefs())
@@ -181,11 +184,12 @@ export function App() {
           empty={session ? <EmptyTerminals session={session} project={project} onRun={run} harnessFor={harnessFor} /> : null}
           shown={view === 'terminals'}
         />
+        {session && <ExecutePanel session={session} terms={sessionTerms} visible={view === 'execute'} onInspect={setInspecting} />}
         {session && <GrillPanel project={project} session={session} board={session.board} terms={sessionTerms} onRun={run} harness={harnessFor('grill')} visible={view === 'grill'} />}
         {session && <QaPanel session={session} terms={sessionTerms} onRun={run} visible={view === 'qa'} />}
         {session && <ReportPanel session={session} phase={reportPhase[session.path] ?? null} visible={view === 'report'} />}
       </main>
-      {session?.board && view !== 'qa' && view !== 'report' && <Board board={session.board} onInspect={setInspecting} />}
+      {session?.board && view !== 'qa' && view !== 'report' && view !== 'execute' && <Board board={session.board} onInspect={setInspecting} />}
       {isCreating && <NewSession project={project} onCancel={() => setCreating(false)} onCreate={create} />}
       {inspecting && session?.feature && (
         <Inspector session={session.path} feature={session.feature} ticket={inspecting} board={session.board} onClose={() => setInspecting(null)} />

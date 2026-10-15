@@ -15,6 +15,25 @@ export const claudeSlug = (cwd: string) => cwd.replace(/[/.]/g, '-')
 
 const cut = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t)
 
+/** Harness-injected text in a user turn (reminders, hook output): never the agent's or the coordinator's words. */
+const isInjected = (t: string) => /^<(system-reminder|environment_context|user_instructions|permissions|command-|local-command)/.test(t)
+
+/**
+ * A shell command as a person would say it: the first line, without the `cd <worktree> &&` and
+ * `VAR=… &&` preamble every agent repeats, worktree paths made relative.
+ */
+export function tidyCommand(command: string): string {
+  let c = command.split('\n').find(l => l.trim()) ?? ''
+  const preamble = /^\s*(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)|[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*))\s*(?:&&|;)\s*/
+  for (let i = 0; i < 6 && preamble.test(c); i++) c = c.replace(preamble, '')
+  const wt = String.raw`/[^\s"']*/\.kss/worktrees/[^/\s"']+/\d{2}`
+  c = c
+    .replace(new RegExp(String.raw`(["'])${wt}/?([^"']*)\1`, 'g'), (_m, _q, rest) => `./${rest}`)
+    .replace(new RegExp(String.raw`${wt}/?`, 'g'), './')
+    .replace(/\$[A-Z_]+\//g, '')
+  return `$ ${c.trim()}`
+}
+
 const lines = (text: string) =>
   text.split('\n').flatMap(l => {
     if (!l) return []
@@ -55,7 +74,7 @@ export function parseClaude(text: string): Omit<TicketActivity, 'transcript' | '
     if (m.role === 'user') {
       if (typeof m.content === 'string' || (Array.isArray(m.content) && m.content.some((b: any) => b?.type === 'text'))) {
         const t = textOf(m.content).trim()
-        if (t) entries.push({ at, kind: entries.length ? 'text' : 'prompt', text: entries.length ? cut(t, 400) : t })
+        if (t && !isInjected(t)) entries.push({ at, kind: entries.length ? 'message' : 'prompt', text: entries.length ? cut(t, 400) : t })
       }
       continue
     }
@@ -71,7 +90,10 @@ export function parseClaude(text: string): Omit<TicketActivity, 'transcript' | '
     if (typeof m.model === 'string') model = m.model
     for (const b of Array.isArray(m.content) ? m.content : []) {
       if (b?.type === 'text' && typeof b.text === 'string' && b.text.trim()) entries.push({ at, kind: 'text', text: cut(b.text.trim(), 1200) })
-      else if (b?.type === 'tool_use') entries.push({ at, kind: 'tool', text: describeTool(String(b.name), b.input && typeof b.input === 'object' ? b.input : {}) })
+      else if (b?.type === 'tool_use') {
+        const input = b.input && typeof b.input === 'object' ? b.input : {}
+        entries.push({ at, kind: 'tool', text: b.name === 'Bash' && typeof input.command === 'string' ? cut(tidyCommand(input.command), 140) : describeTool(String(b.name), input) })
+      }
     }
   }
   return { turns, tokens, model, updatedAt, entries }
@@ -101,9 +123,9 @@ export function parseCodex(text: string): Omit<TicketActivity, 'transcript' | 'f
     if (p.type === 'message') {
       const t = textOf(p.content).trim()
       if (!t || (p.role !== 'user' && p.role !== 'assistant')) continue
-      if (p.role === 'user' && /^<(environment_context|user_instructions|permissions)/.test(t)) continue
+      if (p.role === 'user' && isInjected(t)) continue
       const isPrompt = p.role === 'user' && !entries.some(e => e.kind === 'prompt')
-      entries.push({ at, kind: isPrompt ? 'prompt' : 'text', text: isPrompt ? t : cut(t, 1200) })
+      entries.push({ at, kind: isPrompt ? 'prompt' : p.role === 'user' ? 'message' : 'text', text: isPrompt ? t : cut(t, 1200) })
     } else if (p.type === 'function_call' || p.type === 'custom_tool_call' || p.type === 'local_shell_call') {
       let args: Record<string, unknown> = {}
       try {
@@ -112,7 +134,7 @@ export function parseCodex(text: string): Omit<TicketActivity, 'transcript' | 'f
         /* free-form input: show the name only */
       }
       const cmd = Array.isArray(args.command) ? args.command.join(' ') : typeof args.cmd === 'string' ? args.cmd : typeof args.command === 'string' ? args.command : null
-      entries.push({ at, kind: 'tool', text: cmd ? cut(`$ ${cmd.split('\n')[0]}`, 80) : String(p.name ?? p.type) })
+      entries.push({ at, kind: 'tool', text: cmd ? cut(tidyCommand(cmd), 140) : String(p.name ?? p.type) })
     }
   }
   return { turns, tokens, model, updatedAt, entries }
