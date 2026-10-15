@@ -8,13 +8,14 @@ import { GrillPanel } from './components/GrillPanel.tsx'
 import { Inspector } from './components/Inspector.tsx'
 import { NewSession } from './components/NewSession.tsx'
 import { QaPanel } from './components/QaPanel.tsx'
+import { ReportPanel } from './components/ReportPanel.tsx'
 import { SessionHeader } from './components/SessionHeader.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { TerminalTabs } from './components/TerminalTabs.tsx'
 import { Welcome } from './components/Welcome.tsx'
 import { dispose } from './terminals.ts'
 
-export type View = 'terminals' | 'grill' | 'qa'
+export type View = 'terminals' | 'grill' | 'qa' | 'report'
 
 /** `focus: false` opens the terminal without making it the session's active tab. */
 export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string, opts?: { focus?: boolean }) => Promise<void>
@@ -30,6 +31,9 @@ export function App() {
   const [inspecting, setInspecting] = useState<string | null>(null)
   const [views, setViews] = useState<Record<string, View>>({})
   const [error, setError] = useState<string | null>(null)
+  const [reportPhase, setReportPhase] = useState<Record<string, string | null>>({})
+  // The report each session had when first seen; a newer one means a phase just finished.
+  const seenReports = useRef(new Map<string, number>())
 
   useEffect(() => {
     void api.prefs().then(setPrefs)
@@ -51,6 +55,18 @@ export function App() {
   useEffect(() => {
     if (project && !selected) setSelected(project.root)
   }, [project, selected])
+
+  // A phase that finishes writes its report: show it, on that phase.
+  useEffect(() => {
+    for (const s of sessions) {
+      const at = s.report?.updatedAt ?? 0
+      const seen = seenReports.current.get(s.path)
+      seenReports.current.set(s.path, at)
+      if (seen === undefined || at <= seen || !s.report) continue
+      setViews(v => ({ ...v, [s.path]: 'report' }))
+      setReportPhase(p => ({ ...p, [s.path]: s.report!.latest }))
+    }
+  }, [sessions])
 
   const session = sessions.find(s => s.path === selected) ?? null
   const sessionTerms = useMemo(() => terms.filter(t => t.cwd === selected), [terms, selected])
@@ -167,8 +183,9 @@ export function App() {
         />
         {session && <GrillPanel project={project} session={session} board={session.board} terms={sessionTerms} onRun={run} harness={harnessFor('grill')} visible={view === 'grill'} />}
         {session && <QaPanel session={session} terms={sessionTerms} onRun={run} visible={view === 'qa'} />}
+        {session && <ReportPanel session={session} phase={reportPhase[session.path] ?? null} visible={view === 'report'} />}
       </main>
-      {session?.board && view !== 'qa' && <Board board={session.board} onInspect={setInspecting} />}
+      {session?.board && view !== 'qa' && view !== 'report' && <Board board={session.board} onInspect={setInspecting} />}
       {isCreating && <NewSession project={project} onCancel={() => setCreating(false)} onCreate={create} />}
       {inspecting && session?.feature && (
         <Inspector session={session.path} feature={session.feature} ticket={inspecting} board={session.board} onClose={() => setInspecting(null)} />

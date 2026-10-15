@@ -164,6 +164,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/plan.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): plan"`. Then
@@ -180,6 +185,7 @@ Files: <n> create / <n> modify · entities: <n> · contracts: <n>
 New dependencies: <names, or none>
 Explorers: <n> (<n> deep)
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-plan
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after plan>
 ```
@@ -211,3 +217,4 @@ final context size, not what it consumed.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/plan.json` per `.kss/references/report.md`, then `report.mjs`.

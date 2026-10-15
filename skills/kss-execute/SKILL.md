@@ -281,6 +281,11 @@ reset to `ready`.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/execute.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): execute"`. Then
@@ -296,6 +301,7 @@ Tickets: <n>/<N> integrated · escalations: <n> · rejects: <n>
 Full suite: <command — result> (coordinator, run N of ≤2)
 PR: <url> → <base_branch> — not merged
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-execute
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after execute>
 ```
@@ -337,3 +343,4 @@ review and docs as optional.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/execute.json` per `.kss/references/report.md`, then `report.mjs`.

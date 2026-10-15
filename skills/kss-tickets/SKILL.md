@@ -284,6 +284,11 @@ Record the card ids in the Tickets block. If publishing fails, say so and contin
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/tickets.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): tickets"`. Then
@@ -300,6 +305,7 @@ Critical path: <NN → NN → NN> — <n> turns        (single-session: /clear p
 Parallel after contract: <NNs>
 Not scheduled (DF-): <FRs and owners, or none>
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-tickets
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after tickets>
 ```
@@ -341,3 +347,4 @@ tool displays.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/tickets.json` per `.kss/references/report.md`, then `report.mjs`.

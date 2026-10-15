@@ -29,6 +29,8 @@ const api = {
   restoreTabs: (session: string): Promise<TerminalInfo[]> => ipcRenderer.invoke('tabs:restore', session),
   onTermInfo: (fn: (t: TerminalInfo) => void) => on('term:info', fn),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
+  reportUrl: (file: string, version: number, phase: string | null): Promise<string | null> => ipcRenderer.invoke('report:url', file, version, phase),
+  openReport: (file: string): Promise<void> => ipcRenderer.invoke('report:open', file),
   qaInfo: (session: string, feature: string | null): Promise<QaInfo> => ipcRenderer.invoke('qa:info', session, feature),
   qaImage: (path: string): Promise<string | null> => ipcRenderer.invoke('qa:image', path),
   qaWatch: (session: string | null): Promise<void> => ipcRenderer.invoke('qa:watch', session),

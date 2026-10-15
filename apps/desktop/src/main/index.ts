@@ -1,12 +1,14 @@
 // kss-desktop main process: windows, IPC, and the poll that keeps every session's board fresh.
 
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron'
 
 import type { Harness, ProjectInfo, SavedTab, Session, TerminalInfo, TerminalSpec } from '../shared/types.ts'
 import { LiveView } from './live.ts'
+import { reportOf, reportUrl, SCHEME, servable } from './report.ts'
 import { holder, imageData, qaInfo } from './qa.ts'
 import { sessionBoard } from './board.ts'
 import { loginEnv, which } from './env.ts'
@@ -119,7 +121,7 @@ async function sessions(): Promise<Session[]> {
   ]
   return rows.map(r => {
     const s = sessionBoard(r.path, featureOfBranch(r.branch, project!.branchPrefix))
-    return { ...r, name: r.isProject ? project!.name : r.path.split('/').pop()!, feature: s.feature, board: s.board }
+    return { ...r, name: r.isProject ? project!.name : r.path.split('/').pop()!, feature: s.feature, board: s.board, report: reportOf(s.featureDir) }
   })
 }
 
@@ -205,6 +207,10 @@ function handlers() {
   ipcMain.handle('term:submit', (_e, id: string, text: string) => submitTerminal(id, text))
   ipcMain.handle('tabs:restore', (_e, session: string) => restoreTabs(session))
   ipcMain.handle('shell:reveal', (_e, path: string) => shell.showItemInFolder(path))
+  ipcMain.handle('report:url', async (_e, file: string, version: number, phase: string | null) => (servable(file, await sessionPaths()) ? reportUrl(file, version, phase) : null))
+  ipcMain.handle('report:open', async (_e, file: string) => {
+    if (servable(file, await sessionPaths())) await shell.openPath(file)
+  })
 }
 
 function createWindow() {
@@ -223,7 +229,19 @@ function createWindow() {
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 }
 
+// The report page runs its own script, so it is framed from its own origin, never the app's.
+protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true } }])
+
 app.whenReady().then(() => {
+  protocol.handle(SCHEME, async req => {
+    const file = new URL(req.url).searchParams.get('f') ?? ''
+    if (!servable(file, await sessionPaths())) return new Response('not a session report', { status: 404 })
+    try {
+      return new Response(readFileSync(file), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
+    } catch {
+      return new Response('report not found', { status: 404 })
+    }
+  })
   if (process.platform === 'darwin' && !app.isPackaged) app.dock?.setIcon(ICON)
   handlers()
   createWindow()

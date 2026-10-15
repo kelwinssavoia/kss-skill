@@ -31,7 +31,11 @@ export type Session = {
   isProject: boolean
   feature: string | null
   board: KssBoard | null
+  report: SessionReport | null
 }
+
+/** The feature's report/index.html (DESIGN.md §25): which phases explained themselves, the newest last. */
+export type SessionReport = { file: string; phases: string[]; latest: string | null; updatedAt: number }
 
 export type TerminalKind = 'shell' | 'chat' | 'phase' | 'qa'
 

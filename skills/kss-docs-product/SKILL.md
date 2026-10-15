@@ -110,6 +110,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/docs-product.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): docs-product"`. Then
@@ -131,6 +136,7 @@ Doc: <docs_root>/product/NNN-slug.md (<n> chars)
 Covers: <n> user stories · <n> rules · <n> not included
 Index: <docs_index> — line added under ## Product
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-docs-product
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after docs-product>
 ```
@@ -156,3 +162,4 @@ Print `Cost: n/a` when `metrics.jsonl` does not exist.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/docs-product.json` per `.kss/references/report.md`, then `report.mjs`.

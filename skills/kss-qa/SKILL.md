@@ -62,8 +62,12 @@ environment catalog) — never widen it, never add hints to the plan from what y
    An `inconclusive` or `blocked` scenario is shown with its note (Jev disagreed, low confidence,
    environment); offer `--only <id>` to re-run it. An adjustment is listed, not ticketed, unless
    the user asks.
-5. **Commit** `docs(NNN): qa <verdict lowercase>` with `<feature>/qa/` (plan, seed, report,
-   result, the run's evidence; service logs are gitignored).
+5. **Report** (DESIGN.md §25): explain this phase to a human before committing — write
+   `<features_root>/NNN-slug/report/qa.json` as `.kss/references/report.md` describes, every
+   string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+   and fix the file until it prints `report: …/index.html`. The commit carries `report/`.
+6. **Commit** `docs(NNN): qa <verdict lowercase>` with `<feature>/qa/` (plan, seed, report,
+   result, the run's evidence; service logs are gitignored) and `<feature>/report/`.
 
 ## Output
 
@@ -71,7 +75,8 @@ environment catalog) — never widen it, never add hints to the plan from what y
 QA NNN-slug — <APPROVED|REJECTED|INCONCLUSIVE> · run <id> · <n> scenarios · $<cost>
 <scenario table>
 Problems: <n> · Adjustments: <n> · Not UI-testable: <FR list>
-Report: <features_root>/NNN-slug/qa/report.md
+QA report: <features_root>/NNN-slug/qa/report.md
+Report: <features_root>/NNN-slug/report/index.html#phase-qa
 Next: <verbatim output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after qa>
 ```
 
@@ -88,3 +93,4 @@ Next: <verbatim output of node .kss/scripts/next.mjs <features_root>/NNN-slug --
 - This skill never merges, never pushes, and never fixes the application itself.
 - Terminal output follows `conversation_language`; the report follows `docs_language`. File
   names, headings, field names and identifiers stay English.
+- End with the phase report: `report/qa.json` per `.kss/references/report.md`, then `report.mjs`.

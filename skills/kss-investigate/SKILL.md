@@ -218,6 +218,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/investigate.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): investigate"`. Then
@@ -241,6 +246,7 @@ Decisions:
   Open · technical: <one line each>
   Decided inline: D-01…D-NN · deferred: <DF-ids or none>   (M — from the decision check)
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-investigate
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after investigate [--auto <n>] [--escalate grill]>
 ```
@@ -269,8 +275,9 @@ when the user answered `grill` in the decision check. On L the result is `kss-gr
   answer is never written as fact without its confidence next to it.
 - Every auto decision is written to `auto-decisions.md`; nothing there is ever deleted.
 - `01-investigation.md` is ≤12k chars; overflow goes to `notes/` and is linked.
-- Write only `01-investigation.md`, `auto-decisions.md` and the Investigation block of `README.md`.
+- Write only `01-investigation.md`, `auto-decisions.md`, `report/investigate.json` (+ `report/index.html`) and the Investigation block of `README.md`.
 - A size revision is recorded with its reason.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
+- End with the phase report: `report/investigate.json` per `.kss/references/report.md`, then `report.mjs`.

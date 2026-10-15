@@ -164,6 +164,11 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**Report** (DESIGN.md §25): explain this phase to a human before committing — write
+`<features_root>/NNN-slug/report/spec.json` as `.kss/references/report.md` describes, every
+string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
 .kss/config.md && git commit -m "docs(NNN): spec"`. Then
@@ -179,6 +184,7 @@ FRs: <n> · NFRs: <n> · stories: <n> · seams: <n> (<n> new)
 Open items: <DF- ids, or none>
 Warnings: <n>   Errors: <n>
 Cost: <line rendered from metrics.jsonl>
+Report: <features_root>/NNN-slug/report/index.html#phase-spec
 Safe to /clear.
 Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after spec>
 ```
@@ -207,3 +213,4 @@ what it consumed.
   conversation's language). File names, headings, field names and identifiers stay English.
 - Nothing is ever deleted on revision — old FRs are rewritten in place, changes recorded under
   `## Revision N`.
+- End with the phase report: `report/spec.json` per `.kss/references/report.md`, then `report.mjs`.
