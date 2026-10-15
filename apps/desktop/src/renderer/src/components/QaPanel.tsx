@@ -9,7 +9,7 @@ import { api } from '../api.ts'
 import { exitCode } from '../terminals.ts'
 import { Pane } from './TerminalTabs.tsx'
 
-const ICON: Record<string, string> = { pass: '✓', fail: '✗', blocked: '⛔', inconclusive: '?', info: 'i' }
+const ICON: Record<string, string> = { pass: '✓', fail: '✗', blocked: '⛔', environment: '🧰', inconclusive: '?', info: 'i' }
 
 function Badge({ value }: { value: string | null }) {
   return value ? <span className={`qa-badge ${value}`}>{ICON[value] ?? ''} {value}</span> : <span className="qa-badge none">not run</span>

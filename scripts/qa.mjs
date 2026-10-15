@@ -2,6 +2,7 @@
 // qa.mjs — kss-qa: a blind, browser-driven acceptance test of one feature (DESIGN.md §22).
 //
 //   node .kss/scripts/qa.mjs plan   [--feature <NNN-slug>] [--force]   blind planner → <feature>/qa/ plan + seed
+//   node .kss/scripts/qa.mjs audit  [--feature …] [--force]            sighted auditor aligns seed + stubs with the code's reads
 //   node .kss/scripts/qa.mjs up     [--feature …]                      infra, migrations, Keycloak users, seed, services
 //   node .kss/scripts/qa.mjs run    [--feature …] [--only S-01,S-02]   blind browser driver, one scenario at a time
 //   node .kss/scripts/qa.mjs judge  [--feature …] [--run <id>]         Jev verdict per scenario (jev.mjs judge)
@@ -24,12 +25,13 @@
 import { spawn, spawnSync } from 'node:child_process'
 import {
   existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, readdirSync, copyFileSync,
-  openSync, appendFileSync, rmSync, statSync,
+  openSync, appendFileSync, rmSync, statSync, realpathSync,
 } from 'node:fs'
 import { join, dirname, resolve, relative, basename } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer, connect } from 'node:net'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const lib = await (async () => {
@@ -59,8 +61,12 @@ export const DEFAULTS = {
     request_fallback_sections: ['Problem'],
     sections: ['Problem', 'Solution', 'User stories', 'Decisions', 'Functional requirements', 'Layout', 'Out of scope'],
   },
-  models: { planner: 'sonnet', driver: 'haiku' },
-  limits: { planner_turns: 80, planner_timeout_s: 1500, driver_turns: 60, driver_timeout_s: 900, seed_repairs: 2, max_budget_usd: null },
+  models: { planner: 'sonnet', driver: 'haiku', auditor: 'sonnet' },
+  limits: {
+    planner_turns: 80, planner_timeout_s: 1500, driver_turns: 60, driver_timeout_s: 900, seed_repairs: 2,
+    audit_turns: 150, audit_timeout_s: 1800, max_budget_usd: null,
+  },
+  audit: { enabled: true },
   ready_timeout_s: 600,
   compose: { files: ['docker-compose.yaml'], project: 'kss-qa', services: [], down_volumes: true },
   databases: {},
@@ -68,8 +74,10 @@ export const DEFAULTS = {
   env: { files: ['.env'], overrides: {} },
   prepare: [],
   services: {},
+  stubs: {},
   apps: {},
   environment_notes: '',
+  recipes_file: '.kss/qa/recipes.md',
   browser: { chrome: '', headless: true, width: 1440, height: 900 },
 }
 
@@ -144,12 +152,23 @@ export function buildServiceEnv(cwd, cfg, base = process.env) {
   return env
 }
 
-/** Dependency closure of `names` in the catalog, as start levels (deps first). Throws on unknown or cycle. */
+/**
+ * Dependency closure of `names` in the catalog, as start levels (deps first). Throws on unknown or
+ * cycle. `requires` both pulls a service in and orders it first; `uses` only pulls it in — for a
+ * runtime call with no start order, which may be mutual (A calls B and B calls A over lazy clients).
+ */
 export function serviceLevels(catalog, names) {
+  const closure = new Set()
+  const collect = (n) => {
+    if (!catalog[n]) throw new Error(`unknown service "${n}" (not in ${QA_CONFIG} services)`)
+    if (closure.has(n)) return
+    closure.add(n)
+    for (const d of [...(catalog[n].requires || []), ...(catalog[n].uses || [])]) collect(d)
+  }
+  names.forEach(collect)
   const depth = {}
   const visiting = new Set()
   const visit = (n) => {
-    if (!catalog[n]) throw new Error(`unknown service "${n}" (not in ${QA_CONFIG} services)`)
     if (depth[n] !== undefined) return depth[n]
     if (visiting.has(n)) throw new Error(`service dependency cycle at "${n}"`)
     visiting.add(n)
@@ -158,7 +177,7 @@ export function serviceLevels(catalog, names) {
     visiting.delete(n)
     return depth[n]
   }
-  names.forEach(visit)
+  closure.forEach(visit)
   const levels = []
   for (const [n, d] of Object.entries(depth)) (levels[d] ||= []).push(n)
   return levels.map((l) => l.sort())
@@ -221,6 +240,7 @@ export function validatePlan(plan, cfg, frIds = []) {
     if (!Array.isArray(s.expected) || !s.expected.length) errs.push(`${s.id}: no expected outcomes`)
     if (!Array.isArray(s.steps) || !s.steps.length) errs.push(`${s.id}: no steps`)
   }
+  for (const name of Object.keys(plan.provider_state || {})) if (!(cfg.stubs || {})[name]) errs.push(`provider_state for "${name}", which is not a stub in the catalog`)
   for (const [db, file] of Object.entries(plan.seed || {})) {
     if (!cfg.databases[db]) errs.push(`seed for unknown database "${db}"`)
     if (typeof file !== 'string' || !file.startsWith('seed/')) errs.push(`seed path for ${db} must be under seed/`)
@@ -256,13 +276,81 @@ export function buildDriverPrompt(template, { scenario, persona, app, requiremen
   })
 }
 
-/** Final status of one scenario from the driver's own verdict and Jev's gated answer (or null). */
-export function combine(driverStatus, judged) {
+/**
+ * Final status of one scenario from the driver's own verdict, Jev's gated answer (or null) and the
+ * environment problems its service logs showed (`triageLogs`). A blocked scenario whose logs show
+ * the environment breaking is `environment`, not a product finding; a fail during such a break is
+ * `inconclusive` — the screen may be wrong because a dependency was missing, not because of the code.
+ */
+export function combine(driverStatus, judged, environment = []) {
   const driver = ['pass', 'fail', 'blocked'].includes(driverStatus) ? driverStatus : 'blocked'
-  if (!judged) return { final: driver, note: 'not judged by Jev — driver verdict stands' }
-  if (judged.verdict !== 'auto') return { final: 'inconclusive', note: `Jev below threshold (${judged.confidence} < ${judged.threshold}), leaning ${judged.choice}` }
-  if (judged.choice !== driver) return { final: 'inconclusive', note: `driver says ${driver}, Jev says ${judged.choice} (${judged.confidence})` }
-  return { final: driver, note: `driver and Jev agree (${judged.confidence})` }
+  let base
+  if (!judged) base = { final: driver, note: 'not judged by Jev — driver verdict stands' }
+  else if (judged.verdict !== 'auto') base = { final: 'inconclusive', note: `Jev below threshold (${judged.confidence} < ${judged.threshold}), leaning ${judged.choice}` }
+  else if (judged.choice !== driver) base = { final: 'inconclusive', note: `driver says ${driver}, Jev says ${judged.choice} (${judged.confidence})` }
+  else base = { final: driver, note: `driver and Jev agree (${judged.confidence})` }
+  if (!environment.length) return base
+  const what = environment.map((e) => e.detail).join('; ')
+  if (driver === 'pass') return { ...base, note: `${base.note} · environment warnings: ${what}` }
+  if (driver === 'blocked') return { final: 'environment', note: `the environment broke, not the feature: ${what}` }
+  return { final: 'inconclusive', note: `driver says fail, but the environment broke during the scenario: ${what}` }
+}
+
+/**
+ * Environment problems in the log lines services and stubs wrote while one scenario ran:
+ * a refused connection to a catalog service that was not started (`missing-service` — a
+ * `requires`/`uses` gap in the catalog), a refused connection nobody in the QA stack owns
+ * (`unreachable` — an external call with no stub), and a stub request no fixture answered
+ * (`stub-miss`). `logs` maps a source (service name, or `stub-<name>`) to its text.
+ */
+export function triageLogs({ services = {}, stubs = {}, started = [], logs = {} }) {
+  const owner = {}
+  for (const [n, s] of Object.entries(services)) for (const p of [s.ready?.tcp, ...(s.ports || [])].filter(Boolean)) owner[String(p)] = n
+  for (const [n, s] of Object.entries(stubs)) if (s.port) owner[String(s.port)] = `stub-${n}`
+  const issues = []
+  const seen = new Set()
+  const add = (key, issue) => {
+    if (seen.has(key)) return
+    seen.add(key)
+    issues.push(issue)
+  }
+  for (const [source, text] of Object.entries(logs)) {
+    for (const line of String(text).split('\n')) {
+      const refused = /ECONNREFUSED\s+\[?([\w.:-]+)\]?:(\d+)\b/.exec(line)
+      if (refused) {
+        const [, host, port] = refused
+        const svc = owner[port]
+        if (!svc) add(`unreachable:${host}:${port}`, { kind: 'unreachable', target: `${host}:${port}`, source, detail: `${source} could not reach ${host}:${port} — an external call with no QA service or stub behind it` })
+        else if (!started.includes(svc)) add(`missing:${svc}`, { kind: 'missing-service', service: svc, port: Number(port), source, detail: `${source} called ${svc} on port ${port}, which was not started` })
+        continue
+      }
+      if (!source.startsWith('stub-') || !line.startsWith('{')) continue
+      try {
+        const e = JSON.parse(line)
+        if (e.matched === false) add(`miss:${source}:${e.method} ${e.path}`, { kind: 'stub-miss', stub: source.slice(5), method: e.method, path: e.path, source, detail: `stub ${source.slice(5)} has no fixture for ${e.method} ${e.path}` })
+      } catch {
+        /* not a request line */
+      }
+    }
+  }
+  return issues
+}
+
+/** `existing` recipe bullets plus the new ones not already there (compared ignoring case and spacing). */
+export function mergeRecipes(existing, added) {
+  const norm = (x) => x.replace(/^[-*]\s+/, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const lines = String(existing || '').split('\n')
+  const have = new Set(lines.filter((l) => /^[-*]\s+/.test(l)).map(norm))
+  const fresh = (added || []).map((r) => String(r).trim()).filter((r) => r && !have.has(norm(r)) && (have.add(norm(r)), true))
+  if (!fresh.length) return String(existing || '')
+  const head = String(existing || '').trim() || '# kss-qa recipes\n\nRules the application relies on that the schema does not show, learned by the environment audit. The blind planner reads every bullet.'
+  return `${head}\n${fresh.map((r) => `- ${r}`).join('\n')}\n`
+}
+
+const ENV_HINT = {
+  'missing-service': 'add the called service to the caller\'s `requires` or `uses` in the QA catalog',
+  unreachable: 'an external call left the QA stack: add a `stubs` entry and point the env at it',
+  'stub-miss': 'the stub has no fixture for this route: the base fixture or the audit must answer it',
 }
 
 export function overallVerdict(finals) {
@@ -272,7 +360,7 @@ export function overallVerdict(finals) {
   return 'INCONCLUSIVE'
 }
 
-const ICON = { pass: '✅ pass', fail: '❌ fail', blocked: '⛔ blocked', inconclusive: '❔ inconclusive', info: 'ℹ️ info' }
+const ICON = { pass: '✅ pass', fail: '❌ fail', blocked: '⛔ blocked', environment: '🧰 environment', inconclusive: '❔ inconclusive', info: 'ℹ️ info' }
 const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\n+/g, ' ')
 
 export function renderReport(d) {
@@ -298,7 +386,7 @@ export function renderReport(d) {
   L.push('## Confirmed flows', '')
   L.push(confirmed.length ? confirmed.map((s) => `- **${s.id}** ${s.title} — ${s.summary || ''}`).join('\n') : '_None._', '')
 
-  const problems = d.scenarios.filter((s) => s.final !== 'pass')
+  const problems = d.scenarios.filter((s) => s.final !== 'pass' && s.final !== 'environment')
   L.push('## Problems', '')
   if (!problems.length) L.push('_None._', '')
   for (const s of problems) {
@@ -309,6 +397,28 @@ export function renderReport(d) {
     }
     for (const iss of s.issues.filter((i) => i.kind !== 'adjustment')) L.push(`- **${iss.kind}:** ${iss.title} — ${iss.detail || ''}`)
     L.push('')
+  }
+
+  const envScenarios = d.scenarios.filter((s) => (s.environment || []).length)
+  if (envScenarios.length) {
+    L.push('## Environment problems', '', 'What broke in the QA environment rather than in the feature — fix the adapter or the plan, then re-run with `--only`.', '')
+    for (const s of envScenarios) {
+      L.push(`### ${s.id} · ${s.title} — ${ICON[s.final]}`, '')
+      for (const e of s.environment) L.push(`- **${e.kind}** — ${e.detail} → ${ENV_HINT[e.kind] || ''}`)
+      if (s.final === 'environment') for (const st of s.steps.filter((x) => x.status === 'fail' || x.status === 'blocked')) L.push(`- Step ${st.i} · ${st.title} (${st.status}) — observed: ${st.observed}`)
+      L.push('')
+    }
+  }
+
+  const a = d.audit
+  if (a) {
+    L.push('## Environment audit', '', `A sighted auditor (${a.model || '?'}) aligned the seed and the stubs with how the code reads them; it never changed a scenario or an expected value.`, '')
+    const list = (title, xs, fmt) => (xs || []).length && L.push(`**${title}**`, '', xs.map((x) => `- ${fmt(x)}`).join('\n'), '')
+    list('Seed changes', a.seed_changes, (x) => `\`${x.file || ''}\` ${x.change} — ${x.reason || ''}`)
+    list('Stub changes', a.stub_changes, (x) => `\`${x.stub || ''}\` ${x.change} — ${x.reason || ''}`)
+    list('Spec conflicts seen in the code (possible defects)', a.spec_conflicts, (x) => `**${x.scenario || '—'}** ${x.detail}`)
+    list('Cannot run in QA', a.untestable, (x) => `**${x.scenario || '—'}** ${x.reason}`)
+    list('Recipes learned', a.recipes, (x) => x)
   }
 
   const adjustments = d.scenarios.flatMap((s) => s.issues.filter((i) => i.kind === 'adjustment').map((i) => ({ ...i, id: s.id })))
@@ -440,13 +550,14 @@ async function waitFor(label, fn, timeoutS, { pid, logPath, fail } = {}) {
 }
 
 /** One headless `claude -p` run in an isolated cwd. Returns the parsed JSON result. */
-function runClaude({ cwd, model, prompt, system, allowed, disallowed, maxTurns, timeoutS, budget, env }) {
+function runClaude({ cwd, model, prompt, system, allowed, disallowed, maxTurns, timeoutS, budget, env, addDirs = [] }) {
   const args = [
     '-p', '--model', model, '--output-format', 'json', '--setting-sources', '', '--strict-mcp-config',
     '--no-session-persistence', '--max-turns', String(maxTurns), '--allowedTools', allowed.join(','),
     '--disallowedTools', disallowed.join(','),
   ]
   if (system) args.push('--append-system-prompt', system)
+  for (const d of addDirs) args.push('--add-dir', d)
   if (budget) args.push('--max-budget-usd', String(budget))
   return new Promise((res) => {
     const child = spawn('claude', args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -520,7 +631,12 @@ function compose(cwd, cfg, ...args) {
 
 // ---------------------------------------------------------------- plan
 
-function environmentDoc(cfg) {
+function readRecipes(cwd, cfg) {
+  const p = resolve(cwd, cfg.recipes_file || DEFAULTS.recipes_file)
+  return existsSync(p) ? readFileSync(p, 'utf8') : ''
+}
+
+export function environmentDoc(cfg, recipes = '') {
   const L = ['# Test environment', '']
   L.push('## Web apps', '')
   for (const [n, a] of Object.entries(cfg.apps)) L.push(`- **${n}** — ${a.url} — ${a.description || ''} (served by service \`${a.service}\`)`)
@@ -540,7 +656,14 @@ function environmentDoc(cfg) {
     L.push('', '## Login', '', how)
     if ((auth.roles || []).length) L.push(`Roles available: ${auth.roles.map((r) => `\`${r}\``).join(', ')}.`)
   } else L.push('', '## Login', '', 'The project creates no users for you: personas must already work with what the seed inserts.')
+  const stubs = Object.entries(cfg.stubs || {})
+  if (stubs.length) {
+    L.push('', '## External providers (stubbed)', '', 'Calls to these providers reach a local stand-in, never the real service. Do not write its responses: for each provider a scenario needs to hold something (accounts, listings, balances, statuses), state it in business terms, with the literal ids and values of your seed, under the plan\'s `provider_state.<provider>`. The environment builder turns it into the stand-in\'s answers.', '')
+    for (const [n, st] of stubs) L.push(`- **${n}** — ${st.description || ''}`)
+  }
   if (cfg.environment_notes) L.push('', '## Project rules: how users, data and access connect', '', cfg.environment_notes)
+  const rules = String(recipes).split('\n').filter((l) => /^[-*]\s+/.test(l))
+  if (rules.length) L.push('', '## Seed recipes (learned from earlier runs)', '', 'Rules the application relies on that the schema does not show. Follow every one that applies to the rows you seed.', '', ...rules)
   return L.join('\n') + '\n'
 }
 
@@ -563,7 +686,7 @@ async function cmdPlan(cwd, opts) {
   mkdirSync(join(ws, 'out/seed'), { recursive: true })
   writeFileSync(join(ws, 'input/request.md'), request)
   writeFileSync(join(ws, 'input/functional-spec.md'), extractSections(spec, cfg.spec.sections))
-  writeFileSync(join(ws, 'input/environment.md'), environmentDoc(cfg))
+  writeFileSync(join(ws, 'input/environment.md'), environmentDoc(cfg, readRecipes(cwd, cfg)))
   for (const [n, d] of Object.entries(cfg.databases)) if (d.schema) copyFileSync(resolve(cwd, d.schema), join(ws, 'input', schemaName(d, n)))
 
   log(`planning ${f.name} with ${cfg.models.planner} in ${ws}`)
@@ -585,6 +708,9 @@ async function cmdPlan(cwd, opts) {
   if (errs.length) throw new Error(`planner produced an invalid plan (kept in ${ws}):\n- ${errs.join('\n- ')}`)
 
   mkdirSync(join(f.qa, 'seed'), { recursive: true })
+  // A new plan voids the audit made for the old one: its seed and stub fixtures no longer apply.
+  rmSync(join(f.qa, 'audit.json'), { force: true })
+  rmSync(join(f.qa, 'stubs'), { recursive: true, force: true })
   writeJsonFile(join(f.qa, 'plan.json'), plan)
   for (const file of Object.values(plan.seed || {})) copyFileSync(join(ws, 'out', file), join(f.qa, file))
   writeFileSync(join(f.qa, 'plan.md'), renderPlanMd(f.name, plan, requirementMap(spec)))
@@ -606,7 +732,7 @@ async function repairSeed(cwd, cfg, f, db, file, error) {
   const ws = mkdtempSync(join(tmpdir(), 'kss-qa-repair-'))
   mkdirSync(join(ws, 'input/schema'), { recursive: true })
   mkdirSync(join(ws, 'work/seed'), { recursive: true })
-  writeFileSync(join(ws, 'input/environment.md'), environmentDoc(cfg))
+  writeFileSync(join(ws, 'input/environment.md'), environmentDoc(cfg, readRecipes(cwd, cfg)))
   for (const [n, d] of Object.entries(cfg.databases)) if (d.schema) copyFileSync(resolve(cwd, d.schema), join(ws, 'input', schemaName(d, n)))
   copyFileSync(join(f.qa, 'plan.json'), join(ws, 'work/plan.json'))
   for (const x of readdirSync(join(f.qa, 'seed'))) copyFileSync(join(f.qa, 'seed', x), join(ws, 'work/seed', x))
@@ -637,6 +763,99 @@ async function repairSeed(cwd, cfg, f, db, file, error) {
   log(`seed ${db}: ${r.json?.result || 'repair finished'}`)
 }
 
+/** A fingerprint of the working tree's changes, to prove a sighted agent left the repository alone. */
+function treeFingerprint(cwd) {
+  const h = createHash('sha256')
+  h.update(sh('git', ['diff', 'HEAD', '--binary'], { cwd }).out)
+  for (const f of sh('git', ['ls-files', '--others', '--exclude-standard'], { cwd }).out.split('\n').filter(Boolean)) {
+    try {
+      const st = statSync(resolve(cwd, f))
+      h.update(`${f}:${st.size}:${st.mtimeMs}\n`)
+    } catch {
+      h.update(`${f}:gone\n`)
+    }
+  }
+  return h.digest('hex')
+}
+
+/**
+ * The environment audit (DESIGN.md §22.5). The planner is blind, so its seed follows the schema but
+ * not the rules the code reads it by (a field two tables must agree on, a row a screen joins), and it
+ * cannot know what an external provider answers. A sighted auditor reads the code, never the plan's
+ * expectations' truth: it may only complete the seed and write the stubs' fixtures so the state each
+ * scenario starts from is the one the plan describes. It reads `plan.json` but never writes it; what it
+ * finds the code doing against the spec it reports as a conflict, never seeds around. Each rule it
+ * learns is appended to the recipes file the blind planner reads next time.
+ */
+async function cmdAudit(cwd, opts) {
+  const { cfg } = loadQaConfig(cwd)
+  const f = featureOf(cwd, opts.feature)
+  const plan = readJsonFile(join(f.qa, 'plan.json'), null)
+  if (!plan) throw new Error(`no QA plan for ${f.name}: run qa.mjs plan first`)
+  if (!cfg.audit?.enabled) return log('environment audit off (audit.enabled false)')
+  const auditPath = join(f.qa, 'audit.json')
+  if (existsSync(auditPath) && !opts.force) return log(`audit exists: ${relative(cwd, auditPath)} (use --force to re-audit)`)
+
+  const ws = realpathSync(mkdtempSync(join(tmpdir(), 'kss-qa-audit-')))
+  for (const d of ['input/schema', 'input/stubs-base', 'work/seed', 'work/stubs']) mkdirSync(join(ws, d), { recursive: true })
+  copyFileSync(join(f.qa, 'plan.json'), join(ws, 'input/plan.json'))
+  writeFileSync(join(ws, 'input/environment.md'), environmentDoc(cfg, readRecipes(cwd, cfg)))
+  writeFileSync(join(ws, 'input/functional-spec.md'), extractSections(readFileSync(join(f.dir, cfg.spec.spec), 'utf8'), cfg.spec.sections))
+  for (const [n, d] of Object.entries(cfg.databases)) if (d.schema) copyFileSync(resolve(cwd, d.schema), join(ws, 'input', schemaName(d, n)))
+  for (const x of readdirSync(join(f.qa, 'seed'))) copyFileSync(join(f.qa, 'seed', x), join(ws, 'work/seed', x))
+  for (const [n, st] of Object.entries(cfg.stubs || {})) {
+    if (st.base && existsSync(resolve(cwd, st.base))) copyFileSync(resolve(cwd, st.base), join(ws, 'input/stubs-base', `${n}.json`))
+    const mine = join(f.qa, 'stubs', `${n}.json`)
+    if (existsSync(mine)) copyFileSync(mine, join(ws, 'work/stubs', `${n}.json`))
+  }
+  const stubList = Object.entries(cfg.stubs || {}).map(([n, st]) => `- **${n}** — ${st.description || ''} → \`work/stubs/${n}.json\`${st.base ? ` (base: \`input/stubs-base/${n}.json\`, answered after yours)` : ''}`).join('\n') || '- (none: this project stubs no provider)'
+
+  const before = treeFingerprint(cwd)
+  log(`auditing ${f.name}'s environment with ${cfg.models.auditor} in ${ws}`)
+  const r = await runClaude({
+    cwd: ws,
+    model: cfg.models.auditor,
+    prompt: fill(readFileSync(templatePath(cwd, 'audit.md'), 'utf8'), { REPO: cwd, STUBS: stubList }),
+    // An Edit(path) rule is the one file permission that scopes every writing tool (Write included):
+    // the auditor reads the whole repository but can write only its own workspace.
+    allowed: ['Read', 'Glob', 'Grep', `Edit(/${ws}/work/**)`],
+    disallowed: ['Bash', 'WebFetch', 'WebSearch', 'Agent', 'Task', 'NotebookEdit'],
+    addDirs: [cwd],
+    maxTurns: cfg.limits.audit_turns,
+    timeoutS: cfg.limits.audit_timeout_s,
+    budget: cfg.limits.max_budget_usd,
+    env: process.env,
+  })
+  if (treeFingerprint(cwd) !== before) throw new Error(`the auditor changed the repository (kept in ${ws}) — inspect \`git status\` and revert; nothing was taken from it`)
+  const out = readJsonFile(join(ws, 'work/audit.json'), null)
+  if (!isObj(out)) throw new Error(`auditor wrote no work/audit.json (${r.code}, kept in ${ws}): ${r.json?.result || r.raw || r.err}`)
+
+  for (const x of readdirSync(join(ws, 'work/seed'))) copyFileSync(join(ws, 'work/seed', x), join(f.qa, 'seed', x))
+  for (const n of Object.keys(cfg.stubs || {})) {
+    const p = join(ws, 'work/stubs', `${n}.json`)
+    if (!existsSync(p)) continue
+    JSON.parse(readFileSync(p, 'utf8'))
+    mkdirSync(join(f.qa, 'stubs'), { recursive: true })
+    copyFileSync(p, join(f.qa, 'stubs', `${n}.json`))
+  }
+  const cost = r.json?.total_cost_usd ?? null
+  writeJsonFile(auditPath, { at: new Date().toISOString(), model: cfg.models.auditor, cost_usd: cost, ...out })
+  const recipesPath = resolve(cwd, cfg.recipes_file || DEFAULTS.recipes_file)
+  const merged = mergeRecipes(readRecipes(cwd, cfg), out.recipes)
+  if (merged !== readRecipes(cwd, cfg)) {
+    mkdirSync(dirname(recipesPath), { recursive: true })
+    writeFileSync(recipesPath, merged)
+    log(`recipes: ${relative(cwd, recipesPath)} updated`)
+  }
+  const metaPath = join(f.qa, 'plan.meta.json')
+  const meta = readJsonFile(metaPath, {})
+  meta.cost_usd = (meta.cost_usd || 0) + (cost || 0)
+  writeJsonFile(metaPath, meta)
+  rmSync(ws, { recursive: true, force: true })
+  const n = (k) => (out[k] || []).length
+  log(`audit: ${n('seed_changes')} seed change(s), ${n('stub_changes')} stub change(s), ${n('spec_conflicts')} spec conflict(s), ${n('untestable')} untestable`)
+}
+
 export function renderPlanMd(feature, plan, reqs) {
   const L = [`# QA plan · ${feature}`, '', 'Written by the blind planner from the request and the functional spec only. Review it before the run; edit `plan.json` and `seed/` freely.', '']
   L.push(`**Services:** ${(plan.services || []).join(', ')}`, '')
@@ -650,6 +869,8 @@ export function renderPlanMd(feature, plan, reqs) {
   }
   if ((plan.not_covered || []).length) L.push('## Not covered by the UI', '', (plan.not_covered || []).map((n) => `- **${n.fr}** — ${n.reason}`).join('\n'), '')
   if ((plan.assumptions || []).length) L.push('## Assumptions to confirm', '', bullets(plan.assumptions), '')
+  const ps = Object.entries(plan.provider_state || {})
+  if (ps.length) L.push('## Provider state', '', ps.map(([n, xs]) => `- **${n}**\n${(xs || []).map((x) => `  - ${x}`).join('\n')}`).join('\n'), '')
   L.push('## Seed', '', Object.entries(plan.seed || {}).map(([db, file]) => `- ${db}: [\`${file}\`](${file})`).join('\n'), '')
   return L.join('\n')
 }
@@ -741,6 +962,7 @@ async function cmdUp(cwd, opts) {
   const all = levels.flat()
   const busy = []
   for (const n of all) if (cfg.services[n].ready?.tcp && (await tcpOpen(Number(cfg.services[n].ready.tcp)))) busy.push(`${n}:${cfg.services[n].ready.tcp}`)
+  for (const [n, st] of Object.entries(cfg.stubs || {})) if (await tcpOpen(Number(st.port))) busy.push(`stub ${n}:${st.port}`)
   if (busy.length) throw new Error(`ports already in use (stop your dev stack first): ${busy.join(', ')}`)
 
   const rt = resolve(cwd, RUNTIME)
@@ -807,6 +1029,20 @@ async function cmdUp(cwd, opts) {
   for (const cmd of cfg.prepare || []) {
     log(`prepare: ${cmd}`)
     must(sh('sh', ['-c', cmd], { cwd, env }), `prepare "${cmd}"`)
+  }
+
+  // Provider stand-ins first: a service may call its provider while it boots.
+  for (const [n, st] of Object.entries(cfg.stubs || {})) {
+    const key = `stub-${n}`
+    const fixtures = [join(f.qa, 'stubs', `${n}.json`), st.base ? resolve(cwd, st.base) : null].filter((p) => p && existsSync(p))
+    const logPath = join(logs, `${key}.log`)
+    const fd = openSync(logPath, 'a')
+    const child = spawn(process.execPath, [join(HERE, 'qa-stub.mjs'), '--name', n, '--port', String(st.port), '--fixtures', fixtures.join(','), '--log', logPath], { detached: true, stdio: ['ignore', fd, fd] })
+    child.unref()
+    state.pids[key] = child.pid
+    writeJsonFile(sp, state)
+    await waitFor(key, () => tcpOpen(Number(st.port)), 30, { pid: child.pid, logPath })
+    log(`stub ${n} on ${st.port} (${fixtures.map((p) => relative(cwd, p)).join(', ') || 'no fixtures — every call answers 404'})`)
   }
 
   for (const level of levels) {
@@ -919,6 +1155,8 @@ async function cmdRun(cwd, opts) {
     writeJsonFile(resolve(cwd, LIVE), liveRecord({ runId, scenario: s, evidence: ev, cdp: chrome.url }))
     const env = { ...process.env, BU_NAME: `kssqa-${runId.replace(/[^0-9]/g, '')}-${s.id}`, BU_CDP_URL: chrome.url, BH_AGENT_WORKSPACE: bu, KSS_QA_EVIDENCE: ev, BH_RECORD: '0' }
     log(`${s.id} ${s.title} — driving with ${cfg.models.driver}`)
+    const logOf = (n) => join(state.logs, `${n}.log`)
+    const offsets = Object.fromEntries(Object.keys(state.pids || {}).map((n) => [n, existsSync(logOf(n)) ? statSync(logOf(n)).size : 0]))
     const r = await runClaude({
       cwd: cwdDriver,
       model: cfg.models.driver,
@@ -942,6 +1180,16 @@ async function cmdRun(cwd, opts) {
       code: r.code, subtype: r.json?.subtype ?? null, turns: r.json?.num_turns ?? null, cost_usd: r.json?.total_cost_usd ?? null,
       result: r.json?.result ?? r.raw, stderr: r.err || undefined,
     })
+    const slices = Object.fromEntries(Object.keys(offsets).map((n) => {
+      try {
+        return [n, readFileSync(logOf(n)).subarray(offsets[n]).toString('utf8')]
+      } catch {
+        return [n, '']
+      }
+    }))
+    const environment = triageLogs({ services: cfg.services, stubs: cfg.stubs, started: Object.keys(state.pids || {}), logs: slices })
+    writeJsonFile(join(ev, 'environment.json'), environment)
+    if (environment.length) log(`${s.id}: environment — ${environment.map((e) => e.detail).join('; ')}`)
     if (!existsSync(join(ev, 'result.json'))) {
       writeJsonFile(join(ev, 'result.json'), { status: 'blocked', summary: `the driver ended without closing the scenario (${r.json?.subtype || `exit ${r.code}`})`, issues: [{ kind: 'blocker', title: 'driver did not finish', detail: String(r.json?.result || r.err || '').slice(0, 500) }] })
     }
@@ -1001,8 +1249,9 @@ async function cmdJudge(cwd, opts) {
         log(`${id}: Jev failed (${e.message}) — driver verdict stands`)
       }
     }
-    const c = combine(result.status, judged)
-    writeJsonFile(join(dir, 'judge.json'), { driver: result.status, jev: judged, jev_error: error, ...c })
+    const environment = readJsonFile(join(dir, 'environment.json'), [])
+    const c = combine(result.status, judged, environment)
+    writeJsonFile(join(dir, 'judge.json'), { driver: result.status, jev: judged, jev_error: error, environment, ...c })
     log(`${id}: driver ${result.status} · jev ${judged ? `${judged.choice} ${judged.confidence}` : '—'} → ${c.final}`)
   }
   return runId
@@ -1023,14 +1272,15 @@ async function cmdReport(cwd, opts) {
     const s = plan.scenarios.find((x) => x.id === id) || { id, title: id }
     const dir = join(runDir, id)
     const result = readJsonFile(join(dir, 'result.json'), { status: 'blocked', issues: [] })
-    const judge = readJsonFile(join(dir, 'judge.json'), null) || { driver: result.status, jev: null, ...combine(result.status, null) }
+    const environment = readJsonFile(join(dir, 'environment.json'), [])
+    const judge = readJsonFile(join(dir, 'judge.json'), null) || { driver: result.status, jev: null, ...combine(result.status, null, environment) }
     const driver = readJsonFile(join(dir, 'driver.json'), {})
     return {
-      ...s, driver: result.status, jev: judge.jev, final: judge.final, note: judge.note, summary: result.summary,
+      ...s, driver: result.status, jev: judge.jev, final: judge.final, note: judge.note, summary: result.summary, environment,
       issues: result.issues || [], steps: readSteps(dir), cost: driver.cost_usd || 0, turns: driver.turns,
     }
   })
-  const rank = { fail: 0, blocked: 1, inconclusive: 2, pass: 3 }
+  const rank = { fail: 0, blocked: 1, environment: 2, inconclusive: 3, pass: 4 }
   const coverage = frIds.map((fr) => {
     const ss = scenarios.filter((s) => (s.covers || []).includes(fr))
     const nc = (plan.not_covered || []).find((n) => n.fr === fr)
@@ -1045,6 +1295,7 @@ async function cmdReport(cwd, opts) {
     judge: scenarios.some((s) => s.jev) ? `${jcfg.jev.model} (≥ ${jcfg.jev.qa_judge.confidence})` : 'off',
     cost: planCost + scenarios.reduce((a, s) => a + (s.cost || 0), 0), date: (meta.finishedAt || meta.startedAt || '').slice(0, 16).replace('T', ' '),
     scenarios, coverage, verdict, notCovered: plan.not_covered || [], assumptions: plan.assumptions || [],
+    audit: readJsonFile(join(f.qa, 'audit.json'), null),
     services: plan.services || [], seed: Object.values(plan.seed || {}), personas: plan.personas || [],
   }
   const md = renderReport(data)
@@ -1079,6 +1330,7 @@ async function main() {
   const cwd = typeof opts.cwd === 'string' ? resolve(opts.cwd) : process.cwd()
   const cmd = opts._[0]
   if (cmd === 'plan') return cmdPlan(cwd, opts)
+  if (cmd === 'audit') return cmdAudit(cwd, opts)
   if (cmd === 'up') {
     try {
       return await cmdUp(cwd, opts)
@@ -1094,6 +1346,7 @@ async function main() {
   if (cmd === 'report') process.exit(EXIT[await cmdReport(cwd, opts)])
   if (cmd === 'all') {
     await cmdPlan(cwd, { ...opts, force: !!opts.replan })
+    await cmdAudit(cwd, { ...opts, force: !!opts.replan })
     let verdict = 'INCONCLUSIVE'
     try {
       await cmdUp(cwd, opts)
@@ -1105,7 +1358,7 @@ async function main() {
     }
     process.exit(EXIT[verdict])
   }
-  process.stderr.write(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 11).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n')
+  process.stderr.write(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).map((l) => l.replace(/^\/\/ ?/, '')).join('\n') + '\n')
   process.exit(1)
 }
 
