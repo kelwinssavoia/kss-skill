@@ -1602,10 +1602,31 @@ over a dozen files written for the next phase; the report is written for the per
 `artifacts` — following `.kss/references/report.md`, which also says what each phase puts in it.
 It then runs `node .kss/scripts/report.mjs <features_root>/NNN-slug`, which validates every phase
 file (refusing one with the reason, so the phase fixes it) and rebuilds `report/index.html`: one
-self-contained page — no network, its own CSP — with the track, an overview timeline, each phase
-(`#phase-<name>`), and all decisions together, searchable and filterable by kind. Cost per phase
+self-contained page — no network, its own CSP — with the track, what was built, an overview
+timeline, each phase (`#phase-<name>`), and all decisions together, searchable and filterable by
+kind. The page script is `scripts/report-client.mjs`, embedded at build time. Cost per phase
 comes from `metrics.jsonl` and the Next line from the README; the model writes neither. The model
 spends a few hundred tokens of JSON per phase; the look never drifts.
+
+**Shown, not told.** Besides the summary, what was done and the decisions, a phase adds
+`sections` — rich blocks the page renders interactively: a `flow` of the parts involved (layered,
+the ones this feature touched marked, a click shows a part and its links), a `sequence` of how a
+request travels (playable step by step), `code` quoted from the repository with highlighted
+lines, a `diff`, an `example` (cases × steps with real input and output), a `table`, the `files`
+touched, a `callout`. Every phase's sections are gathered in the page's **What was built** tab,
+execute first. The report is meant to be read in minutes, so the script enforces brevity (summary
+≤ 600 characters, `did` ≤ 7 short lines, short decisions and explanations) and refuses longer text
+— the phase shows it with a block instead. Reports written before these limits stay valid.
+
+**Code is quoted, never written.** `report.mjs --phase <phase>` checks every `code` section of the
+phase just written against the repository: each line must be in the named file, in order (`// …`
+elides), or the file is refused. It then records each line's real number for the page. Older
+phases are not re-checked: files move on, and a report stays what it was.
+
+**Execute delegates its report.** The execute coordinator never reads code (§3.6), and the report
+of what was built quotes it — so after the full suite it spawns one T2 subagent that reads the
+feature's diff, the tickets and the log, writes `report/execute.json` and runs the script. A
+failed report is noted in the summary and never blocks the run.
 
 **Language.** The report is written in `conversation_language` (§1), not `docs_language`: it
 explains the run to the person running it. The page's own labels follow the report's `lang`

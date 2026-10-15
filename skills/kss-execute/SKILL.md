@@ -281,10 +281,22 @@ reset to `ready`.
 
 ## Summary
 
-**Report** (DESIGN.md §25): explain this phase to a human before committing — write
-`<features_root>/NNN-slug/report/execute.json` as `.kss/references/report.md` describes, every
-string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
-and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
+**Report** (DESIGN.md §25) — **delegated**, because the report of what was built quotes the code
+and you never read it. After the full suite and before the commit, spawn **one** subagent at tier
+**T2** (the harness adapter maps it) with this brief, and wait for it:
+
+```
+Write the execute report for <features_root>/NNN-slug, following .kss/references/report.md
+(read it first; it is short). Language: conversation_language from ~/.kss/preferences.md.
+What was built: git diff <base_branch>...HEAD (stat first, then the files that carry the
+rules), the ticket files 05-tickets/NN-*.md, and 06-execution.md for deviations, escalations
+and rejections. Write only <features_root>/NNN-slug/report/execute.json, then run
+node .kss/scripts/report.mjs <features_root>/NNN-slug --phase execute until it prints
+"report: …". Return that line and nothing else. Do not edit any other file, run no tests.
+```
+
+If its last line is not `report: …`, say `Report: failed — <its last line>` in the summary and go
+on; the report never blocks the run. The commit below carries `report/`.
 
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature
 branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <docs_root paths touched>
@@ -343,4 +355,4 @@ review and docs as optional.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
-- End with the phase report: `report/execute.json` per `.kss/references/report.md`, then `report.mjs`.
+- End with the phase report, written by one T2 subagent (you never read code): `report/execute.json` per `.kss/references/report.md`.
