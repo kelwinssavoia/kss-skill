@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
-import type { QaEnv, QaInfo, QaLive, QaScenario, QaScenarioRun, QaStepRecord } from '../shared/types.ts'
+import type { QaEnv, QaFix, QaInfo, QaLive, QaScenario, QaScenarioRun, QaStepRecord } from '../shared/types.ts'
 import { read } from './project.ts'
 
 export const RUNTIME = '.kss/qa/.runtime'
@@ -105,6 +105,20 @@ export function latestRuns(qaDir: string, runs: string[]): Record<string, QaScen
   return out
 }
 
+/** `qa/fixes.json`, written by `kss-qa --fix`: the fix tickets per failed scenario. */
+export function parseFixes(v: unknown): QaFix[] {
+  return (Array.isArray(v) ? v : [])
+    .filter((f: any) => f && typeof f.scenario === 'string')
+    .map((f: any) => ({
+      scenario: f.scenario,
+      run: str(f.run),
+      tickets: (Array.isArray(f.tickets) ? f.tickets : []).filter((t: unknown) => typeof t === 'string' || typeof t === 'number').map((t: string | number) => String(t).padStart(2, '0')),
+      fr: strs(f.fr),
+      title: str(f.title),
+      at: str(f.at),
+    }))
+}
+
 export function envOf(session: string): QaEnv {
   const state = json(join(session, RUNTIME, 'state.json'))
   if (!state) return { state: 'down', feature: null, startedAt: null, readyAt: null, services: [] }
@@ -154,6 +168,7 @@ export function qaInfo(session: string, featureDir: string | null, feature: stri
     runs,
     latest: qaDir ? latestRuns(qaDir, runs) : {},
     verdict: qaDir ? str(json(join(qaDir, 'result.json'))?.verdict) : null,
+    fixes: qaDir ? parseFixes(json(join(qaDir, 'fixes.json'))) : [],
   }
 }
 

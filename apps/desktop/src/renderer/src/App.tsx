@@ -186,7 +186,7 @@ export function App() {
         />
         {session && <ExecutePanel session={session} terms={sessionTerms} visible={view === 'execute'} onInspect={setInspecting} />}
         {session && <GrillPanel project={project} session={session} board={session.board} terms={sessionTerms} onRun={run} harness={harnessFor('grill')} visible={view === 'grill'} />}
-        {session && <QaPanel session={session} terms={sessionTerms} onRun={run} visible={view === 'qa'} />}
+        {session && <QaPanel session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} visible={view === 'qa'} />}
         {session && <ReportPanel session={session} phase={reportPhase[session.path] ?? null} visible={view === 'report'} />}
       </main>
       {session?.board && view !== 'qa' && view !== 'report' && view !== 'execute' && <Board board={session.board} onInspect={setInspecting} />}

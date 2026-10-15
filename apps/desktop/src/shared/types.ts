@@ -176,6 +176,9 @@ export type QaScenarioRun = {
   steps: QaStepRecord[]
 }
 
+/** A fix ticket kss-qa --fix wrote for a failed scenario (`qa/fixes.json`), tied to the run it came from. */
+export type QaFix = { scenario: string; run: string | null; tickets: string[]; fr: string[]; title: string | null; at: string | null }
+
 export type QaLive = { runId: string; scenario: string; title: string; cdp: string; startedAt: string }
 
 /** Who holds the one QA environment (DESIGN.md §24.5): the session whose runtime has live pids. */
@@ -194,6 +197,7 @@ export type QaInfo = {
   runs: string[]
   latest: Record<string, QaScenarioRun>
   verdict: string | null
+  fixes: QaFix[]
 }
 
 export type QaFrame = { session: string; scenario: string; data: string }

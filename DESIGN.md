@@ -1606,6 +1606,13 @@ The QA panel is a front for `scripts/qa.mjs` (§22), one step per button, each a
    CDP (`Page.startScreencast`). `qa.mjs run` writes the endpoint of the Chrome it launched to
    `.kss/qa/.runtime/live.json` (`{scenario, cdp, startedAt}`) and removes it when the scenario ends.
 4. **Judge**, **Report**, **Down** — the remaining steps; the verdict and `report.md` are shown.
+5. **Fix a failure** — a scenario whose verdict is `fail` gets **Create fix task**: `kss-qa NNN-slug
+   --fix S-NN` in a CLI tab writes the fix tickets from that run's evidence, records them in
+   `qa/fixes.json` (`{scenario, run, tickets, fr, title, at}`) and loops back (§3.9). The scenario
+   then shows its tickets, and while the Next line is `kss-execute … --ticket NN (then: kss-qa …)`
+   the panel offers **▶ Execute fix** — the same command as the header's. Once execute has returned
+   the Next line to QA, **Re-run fixed** runs `qa.mjs run --only` the fixed scenarios. A ticket
+   is tied to the run it came from: a newer failing run offers **Create fix task** again.
 
 One QA environment runs at a time, across all sessions: the compose project and the host ports of
 `.kss/qa.config.json` are fixed. The lock is the runtime itself — a session whose

@@ -219,6 +219,9 @@ summary { cursor: pointer; color: var(--dim); }
 .qa-badge.blocked, .qa-badge.inconclusive { color: var(--warn); }
 .qa-badge.none, .qa-badge.info { color: var(--dim); }
 .live-pill { color: var(--bad); font: 600 10px var(--mono); }
+.qa-fix { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--bad); border-radius: var(--radius); background: var(--bg-3); font-size: 12.5px; flex-wrap: wrap; }
+.qa-fix .spacer { flex: 1; }
+.fix-pill { font: 10px var(--mono); padding: 0 5px; border-radius: 3px; color: var(--accent); border: 1px solid var(--accent-soft); margin-left: auto; }
 .qa-term { margin-top: auto; padding-top: 8px; }
 .qa-pane { height: 220px; background: var(--term); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 0 0 6px; overflow: hidden; }
 .qa-right { overflow: auto; padding: 12px 16px 20px; }
