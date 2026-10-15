@@ -15,7 +15,34 @@ function Badge({ value }: { value: string | null }) {
   return value ? <span className={`qa-badge ${value}`}>{ICON[value] ?? ''} {value}</span> : <span className="qa-badge none">not run</span>
 }
 
-function Shot({ path }: { path: string | null }) {
+type Zoom = { src: string; path: string | null; caption: string } | null
+
+/**
+ * A picture at full size, inside the app. `window.open` of a data: URL gives a blank window —
+ * Chromium refuses to navigate a top-level window to one — so screenshots open here instead.
+ */
+function Lightbox({ zoom, onClose }: { zoom: Zoom; onClose: () => void }) {
+  useEffect(() => {
+    if (!zoom) return
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [zoom])
+  if (!zoom) return null
+  return (
+    <div className="lightbox" onClick={onClose}>
+      <img src={zoom.src} onClick={e => e.stopPropagation()} />
+      <div className="lightbox-bar" onClick={e => e.stopPropagation()}>
+        <span>{zoom.caption}</span>
+        <span className="spacer" />
+        {zoom.path && <button onClick={() => api.reveal(zoom.path!)}>Show in Finder</button>}
+        <button onClick={onClose}>Close · Esc</button>
+      </div>
+    </div>
+  )
+}
+
+function Shot({ path, caption, onZoom }: { path: string | null; caption: string; onZoom: (z: Zoom) => void }) {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
@@ -24,13 +51,13 @@ function Shot({ path }: { path: string | null }) {
     return () => void (alive = false)
   }, [path])
   if (!path) return <div className="shot empty">no screenshot</div>
-  return src ? <img className="shot" src={src} onClick={() => window.open(src)} /> : <div className="shot empty">…</div>
+  return src ? <img className="shot" src={src} title="Open at full size" onClick={() => onZoom({ src, path, caption })} /> : <div className="shot empty">…</div>
 }
 
-function StepCard({ s }: { s: QaStepRecord }) {
+function StepCard({ s, onZoom }: { s: QaStepRecord; onZoom: (z: Zoom) => void }) {
   return (
     <div className={`step-card ${s.status}`}>
-      <Shot path={s.screenshot} />
+      <Shot path={s.screenshot} caption={`${String(s.i).padStart(2, '0')} · ${s.title}`} onZoom={onZoom} />
       <div className="step-text">
         <div className="step-title"><b>{String(s.i).padStart(2, '0')}</b> {s.title} <Badge value={s.status} /></div>
         <div><span className="dim">expected</span> {s.expected}</div>
@@ -41,7 +68,7 @@ function StepCard({ s }: { s: QaStepRecord }) {
   )
 }
 
-function ScenarioDetail({ s, run, liveFrame, isLive }: { s: QaScenario; run: QaScenarioRun | undefined; liveFrame: string | null; isLive: boolean }) {
+function ScenarioDetail({ s, run, liveFrame, isLive, onZoom }: { s: QaScenario; run: QaScenarioRun | undefined; liveFrame: string | null; isLive: boolean; onZoom: (z: Zoom) => void }) {
   return (
     <div className="qa-detail">
       <h3>{s.id} · {s.title}</h3>
@@ -49,7 +76,7 @@ function ScenarioDetail({ s, run, liveFrame, isLive }: { s: QaScenario; run: QaS
       {isLive && (
         <div className="live">
           <div className="live-label"><span className="dot live" /> LIVE · {s.id}</div>
-          {liveFrame ? <img src={liveFrame} /> : <div className="shot empty">waiting for the driver's browser…</div>}
+          {liveFrame ? <img src={liveFrame} title="Open at full size" onClick={() => onZoom({ src: liveFrame, path: null, caption: `LIVE · ${s.id}` })} /> : <div className="shot empty">waiting for the driver's browser…</div>}
         </div>
       )}
       <div className="qa-cols">
@@ -69,7 +96,7 @@ function ScenarioDetail({ s, run, liveFrame, isLive }: { s: QaScenario; run: QaS
           {run.note && <p className="dim">{run.note}</p>}
           {run.issues.map((x, i) => <div key={i} className="issue"><b>{x.kind}</b> {x.title}{x.detail && <span className="dim"> · {x.detail}</span>}</div>)}
           {run.steps.length === 0 && <p className="dim">No step recorded yet.</p>}
-          {[...run.steps].reverse().map(st => <StepCard key={st.i} s={st} />)}
+          {[...run.steps].reverse().map(st => <StepCard key={st.i} s={st} onZoom={onZoom} />)}
         </>
       )}
     </div>
@@ -82,6 +109,7 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
   const [info, setInfo] = useState<QaInfo | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ scenario: string; data: string } | null>(null)
+  const [zoom, setZoom] = useState<Zoom>(null)
   const feature = session.feature
 
   useEffect(() => {
@@ -174,12 +202,13 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
         </div>
         <div className="qa-right">
           {current ? (
-            <ScenarioDetail s={current} run={info.latest[current.id]} isLive={info.live?.scenario === current.id} liveFrame={frame?.scenario === current.id ? frame.data : null} />
+            <ScenarioDetail s={current} run={info.latest[current.id]} isLive={info.live?.scenario === current.id} liveFrame={frame?.scenario === current.id ? frame.data : null} onZoom={setZoom} />
           ) : (
             <div className="empty dim">Plan the QA to see its scenarios.</div>
           )}
         </div>
       </div>
+      <Lightbox zoom={zoom} onClose={() => setZoom(null)} />
     </div>
   )
 }
