@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { html, model, validate } from './report.mjs'
+import { checkSnippets, html, model, readReports, validate, validateSection } from './report.mjs'
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'report.mjs')
 
@@ -74,4 +74,61 @@ test('CLI: writes index.html, and refuses an invalid phase file with the reason'
   const check = spawnSync(process.execPath, [SCRIPT, dir, '--check', 'spec'], { encoding: 'utf8' })
   assert.equal(check.status, 1)
   assert.match(check.stderr, /"summary" is required/)
+})
+
+test('sections: each type needs its fields, and stays short', () => {
+  assert.deepEqual(validateSection({ type: 'flow', nodes: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], edges: [{ from: 'a', to: 'b' }] }, 0), [])
+  assert.match(validateSection({ type: 'flow', nodes: [{ id: 'a', label: 'A' }], edges: [{ from: 'a', to: 'z' }] }, 0)[0], /must join two node ids/)
+  assert.match(validateSection({ type: 'sequence', participants: ['A'], messages: [{ from: 'A', to: 'B', text: 'x' }] }, 0)[0], /among the participants/)
+  assert.match(validateSection({ type: 'text', body: 'x'.repeat(800) }, 0)[0], /show it instead/)
+  assert.match(validateSection({ type: 'code', code: 'x' }, 0)[0], /"file"|\.file/)
+  assert.match(validateSection({ type: 'chart' }, 0)[0], /type — one of/)
+  assert.deepEqual(validateSection({ type: 'example', cases: [{ name: 'ok', steps: [{ label: 'go', input: 'GET /' }] }] }, 0), [])
+})
+
+test('the succinct limits bind the phase being written; an older, longer report stays valid', () => {
+  const long = ok('spec', { summary: 'x'.repeat(900) })
+  const dir = feature([long])
+  assert.equal(readReports(dir).errors.length, 0)
+  assert.match(readReports(dir, 'spec').errors[0], /"summary" is over 600/)
+})
+
+test('code is quoted: every line found in order, elisions allowed, real line numbers recorded', () => {
+  const root = mkdtempSync(join(tmpdir(), 'repo-'))
+  mkdirSync(join(root, 'src'))
+  writeFileSync(join(root, 'src/a.ts'), 'import x from "x"\n\nexport function f(a) {\n  const b = a + 1\n  log(b)\n  return b\n}\n')
+  const r = { phase: 'execute', sections: [{ type: 'code', file: 'src/a.ts', line: 3, code: 'export function f(a) {\n  // …\n  return b\n}' }] }
+  assert.deepEqual(checkSnippets(r, root), [])
+  assert.deepEqual(r.sections[0].lines, [3, null, 6, 7])
+  const made = { phase: 'execute', sections: [{ type: 'code', file: 'src/a.ts', code: 'return a * 2' }] }
+  assert.match(checkSnippets(made, root)[0], /is not in src\/a\.ts.*copy the code verbatim/)
+  const order = { phase: 'execute', sections: [{ type: 'code', file: 'src/a.ts', code: 'return b\nconst b = a + 1' }] }
+  assert.equal(checkSnippets(order, root).length, 1)
+  assert.match(checkSnippets({ phase: 'execute', sections: [{ type: 'code', file: 'src/nope.ts', code: 'x' }] }, root)[0], /does not exist/)
+  assert.match(checkSnippets({ phase: 'execute', sections: [{ type: 'code', file: 'src/a.ts', line: 9, code: 'export function f(a) {' }] }, root)[0], /starts at line 3/)
+})
+
+test('CLI --phase: refuses an invented snippet, accepts and annotates a quoted one', () => {
+  const root = mkdtempSync(join(tmpdir(), 'repo-'))
+  mkdirSync(join(root, '.git'))
+  writeFileSync(join(root, 'svc.ts'), 'export const LIMIT = 10\n')
+  const dir = join(root, 'specs/012-x')
+  mkdirSync(join(dir, 'report'), { recursive: true })
+  writeFileSync(join(dir, 'README.md'), '# 012-x\n\n**Size:** S\n')
+  const write = (code) => writeFileSync(join(dir, 'report/execute.json'), JSON.stringify(ok('execute', { sections: [{ type: 'code', file: 'svc.ts', line: 1, code }] })))
+  write('export const LIMIT = 99')
+  const bad = spawnSync(process.execPath, [SCRIPT, dir, '--phase', 'execute'], { encoding: 'utf8' })
+  assert.equal(bad.status, 1)
+  assert.match(bad.stderr, /copy the code verbatim/)
+  write('export const LIMIT = 10')
+  const good = spawnSync(process.execPath, [SCRIPT, dir, '--phase', 'execute'], { encoding: 'utf8' })
+  assert.equal(good.status, 0, good.stderr)
+  assert.deepEqual(JSON.parse(readFileSync(join(dir, 'report/execute.json'), 'utf8')).sections[0].lines, [1])
+})
+
+test('the page embeds the client and builds nothing from markup', () => {
+  const page = html(model(feature([ok('execute', { sections: [{ type: 'callout', body: '<b>x</b>' }] })])))
+  assert.match(page, /function client\(\)/)
+  assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(page))
+  assert.ok(page.includes('\\u003cb>x\\u003c/b>'))
 })

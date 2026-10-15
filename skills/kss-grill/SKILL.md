@@ -178,8 +178,8 @@ this phase keeps up to date afterwards.
 ## Summary
 
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
-`<features_root>/NNN-slug/report/grill.json` as `.kss/references/report.md` describes, every
-string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+`<features_root>/NNN-slug/report/grill.json` as `.kss/references/report.md` describes — short, and shown
+rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase grill`
 and fix the file until it prints `report: …/index.html`. The commit below carries `report/`.
 
 **Commit before printing** (DESIGN.md §3.8): every artifact this phase wrote goes on the feature

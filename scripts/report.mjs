@@ -14,23 +14,31 @@
 // computed here, so every report looks the same and costs a few hundred tokens to produce.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { ORDER, TRACKS, readHeader } from './next.mjs'
 import { aggregate } from './render-cost.mjs'
+import { client } from './report-client.mjs'
 
 export const DIR = 'report'
 
 const KINDS = ['business', 'layout', 'technical', 'scope', 'design', 'auto', 'review', 'execution', 'quality']
 const STATUSES = ['decided', 'auto', 'accepted', 'overridden', 'reopened', 'deferred', 'open', 'rejected']
 
-const CAP = { summary: 1500, line: 600, text: 1500 }
+// Short by construction: a report illustrates, it does not narrate. Past these the script refuses
+// the file, so the phase cuts words or turns them into a diagram, an example or a table.
+export const CAP = { summary: 600, line: 200, did: 7, text: 700, decision: 400, explain: 320, note: 240, sections: 24, codeLines: 60, label: 80 }
+
+/** The limits reports written before the succinct rule were held to: still accepted for them. */
+export const LOOSE = { ...CAP, summary: 1500, line: 600, did: 50, decision: 1500 }
+
+export const SECTION_TYPES = ['text', 'callout', 'code', 'diff', 'flow', 'sequence', 'example', 'table', 'files']
 
 const isStr = (v) => typeof v === 'string' && v.trim().length > 0
 
 /** Problems with one phase file, as lines; empty when it is valid. */
-export function validate(r, phase) {
+export function validate(r, phase, caps = CAP) {
   const errs = []
   const where = (k) => `${phase}.json: ${k}`
   if (!r || typeof r !== 'object' || Array.isArray(r)) return [`${phase}.json: not a JSON object`]
@@ -38,14 +46,15 @@ export function validate(r, phase) {
   if (!ORDER.includes(phase)) errs.push(where(`unknown phase — one of ${ORDER.join(', ')}`))
   if (!isStr(r.lang)) errs.push(where('"lang" is required — the conversation_language, e.g. "pt-BR"'))
   if (!isStr(r.summary)) errs.push(where('"summary" is required'))
-  else if (r.summary.length > CAP.summary) errs.push(where(`"summary" is over ${CAP.summary} characters — it is a summary`))
+  else if (r.summary.length > caps.summary) errs.push(where(`"summary" is over ${caps.summary} characters — cut it; show the rest with a section`))
   const strings = (k, required = false) => {
     const v = r[k]
     if (v === undefined && !required) return
     if (!Array.isArray(v) || (required && !v.length) || !v.every(isStr)) errs.push(where(`"${k}" must be a${required ? ' non-empty' : 'n'} array of strings`))
-    else if (v.some((s) => s.length > CAP.line)) errs.push(where(`an entry of "${k}" is over ${CAP.line} characters`))
+    else if (v.some((s) => s.length > caps.line)) errs.push(where(`an entry of "${k}" is over ${caps.line} characters`))
   }
   strings('did', true)
+  if (Array.isArray(r.did) && r.did.length > caps.did) errs.push(where(`"did" has ${r.did.length} lines — at most ${caps.did}`))
   strings('open')
   strings('risks')
   if (r.decisions !== undefined) {
@@ -60,7 +69,7 @@ export function validate(r, phase) {
         if (d.status !== undefined && !STATUSES.includes(d.status)) errs.push(where(`${at}.status — one of ${STATUSES.join(', ')}`))
         if (d.rejected !== undefined && (!Array.isArray(d.rejected) || !d.rejected.every(isStr))) errs.push(where(`${at}.rejected must be an array of strings`))
         for (const k of ['id', 'why', 'source']) if (d[k] !== undefined && typeof d[k] !== 'string') errs.push(where(`${at}.${k} must be a string`))
-        for (const k of ['decision', 'why']) if (typeof d[k] === 'string' && d[k].length > CAP.text) errs.push(where(`${at}.${k} is over ${CAP.text} characters`))
+        for (const k of ['decision', 'why']) if (typeof d[k] === 'string' && d[k].length > caps.decision) errs.push(where(`${at}.${k} is over ${caps.decision} characters`))
       })
   }
   if (r.highlights !== undefined) {
@@ -73,14 +82,179 @@ export function validate(r, phase) {
         })
       })
   }
+  if (r.sections !== undefined) {
+    if (!Array.isArray(r.sections)) errs.push(where('"sections" must be an array'))
+    else {
+      if (r.sections.length > CAP.sections) errs.push(where(`"sections" has ${r.sections.length} — at most ${CAP.sections}`))
+      r.sections.forEach((sec, i) => errs.push(...validateSection(sec, i).map(where)))
+    }
+  }
   if (r.artifacts !== undefined) {
     if (!Array.isArray(r.artifacts) || !r.artifacts.every((a) => a && isStr(a.path))) errs.push(where('"artifacts" must be [{ "path", "what" }]'))
   }
   return errs
 }
 
+const longer = (v, n) => typeof v === 'string' && v.length > n
+
+/** Problems with one rich section (DESIGN.md §25), as `sections[i]…` lines. */
+export function validateSection(s, i) {
+  const at = `sections[${i}]`
+  const errs = []
+  if (!s || typeof s !== 'object') return [`${at} must be an object`]
+  if (!SECTION_TYPES.includes(s.type)) return [`${at}.type — one of ${SECTION_TYPES.join(', ')}`]
+  if (s.title !== undefined && !isStr(s.title)) errs.push(`${at}.title must be a string`)
+  if (longer(s.title, CAP.label)) errs.push(`${at}.title is over ${CAP.label} characters`)
+  if (longer(s.intro, CAP.note)) errs.push(`${at}.intro is over ${CAP.note} characters`)
+  const need = (k, test, what) => {
+    if (!test(s[k])) errs.push(`${at} (${s.type}).${k} ${what}`)
+  }
+  const arr = (v) => Array.isArray(v) && v.length > 0
+  switch (s.type) {
+    case 'text':
+    case 'callout':
+      need('body', isStr, 'is required')
+      if (longer(s.body, CAP.text)) errs.push(`${at}.body is over ${CAP.text} characters — show it instead (flow, example, table, code)`)
+      if (s.tone !== undefined && !['info', 'warn', 'ok', 'bad'].includes(s.tone)) errs.push(`${at}.tone — info, warn, ok or bad`)
+      break
+    case 'code':
+      need('code', isStr, 'is required — copied verbatim from the file')
+      need('file', isStr, 'is required — the path, relative to the repository root')
+      if (isStr(s.code) && s.code.split('\n').length > CAP.codeLines) errs.push(`${at}.code has more than ${CAP.codeLines} lines — show the part that matters`)
+      if (s.line !== undefined && !(Number.isInteger(s.line) && s.line > 0)) errs.push(`${at}.line must be the 1-based line the snippet starts at`)
+      if (s.highlight !== undefined && !(Array.isArray(s.highlight) && s.highlight.every(Number.isInteger))) errs.push(`${at}.highlight must be line numbers`)
+      if (s.lines !== undefined && !(Array.isArray(s.lines) && s.lines.every((x) => x === null || Number.isInteger(x)))) errs.push(`${at}.lines is written by report.mjs — leave it out`)
+      if (longer(s.explain, CAP.explain)) errs.push(`${at}.explain is over ${CAP.explain} characters`)
+      break
+    case 'diff':
+      if (!isStr(s.diff) && !isStr(s.before) && !isStr(s.after)) errs.push(`${at} (diff) needs "diff" or "before"/"after"`)
+      for (const k of ['diff', 'before', 'after']) if (isStr(s[k]) && s[k].split('\n').length > CAP.codeLines) errs.push(`${at}.${k} has more than ${CAP.codeLines} lines`)
+      if (longer(s.explain, CAP.explain)) errs.push(`${at}.explain is over ${CAP.explain} characters`)
+      break
+    case 'flow': {
+      need('nodes', arr, 'must list the boxes: [{ "id", "label", "group"?, "detail"?, "changed"? }]')
+      const ids = new Set((Array.isArray(s.nodes) ? s.nodes : []).map((n) => n && n.id))
+      ;(Array.isArray(s.nodes) ? s.nodes : []).forEach((n, j) => {
+        if (!n || !isStr(n.id) || !isStr(n.label)) errs.push(`${at}.nodes[${j}] needs "id" and "label"`)
+        else if (longer(n.label, 44)) errs.push(`${at}.nodes[${j}].label is over 44 characters`)
+        if (n && longer(n.detail, CAP.note)) errs.push(`${at}.nodes[${j}].detail is over ${CAP.note} characters`)
+      })
+      if (ids.size > 16) errs.push(`${at} has more than 16 boxes — split it`)
+      ;(Array.isArray(s.edges) ? s.edges : []).forEach((e, j) => {
+        if (!e || !ids.has(e.from) || !ids.has(e.to)) errs.push(`${at}.edges[${j}] must join two node ids`)
+        if (e && longer(e.label, 40)) errs.push(`${at}.edges[${j}].label is over 40 characters`)
+      })
+      break
+    }
+    case 'sequence': {
+      need('participants', arr, 'must list the lifelines, in order')
+      const ps = new Set(Array.isArray(s.participants) ? s.participants : [])
+      if (ps.size > 6) errs.push(`${at} has more than 6 participants`)
+      need('messages', arr, 'must list [{ "from", "to", "text", "kind"?: "reply"|"error", "detail"? }]')
+      ;(Array.isArray(s.messages) ? s.messages : []).forEach((m, j) => {
+        if (!m || !ps.has(m.from) || !ps.has(m.to) || !isStr(m.text)) errs.push(`${at}.messages[${j}] needs "from" and "to" among the participants, and "text"`)
+        else if (longer(m.text, 60)) errs.push(`${at}.messages[${j}].text is over 60 characters — put the rest in "detail"`)
+        if (m && longer(m.detail, CAP.note)) errs.push(`${at}.messages[${j}].detail is over ${CAP.note} characters`)
+      })
+      if (Array.isArray(s.messages) && s.messages.length > 14) errs.push(`${at} has more than 14 messages`)
+      break
+    }
+    case 'example': {
+      const cases = Array.isArray(s.cases) ? s.cases : [{ name: s.title, steps: s.steps }]
+      if (!cases.length) errs.push(`${at} (example) needs "steps" or "cases"`)
+      cases.forEach((c, j) => {
+        if (!c || !arr(c.steps)) return errs.push(`${at} case ${j + 1} needs "steps": [{ "label", "input"?, "output"?, "note"? }]`)
+        if (Array.isArray(s.cases) && !isStr(c.name)) errs.push(`${at}.cases[${j}].name is required`)
+        c.steps.forEach((st, k) => {
+          if (!st || !isStr(st.label)) errs.push(`${at} case ${j + 1} step ${k + 1} needs "label"`)
+          else if (longer(st.label, 120)) errs.push(`${at} case ${j + 1} step ${k + 1} label is over 120 characters`)
+          if (st && longer(st.note, CAP.note)) errs.push(`${at} case ${j + 1} step ${k + 1} note is over ${CAP.note} characters`)
+          for (const key of ['input', 'output']) if (st && isStr(st[key]) && st[key].split('\n').length > 30) errs.push(`${at} case ${j + 1} step ${k + 1} ${key} is over 30 lines`)
+        })
+      })
+      break
+    }
+    case 'table':
+      need('columns', (v) => arr(v) && v.every(isStr), 'must be an array of strings')
+      need('rows', (v) => Array.isArray(v) && v.every((r) => Array.isArray(r)), 'must be an array of rows (arrays)')
+      if (Array.isArray(s.rows) && s.rows.length > 30) errs.push(`${at} has more than 30 rows`)
+      break
+    case 'files':
+      need('items', (v) => arr(v) && v.every((f) => f && isStr(f.path)), 'must be [{ "path", "change"?, "added"?, "deleted"?, "what"? }]')
+      ;(Array.isArray(s.items) ? s.items : []).forEach((f, j) => {
+        if (f && f.change !== undefined && !['added', 'modified', 'deleted', 'renamed'].includes(f.change)) errs.push(`${at}.items[${j}].change — added, modified, deleted or renamed`)
+        if (f && longer(f.what, 100)) errs.push(`${at}.items[${j}].what is over 100 characters`)
+      })
+      break
+  }
+  return errs
+}
+
+/** The repository the feature folder lives in: the nearest parent with a `.git`. */
+export function repoRoot(dir) {
+  let d = resolve(dir)
+  for (;;) {
+    if (existsSync(join(d, '.git'))) return d
+    const up = dirname(d)
+    if (up === d) return null
+    d = up
+  }
+}
+
+const isElision = (l) => /^(\.\.\.|…|⋮|\/\/\s*(\.\.\.|…)|#\s*(\.\.\.|…)|\/\*\s*(\.\.\.|…)\s*\*\/|\{\/\*\s*(\.\.\.|…)\s*\*\/\})$/.test(l)
+
+/**
+ * A code section must quote the repository: every non-blank line of the snippet (elisions such
+ * as `…` or `// ...` aside) is found, in order, in the file it names. Checked for the phase just
+ * written only — files move on after a phase, and an old report stays what it was.
+ */
+export function checkSnippets(report, root) {
+  const errs = []
+  ;(report.sections ?? []).forEach((s, i) => {
+    if (!s || s.type !== 'code' || !isStr(s.code) || !isStr(s.file)) return
+    const path = join(root, s.file)
+    let text
+    try {
+      text = readFileSync(path, 'utf8')
+    } catch {
+      errs.push(`${report.phase}.json: sections[${i}].file ${s.file} does not exist in the repository`)
+      return
+    }
+    const lines = text.split('\n').map((l) => l.trim())
+    let at = 0
+    const numbers = []
+    for (const raw of s.code.split('\n')) {
+      const l = raw.trim()
+      if (isElision(l)) {
+        numbers.push(null)
+        continue
+      }
+      if (!l) {
+        // A blank line sits where the file has one, right after the previous match.
+        numbers.push(at < lines.length && lines[at] === '' ? ++at : null)
+        continue
+      }
+      const found = lines.indexOf(l, at)
+      if (found < 0) {
+        errs.push(`${report.phase}.json: sections[${i}] — "${l.slice(0, 60)}" is not in ${s.file} (after the previous line); copy the code verbatim`)
+        return
+      }
+      numbers.push(found + 1)
+      at = found + 1
+    }
+    // The real line number of every snippet line (null for an elision), so the page numbers it
+    // right across a `// …`; report.mjs writes it into the phase file.
+    s.lines = numbers
+    if (Number.isInteger(s.line)) {
+      const first = s.code.split('\n').map((l) => l.trim()).find(Boolean)
+      if (first && lines[s.line - 1] !== first) errs.push(`${report.phase}.json: sections[${i}].line ${s.line} — the snippet starts at line ${lines.indexOf(first) + 1} of ${s.file}`)
+    }
+  })
+  return errs
+}
+
 /** Every `report/<phase>.json` of the feature: parsed, validated, in track order. */
-export function readReports(dir) {
+export function readReports(dir, strict = null) {
   const rdir = join(dir, DIR)
   const out = []
   const errors = []
@@ -99,7 +273,14 @@ export function readReports(dir) {
       errors.push(`${n}: invalid JSON — ${e.message}`)
       continue
     }
-    const errs = validate(r, phase)
+    const errs = validate(r, phase, phase === strict ? CAP : LOOSE)
+    if (phase === strict && !errs.length) {
+      const root = repoRoot(dir)
+      if (root) {
+        errs.push(...checkSnippets(r, root))
+        if (!errs.length && (r.sections ?? []).some((x) => x && x.lines)) writeFileSync(join(rdir, n), JSON.stringify(r, null, 1) + '\n')
+      }
+    }
     if (errs.length) errors.push(...errs)
     else out.push(r)
   }
@@ -138,9 +319,9 @@ function readmeExtras(dir) {
 }
 
 /** Everything the page shows, as one object. */
-export function model(dir, now = new Date().toISOString()) {
+export function model(dir, now = new Date().toISOString(), strict = null) {
   const header = readHeader(dir)
-  const { reports, errors } = readReports(dir)
+  const { reports, errors } = readReports(dir, strict)
   const size = header.size
   const track = size && TRACKS[size] ? TRACKS[size] : ORDER
   const ran = new Set(reports.map((r) => r.phase))
@@ -180,7 +361,7 @@ export function html(m) {
 <body>
 <div id="app"></div>
 <script type="application/json" id="kss-data">${embed(m)}</script>
-<script>${CLIENT}</script>
+<script>(${client.toString()})()</script>
 </body>
 </html>
 `
@@ -241,114 +422,75 @@ details.hl ul{margin:0;padding:0 12px 10px 30px}details.hl li{margin:3px 0}
 .errors{border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;white-space:pre-wrap}
 footer{color:var(--dim);font-size:12px;margin-top:30px}
 @media (max-width:640px){header.top h1{font-size:18px}.card{padding:14px}}
-`
-
-// The page script: builds everything with textContent from the embedded data — never innerHTML,
-// since the data is model-written text about the repository.
-const CLIENT = `
-(function(){
-var M=JSON.parse(document.getElementById('kss-data').textContent);
-var T={
- en:{overview:'Overview',decisions:'All decisions',phase:'Phase',did:'What was done',dec:'Decisions',why:'Why',rejected:'Rejected',source:'Source',open:'Open items',risks:'Risks',artifacts:'Artifacts',highlights:'Highlights',next:'Next',state:'State',size:'Size',cost:'Cost',agents:'agents',turns:'turns',tokens:'tokens',min:'min',search:'Search decisions…',all:'All',none:'No decisions recorded in this phase.',notyet:'Not run yet.',gen:'Generated',phases:'phases',theme:'Theme',noreport:'No report yet — phases add theirs as they finish.',decision:'Decision'},
- pt:{overview:'Visão geral',decisions:'Todas as decisões',phase:'Fase',did:'O que foi feito',dec:'Decisões',why:'Por quê',rejected:'Descartado',source:'Fonte',open:'Pendências',risks:'Riscos',artifacts:'Artefatos',highlights:'Destaques',next:'Próximo',state:'Estado',size:'Tamanho',cost:'Custo',agents:'agentes',turns:'turnos',tokens:'tokens',min:'min',search:'Buscar decisões…',all:'Todas',none:'Nenhuma decisão registrada nesta fase.',notyet:'Ainda não executada.',gen:'Gerado em',phases:'fases',theme:'Tema',noreport:'Sem relatório ainda — cada fase adiciona o seu ao terminar.',decision:'Decisão'},
- es:{overview:'Resumen',decisions:'Todas las decisiones',phase:'Fase',did:'Qué se hizo',dec:'Decisiones',why:'Por qué',rejected:'Descartado',source:'Fuente',open:'Pendientes',risks:'Riesgos',artifacts:'Artefactos',highlights:'Destacados',next:'Siguiente',state:'Estado',size:'Tamaño',cost:'Costo',agents:'agentes',turns:'turnos',tokens:'tokens',min:'min',search:'Buscar decisiones…',all:'Todas',none:'No hay decisiones registradas en esta fase.',notyet:'Aún no ejecutada.',gen:'Generado',phases:'fases',theme:'Tema',noreport:'Aún no hay informe — cada fase añade el suyo al terminar.',decision:'Decisión'}
-};
-var L=T[String(M.lang||'en').slice(0,2).toLowerCase()]||T.en;
-var byPhase={};M.reports.forEach(function(r){byPhase[r.phase]=r});
-var app=document.getElementById('app');
-function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=String(text);return e}
-function add(p){for(var i=1;i<arguments.length;i++){var c=arguments[i];if(c)p.appendChild(c)}return p}
-function human(n){if(!n)return '0';if(n>=1e9)return (n/1e9).toFixed(2)+'B';if(n>=1e6)return (n/1e6).toFixed(2)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'k';return String(n)}
-function costLine(c){if(!c)return null;var s=[c.agents+' '+L.agents,c.turns+' '+L.turns,human(c.tokens)+' '+L.tokens];if(c.minutes!=null)s.push(c.minutes+' '+L.min);if(c.harnesses&&c.harnesses.length)s.push(c.harnesses.join(' + '));return s.join(' · ')}
-var state={view:'overview',phase:null,q:'',kind:null};
-function readHash(){var h=decodeURIComponent(location.hash.slice(1));if(h.indexOf('phase-')===0&&byPhase[h.slice(6)]){state.view='phase';state.phase=h.slice(6)}else if(h==='decisions'){state.view='decisions'}else{state.view='overview'}}
-function go(view,phase){var h=view==='phase'?'phase-'+phase:view;if(location.hash.slice(1)!==h)location.hash=h;else{readHash();render()}}
-window.addEventListener('hashchange',function(){readHash();render()});
-document.addEventListener('keydown',function(e){if(state.view!=='phase'||e.target.tagName==='INPUT')return;var done=M.phases.filter(function(p){return byPhase[p]});var i=done.indexOf(state.phase);if(e.key==='ArrowRight'&&i<done.length-1)go('phase',done[i+1]);if(e.key==='ArrowLeft'&&i>0)go('phase',done[i-1])});
-function decision(d,phase){
- var box=el('div','dec');var b=el('button');b.type='button';
- add(b,el('span','id',d.id||'•'));
- var t=el('span','t');var head=el('b',null,d.title);if(d.status)head.appendChild(el('span','tag '+d.status,d.status));if(d.kind&&d.kind!==d.status)head.appendChild(el('span','tag',d.kind));if(phase)head.appendChild(el('span','tag',phase));
- add(t,head,el('span',null,d.decision));add(b,t,el('span','chev','›'));
- var body=el('div','body');
- if(d.why)add(body,add(el('p'),el('span','lbl',L.why),document.createTextNode(d.why)));
- if(d.rejected&&d.rejected.length){var p=add(el('p'),el('span','lbl',L.rejected));var ul=el('ul','did');d.rejected.forEach(function(x){ul.appendChild(el('li',null,x))});add(body,p,ul)}
- if(d.source)add(body,add(el('p'),el('span','lbl',L.source),el('code',null,d.source)));
- if(!body.childNodes.length)body.appendChild(el('p','empty','—'));
- b.addEventListener('click',function(){box.classList.toggle('open')});
- return add(box,b,body);
-}
-function header(){
- var h=el('header','top');add(h,el('h1',null,M.feature));
- if(M.size)h.appendChild(el('span','pill acc',L.size+' '+M.size));
- if(M.state)h.appendChild(el('span','pill',L.state+': '+M.state));
- h.appendChild(el('span','spacer'));
- if(M.next)add(h,el('span','pill',L.next+':'),el('code',null,M.next));
- var tb=el('button','theme',L.theme);tb.addEventListener('click',function(){var r=document.documentElement;var dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark'});h.appendChild(tb);
- return h;
-}
-function track(){
- var t=el('div','track');
- M.phases.forEach(function(p,i){var has=!!byPhase[p];var s=el('button','step '+(has?'done':'todo')+(state.view==='phase'&&state.phase===p?' on':''));s.type='button';add(s,el('span','n',has?'✓':String(i+1)),document.createTextNode(p));if(has)s.addEventListener('click',function(){go('phase',p)});else s.title=L.notyet;t.appendChild(s)});
- return t;
-}
-function tabs(){
- var n=el('nav','tabs');
- [['overview',L.overview],['decisions',L.decisions]].forEach(function(x){var b=el('button',state.view===x[0]?'on':'',x[1]);b.addEventListener('click',function(){go(x[0])});n.appendChild(b)});
- if(state.view==='phase'){var b=el('button','on',L.phase+': '+state.phase);n.appendChild(b)}
- return n;
-}
-function overview(){
- var f=document.createDocumentFragment();
- if(!M.reports.length){f.appendChild(el('p','empty',L.noreport));return f}
- var tl=el('div','timeline');
- M.reports.forEach(function(r){var it=el('div','tl');var nd=(r.decisions||[]).length;add(it,el('div','h',r.phase+(nd?' · '+nd+' '+L.dec.toLowerCase():'')),el('p',null,r.summary));var c=costLine(M.cost[r.phase]);if(c)it.appendChild(el('p',null,L.cost+': '+c));it.addEventListener('click',function(){go('phase',r.phase)});tl.appendChild(it)});
- f.appendChild(tl);return f;
-}
-function phaseView(r){
- var c=el('div','card');add(c,el('h2',null,r.title||r.phase),el('p','summary',r.summary));
- var meta=el('div','meta');var cl=costLine(M.cost[r.phase]);if(cl)add(meta,add(el('span'),el('b',null,L.cost+' '),document.createTextNode(cl)));if(r.at)add(meta,el('span',null,new Date(r.at).toLocaleString(M.lang)));if(meta.childNodes.length)c.appendChild(meta);
- c.appendChild(el('h3',null,L.did));var ul=el('ul','did');r.did.forEach(function(x){ul.appendChild(el('li',null,x))});c.appendChild(ul);
- c.appendChild(el('h3',null,L.dec+' ('+(r.decisions||[]).length+')'));
- if(r.decisions&&r.decisions.length)r.decisions.forEach(function(d){c.appendChild(decision(d))});else c.appendChild(el('p','empty',L.none));
- if(r.highlights&&r.highlights.length){c.appendChild(el('h3',null,L.highlights));r.highlights.forEach(function(g,i){var d=el('details','hl');if(i===0)d.open=true;d.appendChild(el('summary',null,g.group+' ('+g.items.length+')'));var u=el('ul');g.items.forEach(function(it){var li=el('li');if(it.label)li.appendChild(el('span','lab',it.label));li.appendChild(document.createTextNode(it.text));u.appendChild(li)});d.appendChild(u);c.appendChild(d)})}
- if(r.open&&r.open.length){c.appendChild(el('h3',null,L.open));r.open.forEach(function(x){c.appendChild(el('div','warnbox',x))})}
- if(r.risks&&r.risks.length){c.appendChild(el('h3',null,L.risks));r.risks.forEach(function(x){c.appendChild(el('div','warnbox risk',x))})}
- if(r.artifacts&&r.artifacts.length){c.appendChild(el('h3',null,L.artifacts));var au=el('ul','did');r.artifacts.forEach(function(a){var li=el('li');li.appendChild(el('code',null,a.path));if(a.what)li.appendChild(document.createTextNode(' — '+a.what));au.appendChild(li)});c.appendChild(au)}
- return c;
-}
-function decisionsView(){
- var f=document.createDocumentFragment();var all=[];M.reports.forEach(function(r){(r.decisions||[]).forEach(function(d){all.push({d:d,p:r.phase})})});
- var bar=el('div','filters');var inp=el('input');inp.placeholder=L.search;inp.value=state.q;bar.appendChild(inp);
- var kinds=[];all.forEach(function(x){if(x.d.kind&&kinds.indexOf(x.d.kind)<0)kinds.push(x.d.kind)});
- var list=el('div');
- function chip(k,label){var b=el('button','chip'+(state.kind===k?' on':''),label);b.addEventListener('click',function(){state.kind=k;render()});return b}
- bar.appendChild(chip(null,L.all+' ('+all.length+')'));kinds.forEach(function(k){bar.appendChild(chip(k,k))});
- function fill(){list.textContent='';var q=state.q.toLowerCase();var shown=all.filter(function(x){if(state.kind&&x.d.kind!==state.kind)return false;if(!q)return true;return [x.d.id,x.d.title,x.d.decision,x.d.why,(x.d.rejected||[]).join(' ')].join(' ').toLowerCase().indexOf(q)>=0});if(!shown.length)list.appendChild(el('p','empty','—'));shown.forEach(function(x){list.appendChild(decision(x.d,x.p))})}
- inp.addEventListener('input',function(){state.q=inp.value;fill()});
- fill();add(f,bar,list);return f;
-}
-function render(){
- app.textContent='';var w=el('div','wrap');add(w,header(),track(),tabs());
- if(M.errors&&M.errors.length)w.appendChild(el('div','errors',M.errors.join('\\n')));
- if(state.view==='phase'&&byPhase[state.phase])w.appendChild(phaseView(byPhase[state.phase]));
- else if(state.view==='decisions')w.appendChild(decisionsView());
- else w.appendChild(overview());
- add(w,el('footer',null,'KSS · '+M.reports.length+'/'+M.phases.length+' '+L.phases+' · '+L.gen+' '+new Date(M.generatedAt).toLocaleString(M.lang)));
- app.appendChild(w);
-}
-readHash();render();
-})();
+.chead{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.mini{background:var(--bg3);border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:2px 9px;font:600 11px inherit;font-family:inherit;cursor:pointer}
+.mini:hover:not(:disabled){color:var(--text);border-color:var(--accent)}.mini:disabled{opacity:.4;cursor:default}
+.block{margin:22px 0 6px}.btitle{font-size:15px;text-transform:none;letter-spacing:0;color:var(--text);margin:0 0 8px}
+.prose p{margin:6px 0}.prose ul,.prose ol{margin:6px 0;padding-left:22px}.prose h4{margin:10px 0 4px;font-size:14px}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:6px;padding:4px 12px}
+.callout.warn{border-left-color:var(--warn);background:transparent}.callout.bad{border-left-color:var(--bad);background:transparent}.callout.ok{border-left-color:var(--ok);background:transparent}
+figure{margin:0}
+.code{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.code figcaption{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--bg2);font-size:12px}
+.code .file{background:none;padding:0;color:var(--text)}.code .lang{color:var(--dim);font:11px var(--mono)}.grow{flex:1}
+.code pre{margin:0;padding:8px 0;overflow:auto;font:12.5px/1.55 var(--mono)}
+.code pre.folded{max-height:420px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 80%,transparent)}
+.code .more{margin:6px 10px}
+.ln{display:flex;white-space:pre;padding:0 12px 0 0}.ln .no{width:48px;flex:none;text-align:right;padding-right:12px;color:var(--dim);opacity:.6;user-select:none}
+.ln .tx{flex:1;padding-left:4px}.ln.gap{background:var(--bg2);opacity:.7}.ln.hl{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.diff .ln{padding-left:12px}.diff .ln.add{background:rgba(143,207,111,.12);color:var(--ok)}.diff .ln.del{background:rgba(239,100,97,.12);color:var(--bad)}.diff .ln.hunk{color:var(--dim)}
+.tk-c{color:var(--dim);font-style:italic}.tk-s{color:#8fcf6f}.tk-n{color:#e8c547}.tk-k{color:var(--accent);font-weight:600}.tk-t{color:#6fa8dc}.tk-f{color:#c792ea}.tk-d{color:#6cc4c4}
+:root:not([data-theme=dark]) .tk-s{color:#3f8f2f}:root:not([data-theme=dark]) .tk-n{color:#9a6b00}:root:not([data-theme=dark]) .tk-t{color:#2f6db0}:root:not([data-theme=dark]) .tk-f{color:#8a3fc0}:root:not([data-theme=dark]) .tk-d{color:#1f8a8a}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .tk-s{color:#8fcf6f}:root:not([data-theme=light]) .tk-n{color:#e8c547}:root:not([data-theme=light]) .tk-t{color:#6fa8dc}:root:not([data-theme=light]) .tk-f{color:#c792ea}:root:not([data-theme=light]) .tk-d{color:#6cc4c4}}
+.explain{border-top:1px dashed var(--line);padding:6px 12px;font-size:13px;background:var(--bg2)}
+.diagram{border:1px solid var(--line);border-radius:8px;background:var(--bg);overflow:hidden}
+.dscroll{overflow:auto;padding:4px}.dscroll svg{display:block;margin:0 auto;max-width:none}
+.dinfo{border-top:1px solid var(--line);padding:8px 12px;font-size:13px;color:var(--dim);min-height:38px}.dinfo b{color:var(--text);margin-right:6px}.dinfo .links{margin:6px 0 0;padding-left:18px}
+.dbar{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
+svg .node{cursor:pointer;outline:none}svg .node rect{fill:var(--bg2);stroke-width:1.5}svg .node .band{stroke:none}
+svg .node:hover rect:first-child,svg .node.on rect:first-child,svg .node:focus rect:first-child{fill:var(--accent-soft);stroke-width:2.5}
+svg .nlabel{fill:var(--text);font:600 12px -apple-system,BlinkMacSystemFont,sans-serif}svg .nlabel.sub{font-weight:400;fill:var(--dim)}
+svg .node .dot{fill:var(--accent)}
+svg .edge path{fill:none;stroke:var(--line);stroke-width:1.6}svg .edge.on path{stroke:var(--accent);stroke-width:2.4}
+svg .edgelabel{fill:var(--dim);font:11px -apple-system,BlinkMacSystemFont,sans-serif;paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+svg .arrowhead{fill:var(--dim)}
+svg .life{stroke:var(--line);stroke-dasharray:4 4}svg .part rect{fill:var(--bg2);stroke:var(--accent)}svg .part text{fill:var(--text);font:600 12px -apple-system,BlinkMacSystemFont,sans-serif}
+svg .msg{cursor:pointer;outline:none}svg .msg line,svg .msg path{stroke:var(--dim);stroke-width:1.6;fill:none}svg .msg .hit{fill:transparent}
+svg .msg.reply line{stroke-dasharray:5 4}svg .msg.error line,svg .msg.error path{stroke:var(--bad)}
+svg .mlabel{fill:var(--text);font:12px -apple-system,BlinkMacSystemFont,sans-serif;paint-order:stroke;stroke:var(--bg);stroke-width:4px}
+svg .msg.on line,svg .msg.on path{stroke:var(--accent);stroke-width:2.6}svg .msg.on .mlabel{fill:var(--accent);font-weight:600}svg .msg.past .mlabel{fill:var(--dim)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--dim)}.lg{display:flex;align-items:center;gap:5px}.lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.example{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:10px 12px}
+.etabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.etabs:empty{display:none}
+.edots{display:flex;gap:6px;margin-bottom:8px}.edot{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--bg2);color:var(--dim);font:600 11px var(--mono);cursor:pointer}
+.edot.past{background:var(--accent-soft);color:var(--text)}.edot.on{background:var(--accent);color:#1c1206;border-color:var(--accent)}
+.estep .elabel{font:600 11px var(--mono);color:var(--dim)}.estep .etitle{font-size:15px;font-weight:600;margin:2px 0 8px}
+.ehead{font:600 11px var(--mono);color:var(--dim);margin:8px 0 4px;text-transform:uppercase}
+pre.io{margin:0;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:12.5px/1.5 var(--mono);overflow:auto;white-space:pre}
+.enav{display:flex;gap:6px;margin-top:10px}
+.tscroll{overflow:auto;border:1px solid var(--line);border-radius:8px}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--bg2);font-size:12px;color:var(--dim)}tr:last-child td{border-bottom:none}
+.files{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 10px}
+.ftotal{font:600 12px var(--mono);color:var(--dim);margin:4px 0 6px}
+.fdir summary{cursor:pointer;font:600 12px var(--mono);padding:4px 0}
+.frow{display:flex;gap:8px;align-items:baseline;padding:3px 0 3px 14px;font-size:12.5px;flex-wrap:wrap}
+.fch{font:700 10px var(--mono);width:16px;height:16px;display:inline-grid;place-items:center;border-radius:4px;background:var(--bg3)}
+.fch.added{background:rgba(143,207,111,.2);color:var(--ok)}.fch.deleted{background:rgba(239,100,97,.2);color:var(--bad)}.fch.modified{background:var(--accent-soft);color:var(--accent)}
+.fnum{font:11px var(--mono);color:var(--dim)}.fwhat{color:var(--dim)}
 `
 
 function main() {
   const args = process.argv.slice(2)
-  const dir = args.find((a) => !a.startsWith('--'))
+  const dir = args.find((a, i) => !a.startsWith('--') && !['--check', '--phase'].includes(args[i - 1]))
   if (!dir) {
-    console.error('usage: report.mjs <feature-dir> [--check <phase>]')
+    console.error('usage: report.mjs <feature-dir> [--phase <phase>] [--check <phase>]')
     process.exit(2)
   }
-  const check = args.includes('--check') ? args[args.indexOf('--check') + 1] : null
+  const flag = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : null)
+  const check = flag('--check')
+  // --phase names the phase that just wrote its file: it is held to the succinct limits and its
+  // code snippets are checked against the repository.
+  const phase = flag('--phase') ?? check
   if (check) {
     const p = join(dir, DIR, `${check}.json`)
     let r
@@ -358,7 +500,9 @@ function main() {
       console.error(`report: ${p}: ${e.message}`)
       process.exit(1)
     }
+    const root = repoRoot(dir)
     const errs = validate(r, check)
+    if (!errs.length && root) errs.push(...checkSnippets(r, root))
     if (errs.length) {
       console.error(errs.map((e) => `report: ${e}`).join('\n'))
       process.exit(1)
@@ -366,7 +510,7 @@ function main() {
     console.log(`report: ${check}.json ok`)
     return
   }
-  const m = model(dir)
+  const m = model(dir, undefined, phase)
   if (m.errors.length) {
     console.error(m.errors.map((e) => `report: ${e}`).join('\n'))
     process.exit(1)

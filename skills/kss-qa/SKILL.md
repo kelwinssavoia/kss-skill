@@ -63,8 +63,8 @@ environment catalog) — never widen it, never add hints to the plan from what y
    environment); offer `--only <id>` to re-run it. An adjustment is listed, not ticketed, unless
    the user asks.
 5. **Report** (DESIGN.md §25): explain this phase to a human before committing — write
-   `<features_root>/NNN-slug/report/qa.json` as `.kss/references/report.md` describes, every
-   string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug`
+   `<features_root>/NNN-slug/report/qa.json` as `.kss/references/report.md` describes — short, and shown
+   rather than told — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase qa`
    and fix the file until it prints `report: …/index.html`. The commit carries `report/`.
 6. **Commit** `docs(NNN): qa <verdict lowercase>` with `<feature>/qa/` (plan, seed, report,
    result, the run's evidence; service logs are gitignored) and `<feature>/report/`.
