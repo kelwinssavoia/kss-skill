@@ -517,6 +517,22 @@ summary and Next line.
 
 Reads `README.md`, `00-brief.md`, the config and `domain_docs`.
 
+
+**Going back.** A later phase can need an earlier one again — a review round or a QA run opens fix
+tickets that only `kss-execute` may run. The Next line then points back, with the arguments and
+the phase to return to: `node .kss/scripts/next.mjs <dir> --back execute --ticket 15 --ticket 16
+--then review` prints `Next: /kss-execute NNN-slug --ticket 15 --ticket 16 (then: /kss-review
+NNN-slug)`, which the asking phase writes into the README header and prints last. `kss-execute`
+is started by the user only (a model cannot invoke it), so the asking phase never tries; the board,
+the statusline and kss-desktop show the Next line as the step to run. When the phase run ends, its
+`next.mjs --after execute` sees the pending `(then: …)` and returns to `review` instead of the
+track — the status is always where the work is, without anyone retyping it.
+
+**Review ends when the user says so.** Review works in rounds — reviewers look again after every
+fix — so `next.mjs --after review` keeps the Next line on review
+(`Next: /kss-review NNN-slug (finish: /kss-review NNN-slug --done)`), and a loop back from review
+returns to it. Only `kss-review NNN-slug --done`, run by the user (kss-desktop: **Finish review**),
+records the end and lets the track go on; a model never passes `--done` on its own.
 ### 8.1 Questions
 
 Built from the brief:

@@ -61,8 +61,11 @@ phase may well run in the other one (DESIGN.md §19).
    `Ticket graph for NNN-slug is not approved. Run kss-tickets NNN-slug and approve it.`
 5. Pick the sub-procedure from `execution` in `.kss/config.md`: `multi-agent` → §A,
    `single-session` → §B. Never mix them.
-6. `--ticket NN` runs that one ticket only (a re-run or a fix ticket); its blockers must already
-   be `integrated`, otherwise stop with `Ticket NN is blocked by <ids>. Run them first.`
+6. `--ticket NN` (repeatable: `--ticket 15 --ticket 16`) runs those tickets only — a re-run, or the
+   fix tickets a review or qa round opened; their blockers must already be `integrated` (or be in
+   the same run), otherwise stop with `Ticket NN is blocked by <ids>. Run them first.` The README's
+   Next line for such a run ends `(then: /kss-review …)`; the closing `next.mjs --after execute`
+   reads it and returns there by itself.
 
 **Enter the phase before any other work.** As soon as the preconditions pass — before reading the
 inputs, spawning anything or asking anything — run

@@ -59,6 +59,13 @@ environment catalog) — never widen it, never add hints to the plan from what y
    the Problems and Adjustments sections, condensed.
 4. **Route.** A `fail` is a defect against an FR: list it as `QA-NN · FR-xx · <one line>` and offer
    to open fix tickets through `kss-execute` (numbered after the last ticket, with all the gates).
+   When the user accepts, **loop back** (DESIGN.md §3.9): `kss-execute` is started by the user only — its skill cannot
+   be invoked by a model, so never try, and never reproduce its work by other means. Write the fix
+   tickets, add them to `05-tickets/graph.md`, commit them (`docs(NNN): qa fix tickets`), then
+   set the README header's `**Next:**` to the output of
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then qa`
+   and print that line as the last line of the turn. The board and kss-desktop show it as the next
+   step; when execute ends, its Next returns to `qa` by itself.
    An `inconclusive` or `blocked` scenario is shown with its note (Jev disagreed, low confidence,
    environment); offer `--only <id>` to re-run it. An adjustment is listed, not ticketed, unless
    the user asks.

@@ -258,3 +258,9 @@ test('quota: the first reading is the baseline, and a reset carries what was use
   // Another feature starts from its own baseline.
   expect(usedBy(trackQuota(q, '013-y', [five(10)]).windows[0]!)).toBe(0)
 })
+
+test('a Next line runs as its command; the advice in parentheses is not an argument', () => {
+  expect(commandOf('/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')).toEqual({ command: 'kss-execute', args: '061-x --ticket 15 --ticket 16' })
+  expect(commandOf('/kss-review 061-x (optional first: /kss-qa 061-x)')).toEqual({ command: 'kss-review', args: '061-x' })
+  expect(commandOf('/kss-review 061-x (finish: /kss-review 061-x --done)')).toEqual({ command: 'kss-review', args: '061-x' })
+})

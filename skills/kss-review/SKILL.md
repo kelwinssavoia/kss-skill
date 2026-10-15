@@ -1,7 +1,7 @@
 ---
 name: kss-review
 description: Work a feature's PR review round — collect comments and CI findings, triage them, fix, dispute, answer or defer, reply on the threads; optionally watch the PR and run rounds automatically. Run it after kss-execute has opened the PR.
-argument-hint: NNN-<slug> [--watch]
+argument-hint: NNN-<slug> [--watch | --done]
 disable-model-invocation: true
 ---
 
@@ -40,6 +40,24 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## Rounds, and finishing
+
+Review works in **rounds**, and **only the user finishes it**. A round never ends the review: its
+Next line stays on `kss-review`, because the reviewers will look again after the fixes. The
+review ends when the user runs `kss-review NNN-slug --done` (kss-desktop's **Finish review**) —
+never on your own judgement, never because a round found nothing, never by passing `--done`
+yourself.
+
+`--done` runs no round. It:
+1. Lists what is still open — `RV-` ids not resolved, open threads on the PR, CI conclusion — and
+   if anything is, asks once: `Open: <ids>. Finish the review anyway?` A no ends the turn with the
+   usual round Next line.
+2. Appends `## Finished` to `07-review.md` (date, open items left, who decided: the user) and
+   `Finished: <date>` to the README Review block; sets `.kss/current` `review.state` to `"done"`.
+3. Goes to the Summary, whose Next line is
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review --done` — the track goes on
+   (docs on L, the end of the track on S and M) — and **closes the run** as described there.
 
 ## Preconditions
 
@@ -91,9 +109,17 @@ this phase keeps up to date afterwards.
    `D-`/`AD-`, or have the user override it via `kss-review-decisions` and *then* fix it, with
    the spec marked for revision in the README.
 5. **Fix.** Write the fix tickets into `05-tickets/`, numbered after the last existing ticket,
-   grouped by file, and run them through `kss-execute NNN-slug --ticket NN`. Every gate applies
+   grouped by file; they run through `kss-execute NNN-slug --ticket NN …`, where every gate applies
    — report shape, commit order (test committed first), reviewer verdict, integration; the tests
    themselves run only in the coordinator's single run after integration.
+   **The loop back** (DESIGN.md §3.9): `kss-execute` is started by the user only — its skill cannot
+   be invoked by a model, so never try, and never reproduce its work by other means. Write the fix
+   tickets, add them to `05-tickets/graph.md`, commit them (`docs(NNN): review round <n> fix tickets`), then
+   set the README header's `**Next:**` to the output of
+   `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then review`
+   and print that line as the last line of the turn. The board and kss-desktop show it as the next
+   step; when execute ends, its Next returns to `review` by itself.
+   The round ends there; steps 6–7 run in the next round, once the fix tickets are integrated.
 6. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.
@@ -177,7 +203,7 @@ branch now — `git add <features_root>/NNN-slug <domain_docs paths touched> <do
 `Uncommitted feature artifacts: <paths>` instead of printing the summary. `.kss/current` is
 gitignored and never part of this.
 
-**Close the run** when nothing is left to do for this feature (Ready for merge decision, or the watch stopped because the PR was merged or closed):
+**Close the run** only after `--done`, or when the watch stopped because the PR was merged or closed:
 `node .kss/scripts/current.mjs end`. It sets `phase: "done"` so the hooks stop appending to
 `metrics.jsonl`, and a harness with a status line hands it back to the previous one. Running any later `kss-` skill on
 this feature re-opens it automatically. The main session's own cost for this last phase is not
@@ -193,14 +219,18 @@ Threads: <n> resolved · <n> open
 CI: <conclusion>
 Cost: <line rendered from metrics.jsonl>
 Report: <features_root>/NNN-slug/report/index.html#phase-review
-Ready for merge decision. This skill never merges.
+<after a round:> Review stays open — run kss-review again after the next push, or finish it with --done.
+<after --done:>  Review finished by the user. Ready for merge decision. This skill never merges.
 Safe to /clear.
-Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after review>
+Next: <output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after review [--done]>
 ```
 
 The `Next:` line is **never written by hand**: it is the output of
-`node .kss/scripts/next.mjs <features_root>/NNN-slug --after review`, which knows the track of the
-feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the README header. On L it is `kss-docs-tech`; on S and M the track ends here and docs are listed as optional.
+`node .kss/scripts/next.mjs <features_root>/NNN-slug --after review`, with `--done` only in a
+`--done` run (DESIGN.md §3.9). After a round it stays on `kss-review` (with the finish command in
+parentheses); after `--done` it is the track's next — `kss-docs-tech` on L, the end of the track
+on S and M. A round that opened fix tickets writes the loop back (step 5) instead. Copy it
+verbatim into the summary and into the README header.
 
 Print `Cost: n/a` when `metrics.jsonl` does not exist. While watching, replace the last two lines
 with `Watching PR <url> — next check in <n>m.`
@@ -214,7 +244,8 @@ with `Watching PR <url> — next check in <n>m.`
 - The triage table is printed and confirmed in exactly one turn.
 - A finding contradicting a decision is disputed or overridden, never silently fixed.
 - Fix tickets are numbered after the last ticket, grouped by file, executed via `kss-execute`
-  with all the gates.
+  with all the gates — started by the user from the Next line (`--back execute … --then review`),
+  never invoked by this skill.
 - Resolve only the threads that were fixed or answered; disputes and deferrals stay open.
 - Push only to the PR branch, never to `base_branch`.
 - `--watch` uses whatever the adapter names, never a polling subagent; it dies with the session and
@@ -228,3 +259,4 @@ with `Watching PR <url> — next check in <n>m.`
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
 - End with the phase report: `report/review.json` per `.kss/references/report.md`, then `report.mjs`.
+- Only the user finishes the review (`--done`); a round always leaves Next on `kss-review`.

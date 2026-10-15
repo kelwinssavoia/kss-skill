@@ -6,7 +6,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { nextPhase, nextLine, check, TRACKS, ORDER, PREFIX } from './next.mjs'
+import { nextPhase, nextLine, check, backLine, pendingReturn, TRACKS, ORDER, PREFIX } from './next.mjs'
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'next.mjs')
 
@@ -39,7 +39,8 @@ test('M: no grill — investigate goes straight to spec unless the user escalate
   assert.equal(nextLine('M', 'execute', '001-x'), 'Next: /kss-review 001-x (optional first: /kss-qa 001-x)')
   assert.equal(nextPhase('M', 'qa'), 'review', 'qa resumes the track at review')
   assert.equal(check('M', 'qa'), 'optional')
-  assert.equal(nextLine('M', 'review', '001-x'), 'Next: nothing on track M — /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
+  assert.equal(nextLine('M', 'review', '001-x'), 'Next: /kss-review 001-x (finish: /kss-review 001-x --done)', 'a round never ends the review')
+  assert.equal(nextLine('M', 'review', '001-x', { done: true }), 'Next: nothing on track M — /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
   assert.equal(check('M', 'grill'), 'optional')
   assert.equal(check('M', 'spec'), 'on-track')
 })
@@ -88,4 +89,39 @@ test('CLI reads size, state and id from the README header', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('a loop back runs an earlier phase with its tickets and names the phase to return to', () => {
+  assert.equal(backLine('execute', '061-x', { tickets: ['15', '16'], then: 'review' }), 'Next: /kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')
+  assert.equal(backLine('execute', '061-x', { tickets: ['7'], then: 'qa', harness: 'codex' }), 'Next: $kss-execute 061-x --ticket 07 (then: $kss-qa 061-x)')
+  assert.throws(() => backLine('fixing', '061-x', {}))
+})
+
+test('the phase a loop back sent you to returns to where it came from', () => {
+  const back = '/kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)'
+  assert.equal(pendingReturn(back, 'execute'), 'review')
+  assert.equal(pendingReturn(back, 'review'), null, 'only the phase it sent you to')
+  assert.equal(pendingReturn('/kss-review 061-x (optional first: /kss-qa 061-x)', 'review'), null)
+  assert.equal(nextLine('L', 'execute', '061-x', { readmeNext: back.replace('review', 'qa') }), 'Next: /kss-qa 061-x')
+  assert.equal(nextLine('M', 'execute', '061-x', { readmeNext: '/kss-execute 061-x' }), 'Next: /kss-review 061-x (optional first: /kss-qa 061-x)')
+})
+
+test('CLI --back, then --after execute returns', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'next-back-'))
+  const readme = (next) => writeFileSync(join(dir, 'README.md'), `# 061-x\n\n**State:** review · **Size:** L · **Track:** …\n**Next:** ${next}  <!-- from scripts/next.mjs -->\n`)
+  readme('/kss-docs-tech 061-x')
+  const run = (...a) => spawnSync(process.execPath, [SCRIPT, dir, '--harness', 'claude-code', ...a], { encoding: 'utf8' })
+  const back = run('--back', 'execute', '--ticket', '15', '--ticket', '16', '--then', 'review')
+  assert.equal(back.stdout.trim(), 'Next: /kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')
+  readme(back.stdout.trim().replace(/^Next: /, ''))
+  assert.equal(run('--after', 'execute').stdout.trim(), 'Next: /kss-review 061-x')
+  rmSync(dir, { recursive: true })
+})
+
+test('review stays the next step after every round; only --done moves the track on', () => {
+  assert.equal(nextLine('L', 'review', '061-x', {}), 'Next: /kss-review 061-x (finish: /kss-review 061-x --done)')
+  assert.equal(nextLine('L', 'review', '061-x', { done: true }), 'Next: /kss-docs-tech 061-x')
+  assert.match(nextLine('M', 'review', '061-x', { done: true }), /nothing on track M/)
+  // A loop back from review returns to review, still open.
+  assert.equal(nextLine('L', 'execute', '061-x', { readmeNext: '/kss-execute 061-x --ticket 15 (then: /kss-review 061-x)' }), 'Next: /kss-review 061-x')
 })

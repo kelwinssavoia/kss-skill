@@ -8,5 +8,21 @@ import type { KssBoard, KssPhase } from './types.ts'
  */
 export function marks(b: Pick<KssBoard, 'phases' | 'isPhaseFinished' | 'isClosed' | 'nextPhase'>): KssPhase[] {
   if (!b.isPhaseFinished || b.isClosed) return b.phases
-  return b.phases.map(p => (p.mark === 'current' ? { ...p, mark: 'done' } : p.name === b.nextPhase ? { ...p, mark: 'next' as KssPhase['mark'] } : p))
+  const at = b.phases.findIndex(p => p.mark === 'current')
+  const to = b.phases.findIndex(p => p.name === b.nextPhase)
+  const next = (p: KssPhase): KssPhase => ({ ...p, mark: 'next' as KssPhase['mark'] })
+  // A loop back (DESIGN.md §3.9): the running phase is not done — it waits on an earlier one.
+  if (at >= 0 && to >= 0 && to < at) return b.phases.map((p, i) => (i === to ? next(p) : p))
+  return b.phases.map(p => (p.mark === 'current' ? { ...p, mark: 'done' } : p.name === b.nextPhase ? next(p) : p))
+}
+
+/** The phase a loop back returns to: `(then: /kss-review …)` on the Next line. */
+export function thenOf(next: string | null): string | null {
+  return (next && /\(then:\s*[/$](?:kss:)?kss-([a-z-]+)/.exec(next)?.[1]) || null
+}
+
+/** The command that finishes a phase the user closes by hand: review's `(finish: /kss-review NNN-slug --done)`. */
+export function finishOf(next: string | null): { phase: string; args: string } | null {
+  const m = next ? /\(finish:\s*[/$](?:kss:)?kss-([a-z-]+)\s*([^)]*)\)/.exec(next) : null
+  return m ? { phase: m[1]!, args: m[2]!.trim() } : null
 }

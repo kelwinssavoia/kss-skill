@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { finishOf, thenOf } from '../../../shared/board.ts'
 import { optionalOf } from '../../../shared/commands.ts'
 import type { Harness, ProjectInfo, Session } from '../../../shared/types.ts'
 import type { Run, View } from '../App.tsx'
@@ -28,9 +29,14 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
   const [harness, setHarness] = useState<Harness>(next ? harnessFor(next.phase) : 'claude-code')
   useEffect(() => setHarness(next ? harnessFor(next.phase) : project.harnesses.claude ? 'claude-code' : 'codex'), [next?.phase, session.path])
   const optional = optionalOf(b?.next ?? null)
+  // A loop back (DESIGN.md §3.9): the earlier phase runs, then the one that asked for it.
+  const then = thenOf(b?.next ?? null)
+  // Review is finished by the user, never by a round (DESIGN.md §3.9).
+  const finish = finishOf(b?.next ?? null)
   // A phase whose Next still names it has not finished: running it again resumes it (every
   // skill resumes from the feature folder), it does not start over.
-  const isResume = !!next && !!b && !b.isPhaseFinished
+  // Review's Next names review after every round: that is a new round, not a resume.
+  const isResume = !!next && !!b && !b.isPhaseFinished && !finishOf(b.next)
 
   return (
     <header className="session-header">
@@ -65,6 +71,15 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
             <button className="primary" title={isResume ? 'The phase has not finished: a fresh process resumes it from the feature folder' : 'A fresh process with the Next command — the same as /clear + the command'} onClick={() => onRun({ kind: 'phase', harness, phase: next.phase, args: next.args })}>
               ▶ {isResume ? 'Resume' : 'Run'} {next.phase}
             </button>
+            {then && <span className="dim" title={`When ${next.phase} ends, the Next line returns to ${then}`}>then {then}</span>}
+            {finish && (
+              <button
+                title="The reviewers are done: record the end of the review and move the track on"
+                onClick={() => confirm(`Finish the ${finish.phase}? Its Next line moves on along the track; open items are listed first.`) && onRun({ kind: 'phase', harness, phase: finish.phase, args: finish.args })}
+              >
+                ✓ Finish {finish.phase}
+              </button>
+            )}
             {optional && (
               <button onClick={() => onRun({ kind: 'phase', harness, phase: optional.phase, args: optional.args })} title="Optional phase the track offers first">
                 {optional.phase}
