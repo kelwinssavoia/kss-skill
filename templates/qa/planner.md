@@ -103,6 +103,12 @@ Write exactly these files under `out/`:
   linked (for example the user id attribute equals the seeded user id).
 - List every service whose screens or data your scenarios touch; the dependencies
   `environment.md` lists are started with them.
+- **Every scenario starts from the seed alone.** Scenarios run one at a time, in any order and
+  often alone, each against the same freshly seeded environment: never assume an earlier scenario
+  ran, and never expect what another scenario's actions would create. When a scenario needs a
+  state that a flow produces (a change already made, a document already uploaded), seed that state
+  directly, with its own rows, and keep the rows of different scenarios from interfering (a
+  scenario that changes something should change rows no other scenario reads).
 - **Follow every seed recipe** in `environment.md` that applies to the rows you seed: each one is a
   rule the application relies on that the schema does not show.
 - **External providers are stubbed, not absent.** When a screen shows or offers something an

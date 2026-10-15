@@ -163,6 +163,12 @@ test('databases: psql is only the default, and the schema keeps its own format',
   assert.equal(schemaName({ schema: 'db/SCHEMA' }, 'main'), 'schema/main')
 })
 
+test('the planner prompt makes every scenario start from the seed alone', () => {
+  const tpl = readFileSync(join(HERE, '../templates/qa/planner.md'), 'utf8')
+  assert.match(tpl, /Every scenario starts from the seed alone/)
+  assert.match(tpl, /never assume an earlier scenario\s+ran/)
+})
+
 test('the planner prompt names no stack', () => {
   const tpl = readFileSync(join(HERE, '../templates/qa/planner.md'), 'utf8')
   assert.doesNotMatch(tpl, /prisma|postgres|keycloak|merchant|realm/i)

@@ -48,7 +48,7 @@ environment catalog) — never widen it, never add hints to the plan from what y
    question: run as planned, or edit first? A plan with assumptions the user rejects is edited in
    `plan.json` / `seed/` (by the user, or by you on their exact instruction) — never re-derived from
    the code. The **environment audit** (`qa.mjs audit`, run by `all` when `qa/audit.json` is missing)
-   is the one sighted step: it completes the seed and writes the provider stubs so the code reads the
+   is the one sighted step — `up` runs it too when it is missing, so the desktop's step buttons get it: it completes the seed and writes the provider stubs so the code reads the
    plan's starting state, and appends what it learned to the recipes file (DESIGN.md §22.5). You do
    not do its work by hand.
 2. **Run.** `node .kss/scripts/qa.mjs all --feature NNN-slug [--only …] [--keep-up]` in the

@@ -957,6 +957,11 @@ async function cmdUp(cwd, opts) {
   const sp = statePath(cwd)
   const prev = readJsonFile(sp, null)
   if (prev && Object.values(prev.pids || {}).some(alive)) throw new Error('a QA environment is already up — run qa.mjs down first')
+  // The audit belongs to the plan, but `up` is the one step every path goes through (`all`, the
+  // desktop's step buttons, a hand-run `plan` + `up`): a plan without its audit seeds and stubs an
+  // environment the code cannot read. A no-op when audit.json exists or the audit is off.
+  await cmdAudit(cwd, { feature: f.name })
+  Object.assign(plan, readJsonFile(join(f.qa, 'plan.json'), plan))
 
   const levels = serviceLevels(cfg.services, plan.services || [])
   const all = levels.flat()
