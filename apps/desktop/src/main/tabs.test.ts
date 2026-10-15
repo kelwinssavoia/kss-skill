@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { appArgs, launchOf, parseNext } from '../shared/commands.ts'
-import { marks, thenOf } from '../shared/board.ts'
+import { finishOf, marks, thenOf } from '../shared/board.ts'
 import type { SavedTab } from '../shared/types.ts'
 import { claudeConversationExists, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
@@ -87,4 +87,11 @@ test('a loop back: the earlier phase is the one waiting, the running one is not 
   assert.deepEqual(parseNext(line), { phase: 'execute', args: '061-x --ticket 15 --ticket 16' })
   assert.equal(thenOf(line), 'review')
   assert.equal(thenOf('/kss-review 061-x (optional first: /kss-qa 061-x)'), null)
+})
+
+test('review stays the next step, with its finish command offered apart', () => {
+  const line = '/kss-review 061-x (finish: /kss-review 061-x --done)'
+  assert.deepEqual(parseNext(line), { phase: 'review', args: '061-x' })
+  assert.deepEqual(finishOf(line), { phase: 'review', args: '061-x --done' })
+  assert.equal(finishOf('/kss-docs-tech 061-x'), null)
 })

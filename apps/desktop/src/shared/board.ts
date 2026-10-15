@@ -20,3 +20,9 @@ export function marks(b: Pick<KssBoard, 'phases' | 'isPhaseFinished' | 'isClosed
 export function thenOf(next: string | null): string | null {
   return (next && /\(then:\s*[/$](?:kss:)?kss-([a-z-]+)/.exec(next)?.[1]) || null
 }
+
+/** The command that finishes a phase the user closes by hand: review's `(finish: /kss-review NNN-slug --done)`. */
+export function finishOf(next: string | null): { phase: string; args: string } | null {
+  const m = next ? /\(finish:\s*[/$](?:kss:)?kss-([a-z-]+)\s*([^)]*)\)/.exec(next) : null
+  return m ? { phase: m[1]!, args: m[2]!.trim() } : null
+}

@@ -39,7 +39,8 @@ test('M: no grill — investigate goes straight to spec unless the user escalate
   assert.equal(nextLine('M', 'execute', '001-x'), 'Next: /kss-review 001-x (optional first: /kss-qa 001-x)')
   assert.equal(nextPhase('M', 'qa'), 'review', 'qa resumes the track at review')
   assert.equal(check('M', 'qa'), 'optional')
-  assert.equal(nextLine('M', 'review', '001-x'), 'Next: nothing on track M — /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
+  assert.equal(nextLine('M', 'review', '001-x'), 'Next: /kss-review 001-x (finish: /kss-review 001-x --done)', 'a round never ends the review')
+  assert.equal(nextLine('M', 'review', '001-x', { done: true }), 'Next: nothing on track M — /kss-docs-tech 001-x or /kss-docs-product 001-x are optional.')
   assert.equal(check('M', 'grill'), 'optional')
   assert.equal(check('M', 'spec'), 'on-track')
 })
@@ -115,4 +116,12 @@ test('CLI --back, then --after execute returns', () => {
   readme(back.stdout.trim().replace(/^Next: /, ''))
   assert.equal(run('--after', 'execute').stdout.trim(), 'Next: /kss-review 061-x')
   rmSync(dir, { recursive: true })
+})
+
+test('review stays the next step after every round; only --done moves the track on', () => {
+  assert.equal(nextLine('L', 'review', '061-x', {}), 'Next: /kss-review 061-x (finish: /kss-review 061-x --done)')
+  assert.equal(nextLine('L', 'review', '061-x', { done: true }), 'Next: /kss-docs-tech 061-x')
+  assert.match(nextLine('M', 'review', '061-x', { done: true }), /nothing on track M/)
+  // A loop back from review returns to review, still open.
+  assert.equal(nextLine('L', 'execute', '061-x', { readmeNext: '/kss-execute 061-x --ticket 15 (then: /kss-review 061-x)' }), 'Next: /kss-review 061-x')
 })

@@ -527,6 +527,12 @@ is started by the user only (a model cannot invoke it), so the asking phase neve
 the statusline and kss-desktop show the Next line as the step to run. When the phase run ends, its
 `next.mjs --after execute` sees the pending `(then: …)` and returns to `review` instead of the
 track — the status is always where the work is, without anyone retyping it.
+
+**Review ends when the user says so.** Review works in rounds — reviewers look again after every
+fix — so `next.mjs --after review` keeps the Next line on review
+(`Next: /kss-review NNN-slug (finish: /kss-review NNN-slug --done)`), and a loop back from review
+returns to it. Only `kss-review NNN-slug --done`, run by the user (kss-desktop: **Finish review**),
+records the end and lets the track go on; a model never passes `--done` on its own.
 ### 8.1 Questions
 
 Built from the brief:

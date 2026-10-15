@@ -10,6 +10,9 @@
 //       a phase that needs an earlier one again (review or qa opening fix tickets → execute):
 //       `Next: /kss-execute NNN-slug --ticket 15 --ticket 16 (then: /kss-review NNN-slug)`.
 //       When that phase ends, its `--after` returns to the `then` phase instead of the track.
+//   --after review [--done]
+//       review works in rounds and ends only when the user says so: without --done the Next line
+//       stays on review (`(finish: /kss-review NNN-slug --done)`); with it, the track goes on.
 //
 // How a phase is invoked is the one harness-specific thing in the line: `/kss-spec` in Claude Code,
 // `$kss-spec` in Codex (DESIGN.md §19). `--harness` forces it; otherwise it is detected.
@@ -123,6 +126,8 @@ export function nextLine(size, after, feature, opts = {}) {
   // A loop back ends where it was opened: the fix tickets done, the review (or qa) runs again.
   const back = pendingReturn(opts.readmeNext, after)
   if (back) return `Next: ${p}kss-${back} ${id}`
+  // Review is never finished by a round: the user closes it, with --done (DESIGN.md §3.9).
+  if (after === 'review' && !opts.done) return `Next: ${p}kss-review ${id} (finish: ${p}kss-review ${id} --done)`
   const next = nextPhase(size, after, opts)
   if (next) {
     let line = `Next: ${p}kss-${next} ${id}`
@@ -164,7 +169,7 @@ async function main() {
   const argv = process.argv.slice(2)
   const dir = argv[0] && !argv[0].startsWith('--') ? argv[0] : null
   if (!dir) {
-    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] [--harness <name>] | --check <phase> | --back <phase> [--ticket NN …] --then <phase>')
+    console.error('usage: node .kss/scripts/next.mjs <feature-dir> --after <phase> [--auto <n>] [--escalate grill] [--harness <name>] | --check <phase> | --back <phase> [--ticket NN …] --then <phase> | --after review [--done]')
     process.exit(1)
   }
   const h = readHeader(dir)
@@ -206,6 +211,7 @@ async function main() {
     escalate: arg(argv, '--escalate'),
     state: h.state,
     readmeNext: h.next,
+    done: argv.includes('--done'),
     harness: await resolveHarness(argv),
   }
   process.stdout.write(nextLine(h.size, after, h.feature, opts) + '\n')
