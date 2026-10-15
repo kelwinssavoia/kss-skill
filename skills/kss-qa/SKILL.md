@@ -47,7 +47,10 @@ environment catalog) — never widen it, never add hints to the plan from what y
    scenario table (id, title, covers, persona) and its **Assumptions to confirm**, and ask one
    question: run as planned, or edit first? A plan with assumptions the user rejects is edited in
    `plan.json` / `seed/` (by the user, or by you on their exact instruction) — never re-derived from
-   the code.
+   the code. The **environment audit** (`qa.mjs audit`, run by `all` when `qa/audit.json` is missing)
+   is the one sighted step — `up` runs it too when it is missing, so the desktop's step buttons get it: it completes the seed and writes the provider stubs so the code reads the
+   plan's starting state, and appends what it learned to the recipes file (DESIGN.md §22.5). You do
+   not do its work by hand.
 2. **Run.** `node .kss/scripts/qa.mjs all --feature NNN-slug [--only …] [--keep-up]` in the
    background; it plans only when needed, brings the environment up, drives every scenario, judges,
    reports and tears everything down (unless `--keep-up`). Exit 0 approved, 4 rejected,
@@ -66,8 +69,11 @@ environment catalog) — never widen it, never add hints to the plan from what y
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then qa`
    and print that line as the last line of the turn. The board and kss-desktop show it as the next
    step; when execute ends, its Next returns to `qa` by itself.
-   An `inconclusive` or `blocked` scenario is shown with its note (Jev disagreed, low confidence,
-   environment); offer `--only <id>` to re-run it. An adjustment is listed, not ticketed, unless
+   An `inconclusive` or `blocked` scenario is shown with its note (Jev disagreed, low confidence);
+   offer `--only <id>` to re-run it. An **`environment`** scenario is never a fix ticket: show its
+   *Environment problems* line and fix the adapter it names (`requires`/`uses`, a `stubs` entry or
+   its base fixture), or re-audit (`qa.mjs audit --force`) for a stub miss, then re-run with
+   `--only`. *Spec conflicts* from the audit are shown as possible defects for the user to judge. An adjustment is listed, not ticketed, unless
    the user asks.
 5. **Report** (DESIGN.md §25): explain this phase to a human before committing — write
    `<features_root>/NNN-slug/report/qa.json` as `.kss/references/report.md` describes — short, and shown
@@ -81,7 +87,7 @@ environment catalog) — never widen it, never add hints to the plan from what y
 ```
 QA NNN-slug — <APPROVED|REJECTED|INCONCLUSIVE> · run <id> · <n> scenarios · $<cost>
 <scenario table>
-Problems: <n> · Adjustments: <n> · Not UI-testable: <FR list>
+Problems: <n> · Environment: <n> · Adjustments: <n> · Not UI-testable: <FR list>
 QA report: <features_root>/NNN-slug/qa/report.md
 Report: <features_root>/NNN-slug/report/index.html#phase-qa
 Next: <verbatim output of node .kss/scripts/next.mjs <features_root>/NNN-slug --after qa>

@@ -1375,13 +1375,14 @@ It is optional on every track, offered by `next.mjs` right after `execute`
 | Step | Who | Sees | Writes |
 | --- | --- | --- | --- |
 | `plan` | blind planner, `claude -p` (`models.planner`, default sonnet), file tools only, empty temp cwd | `00-brief.md` (or the spec's Problem), the spec sections in `spec.sections` (never contracts, NFRs or the plan), the database schemas, the environment catalog | `qa/plan.json` (services, personas, scenarios with exact expected values, not-covered FRs, assumptions), `qa/seed/<db>.sql`, `qa/plan.md` |
-| `up` | script | `.kss/qa.config.json` | compose project up, migrations, Keycloak realm + client secret + personas, seed, services in dependency levels with readiness checks, page warm-up |
-| `run` | blind driver per scenario, `claude -p` (`models.driver`, default haiku), **only** `Bash(browser-use:*)`, fresh Chrome profile per scenario | one scenario, its FR texts, one persona, the app URL | `qa/runs/<id>/<S-NN>/NN-step.jpg` + `steps.jsonl` (via `qa_step`), `result.json` (via `qa_done`), `driver.json` |
+| `audit` | **sighted** environment builder, `claude -p` (`models.auditor`, default sonnet), reads the repository (`--add-dir`), writes only its workspace (an `Edit(path)` rule) | the plan (read-only), the spec sections, the schemas, the seed, the stub fixtures, the code | `qa/seed/` completed so the code reads it as the plan means, `qa/stubs/<provider>.json`, `qa/audit.json`, new lines in the recipes file (§22.5) |
+| `up` | script | `.kss/qa.config.json` | compose project up, migrations, Keycloak realm + client secret + personas, seed, provider stubs, services in dependency levels with readiness checks, page warm-up |
+| `run` | blind driver per scenario, `claude -p` (`models.driver`, default haiku), **only** `Bash(browser-use:*)`, fresh Chrome profile per scenario | one scenario, its FR texts, one persona, the app URL | `qa/runs/<id>/<S-NN>/NN-step.jpg` + `steps.jsonl` (via `qa_step`), `result.json` (via `qa_done`), `driver.json`, `environment.json` (the log triage, §22.5) |
 | `judge` | Jev (`jev.qa_judge`) | the FR texts, the expected outcomes, the recorded observations | `judge.json`: driver verdict, Jev's gated answer, final |
 | `report` | script | the run | `qa/report.md`, `qa/result.json` (latest) and a copy per run |
 | `down` | script | state | services and browsers stopped, `compose down -v` |
 
-`all` chains them and always tears down unless `--keep-up`. Both models run with
+`all` chains them (the audit only when `qa/audit.json` is missing or `--replan`) and always tears down unless `--keep-up`. Both models run with
 `--setting-sources ""` and `--strict-mcp-config` from an empty directory: no CLAUDE.md, no memory,
 no hook, no plugin, no MCP reaches them. The driver cannot read a file at all; the evidence
 helpers (`templates/qa/agent_helpers.py`, loaded by browser-use from `BH_AGENT_WORKSPACE`) are
@@ -1400,7 +1401,10 @@ every credential in it is local and throwaway):
 | `auth` | `{provider: "keycloak", url, admin, adminPassword, realm, realmImport, clients, roles}` — realm import, client secrets, personas with roles and attributes — or `{provider: "command", command, roles, description}`, run with `KSS_QA_PERSONAS_FILE` pointing at the personas JSON; absent = the project creates no users |
 | `env` | base dotenv files plus overrides pointing every dependency at the QA stack and every external provider at an unreachable address; re-applied inside each final Node process by `env-preload.cjs`, so no task runner's dotenv handling can swap them back |
 | `prepare` | shell commands run on every `up` before any service starts — generated clients, codegen — because the checkout may have changed branch since the last run |
-| `services` | the catalog: `command`, `ready` (`tcp` / `http` / `log`), `fail` (a log regex that aborts `up` at once, e.g. a failed build), `requires`, `warmup`, `description` |
+| `services` | the catalog: `command`, `ready` (`tcp` / `http` / `log`), `fail` (a log regex that aborts `up` at once, e.g. a failed build), `requires` (pulled in and started first), `uses` (pulled in, no order — a runtime call, possibly mutual), `ports` (extra ports the triage maps to the service), `warmup`, `description` |
+| `stubs.<provider>` | `port`, `description` (what the planner reads), `base` (a committed fixture answered after the feature's, e.g. the token endpoint); the env overrides point the provider's base URL at the port |
+| `recipes_file` | default `.kss/qa/recipes.md` (committed): the rules the audit learned, read by every later planner |
+| `audit` | `{enabled}` — default on |
 | `apps` | the web apps the driver may open |
 | `environment_notes` | the **project rules** in the planner's words — how users, accounts and data connect, and which isolation must always be tested |
 
@@ -1419,7 +1423,35 @@ state — and it judges from the *observations*, not from the driver's self-asse
 what makes it a second opinion rather than an echo. As in §20, nothing Jev says is written as
 fact: its answer, confidence and threshold are in `judge.json` and in the report.
 
-### 22.5 What to measure
+### 22.5 Environment fidelity
+
+A blind planner writes a seed that follows the schema but not the rules the code reads it by, and it
+cannot know what an external provider answers; a catalog with a missing dependency starts a stack
+that cannot serve the screen. Each of these used to come back as a `blocked` or a `fail` that looked
+like a product finding. Three mechanisms keep them apart:
+
+1. **The audit** (`qa.mjs audit`, `templates/qa/audit.md`). A sighted agent traces every scenario's
+   starting screen through the code to its query and its provider calls, completes the seed where a
+   row the plan relies on would be filtered out or read as absent, and writes the stub fixtures from
+   the plan's `provider_state` and the code's client. It never writes `plan.json` (it only gets a
+   copy), never deletes a row, never changes a value an `expected` depends on, and never seeds around
+   code that contradicts the spec — that is a `spec_conflicts` entry, shown in the report as a
+   possible defect. The repository is fingerprinted (`git diff HEAD` + untracked files) before and
+   after: a change aborts the audit. Planner and driver stay blind.
+2. **Recipes.** Each rule the audit had to discover is appended, in general terms, to the recipes
+   file, which `environment.md` carries to every later planner — the same mistake is not paid twice.
+3. **Triage.** While a scenario runs, the script slices every service and stub log; a refused
+   connection to a catalog service that was not started (`missing-service`), a refused connection no
+   QA service or stub owns (`unreachable`), and a stub request no fixture answered (`stub-miss`) land
+   in `environment.json`. A `blocked` scenario with such evidence is final **`environment`**; a `fail`
+   with it is `inconclusive`. The report lists them under *Environment problems* with the fix, out of
+   *Problems*.
+
+Provider stubs are `scripts/qa-stub.mjs`: a fixture-driven HTTP server (method, path with `:param`
+and `*`, optional query, status, body with `{{now+N}}` / `{{param.x}}` / `{{query.x}}` /
+`{{body.x}}` placeholders) that logs every request with `matched`.
+
+### 22.6 What to measure
 
 `report.md` carries cost (planner + drivers) and turns per scenario; `jev-trace.jsonl` carries
 every judgement. Worth watching: how often Jev and the driver disagree (a driver that marks `pass`

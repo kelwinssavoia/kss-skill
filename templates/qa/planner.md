@@ -4,8 +4,9 @@ change under test and you must not look for it. Everything you know is in this f
 - `input/request.md` — what was asked for (the task).
 - `input/functional-spec.md` — the functional specification: problem, decisions, requirements.
 - `input/environment.md` — the services you may start, the web apps, the databases (and the
-  seed format each one takes), how test users log in, and the **project rules** on how users,
-  data and access connect.
+  seed format each one takes), how test users log in, the stubbed external providers, the
+  **project rules** on how users, data and access connect, and the **seed recipes** learned from
+  earlier runs.
 - `input/schema/` — the database schemas, one file per database in whatever format the project
   uses, so the seed you write is valid.
 
@@ -44,6 +45,9 @@ Write exactly these files under `out/`:
     }
   ],
   "seed": { "<database>": "seed/<database><extension>" },
+  "provider_state": {
+    "<stubbed provider from environment.md>": ["one fact the provider must hold, with the literal ids and values of your seed"]
+  },
   "scenarios": [
     {
       "id": "S-01",
@@ -97,8 +101,21 @@ Write exactly these files under `out/`:
   no UI path) goes to `not_covered`.
 - A persona's `attributes` and database rows must agree with how `environment.md` says a user is
   linked (for example the user id attribute equals the seeded user id).
-- Choose the smallest set of services that makes the scenarios work, using the dependencies
-  `environment.md` lists.
+- List every service whose screens or data your scenarios touch; the dependencies
+  `environment.md` lists are started with them.
+- **Every scenario starts from the seed alone.** Scenarios run one at a time, in any order and
+  often alone, each against the same freshly seeded environment: never assume an earlier scenario
+  ran, and never expect what another scenario's actions would create. When a scenario needs a
+  state that a flow produces (a change already made, a document already uploaded), seed that state
+  directly, with its own rows, and keep the rows of different scenarios from interfering (a
+  scenario that changes something should change rows no other scenario reads).
+- **Follow every seed recipe** in `environment.md` that applies to the rows you seed: each one is a
+  rule the application relies on that the schema does not show.
+- **External providers are stubbed, not absent.** When a screen shows or offers something an
+  external provider holds (bank accounts, a listing, a balance, a verification status), write it in
+  `provider_state.<provider>` in business terms with your seed's literal values ("the payment
+  provider lists two bank accounts for account `acct-a`: First National ••1111, verified; Harbor
+  Bank ••4321, verified"). Never write the provider's responses yourself; an environment builder does.
 - Do not search outside this folder. Do not write anything outside `out/`.
 
 When the files are written, answer with one line: `plan ready: <n> scenarios`.
