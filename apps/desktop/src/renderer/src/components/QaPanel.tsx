@@ -1,9 +1,11 @@
 // The QA panel (DESIGN.md §24.5): one button per qa.mjs step, ▶ per scenario, the driver's browser live,
-// and each scenario's recorded steps with their screenshots.
+// each scenario's recorded steps with their screenshots, and the way out of a failure — fix task,
+// execute the fix, re-run what was fixed.
 
 import { useEffect, useState } from 'react'
 
-import type { QaInfo, QaScenario, QaScenarioRun, QaStep, QaStepRecord, Session, TerminalInfo } from '../../../shared/types.ts'
+import { fixActions, fixFor } from '../../../shared/qa.ts'
+import type { Harness, QaFix, QaInfo, QaScenario, QaScenarioRun, QaStep, QaStepRecord, Session, TerminalInfo } from '../../../shared/types.ts'
 import type { Run } from '../App.tsx'
 import { api } from '../api.ts'
 import { exitCode } from '../terminals.ts'
@@ -68,11 +70,38 @@ function StepCard({ s, onZoom }: { s: QaStepRecord; onZoom: (z: Zoom) => void })
   )
 }
 
-function ScenarioDetail({ s, run, liveFrame, isLive, onZoom }: { s: QaScenario; run: QaScenarioRun | undefined; liveFrame: string | null; isLive: boolean; onZoom: (z: Zoom) => void }) {
+/** What a failed scenario can do next: write its fix ticket, run it, or check it again. */
+type FixBox = { fix: QaFix | null; canCreate: boolean; writing: boolean; onCreate: () => void; execute: (() => void) | null; rerun: (() => void) | null; rerunHint: string }
+
+function FixPanel({ box }: { box: FixBox }) {
+  const { fix } = box
+  return (
+    <div className="qa-fix">
+      <span className="qa-badge fail">✗ fail</span>
+      {fix ? (
+        <>
+          <span>fix ticket{fix.tickets.length > 1 ? 's' : ''} <b>{fix.tickets.join(', ') || '—'}</b>{fix.title ? ` · ${fix.title}` : ''}</span>
+          <span className="spacer" />
+          {box.execute && <button className="primary" onClick={box.execute} title="kss-execute runs the fix tickets with every gate; then the Next line returns to QA">▶ Execute fix</button>}
+          {box.rerun && <button onClick={box.rerun} title={box.rerunHint}>↻ Re-run</button>}
+        </>
+      ) : (
+        <>
+          <span>{box.writing ? 'writing the fix ticket…' : 'A defect against the spec — open a fix ticket from this run’s evidence.'}</span>
+          <span className="spacer" />
+          <button className="primary" disabled={!box.canCreate} onClick={box.onCreate} title="kss-qa --fix: a fix ticket from this run's steps and screenshots, added to the graph; Next loops back to execute">+ Create fix task</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function ScenarioDetail({ s, run, liveFrame, isLive, onZoom, fix }: { s: QaScenario; run: QaScenarioRun | undefined; liveFrame: string | null; isLive: boolean; onZoom: (z: Zoom) => void; fix: FixBox | null }) {
   return (
     <div className="qa-detail">
       <h3>{s.id} · {s.title}</h3>
       <div className="dim">persona {s.persona ?? '—'} · app {s.app ?? '—'} · covers {s.covers.join(', ') || '—'}</div>
+      {fix && !isLive && <FixPanel box={fix} />}
       {isLive && (
         <div className="live">
           <div className="live-label"><span className="dot live" /> LIVE · {s.id}</div>
@@ -103,9 +132,9 @@ function ScenarioDetail({ s, run, liveFrame, isLive, onZoom }: { s: QaScenario; 
   )
 }
 
-type Props = { session: Session; terms: TerminalInfo[]; onRun: Run; visible: boolean }
+type Props = { session: Session; terms: TerminalInfo[]; onRun: Run; visible: boolean; harnessFor: (phase: string) => Harness }
 
-export function QaPanel({ session, terms, onRun, visible }: Props) {
+export function QaPanel({ session, terms, onRun, visible, harnessFor }: Props) {
   const [info, setInfo] = useState<QaInfo | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ scenario: string; data: string } | null>(null)
@@ -147,6 +176,27 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
   const current = scenarios.find(s => s.id === selected) ?? scenarios[0] ?? null
   const lastTerm = qaTerms[qaTerms.length - 1] ?? null
 
+  // A kss-qa CLI tab (the --fix one) still at work: its tickets are not written yet.
+  const writing = terms.some(t => t.kind === 'phase' && t.phase === 'qa' && exitCode(t.id) === null)
+  const acts = fixActions(scenarios.map(s => s.id), info.latest, info.fixes, session.board?.next ?? null)
+  const createFix = (ids: string[]) => onRun({ kind: 'phase', harness: harnessFor('qa'), phase: 'qa', args: `${feature} --fix ${ids.join(',')}`, title: `qa fix ${ids.join(',')}` })
+  const execute = acts.execute && (() => onRun({ kind: 'phase', harness: harnessFor('execute'), phase: 'execute', args: acts.execute!.args }))
+  const rerunHint = isMine ? `qa.mjs run --only ${acts.rerun.join(',')}` : 'Bring the environment up first'
+  const rerun = (ids: string[]) => run('run', { only: ids.join(',') })
+  const fixBox = (id: string): FixBox | null => {
+    const last = info.latest[id]
+    if (!acts.toFix.includes(id) && !acts.rerun.includes(id) && !fixFor(info.fixes, id, last)) return null
+    return {
+      fix: fixFor(info.fixes, id, last),
+      canCreate: !writing,
+      writing,
+      onCreate: () => createFix([id]),
+      execute,
+      rerun: acts.rerun.includes(id) && isMine && !busy ? () => rerun([id]) : null,
+      rerunHint,
+    }
+  }
+
   return (
     <div className="qa">
       <div className="qa-bar">
@@ -162,6 +212,9 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
           <button disabled={busy || !info.runs.length} onClick={() => run('report')}>Report</button>
           <button disabled={busy || env.state === 'down' || !!info.heldBy} onClick={() => run('down')}>Down</button>
           {info.verdict && <span className={`verdict ${info.verdict}`}>{info.verdict}</span>}
+          {acts.toFix.length > 1 && <button disabled={writing} onClick={() => createFix(acts.toFix)} title={`kss-qa --fix ${acts.toFix.join(',')}`}>+ Fix tasks · {acts.toFix.length} failed</button>}
+          {execute && <button className="primary" onClick={execute} title={`kss-execute ${acts.execute!.args} — then back to QA`}>▶ Execute fix · {acts.execute!.tickets.join(', ')}</button>}
+          {acts.rerun.length > 0 && <button disabled={busy || !isMine} onClick={() => rerun(acts.rerun)} title={rerunHint}>↻ Re-run fixed · {acts.rerun.join(', ')}</button>}
         </div>
       </div>
       {!info.hasConfig && <p className="warn-line">No <code>.kss/qa.config.json</code> in this session — <code>kss-qa</code> needs the project adapter (DESIGN.md §22.3).</p>}
@@ -183,6 +236,7 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
                 <div className="qa-scn-row dim">
                   {isLive ? <span className="live-pill">● live</span> : <Badge value={last?.final ?? last?.status ?? null} />}
                   <span>{s.covers.join(' ')}</span>
+                  {fixFor(info.fixes, s.id, last) && <span className="fix-pill" title="fix ticket from this run">→ {fixFor(info.fixes, s.id, last)!.tickets.join(', ')}</span>}
                 </div>
               </div>
             )
@@ -202,7 +256,7 @@ export function QaPanel({ session, terms, onRun, visible }: Props) {
         </div>
         <div className="qa-right">
           {current ? (
-            <ScenarioDetail s={current} run={info.latest[current.id]} isLive={info.live?.scenario === current.id} liveFrame={frame?.scenario === current.id ? frame.data : null} onZoom={setZoom} />
+            <ScenarioDetail s={current} run={info.latest[current.id]} isLive={info.live?.scenario === current.id} liveFrame={frame?.scenario === current.id ? frame.data : null} onZoom={setZoom} fix={fixBox(current.id)} />
           ) : (
             <div className="empty dim">Plan the QA to see its scenarios.</div>
           )}

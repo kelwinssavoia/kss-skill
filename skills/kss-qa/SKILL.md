@@ -1,7 +1,7 @@
 ---
 name: kss-qa
 description: Blind acceptance test of a feature through its web UI — a planner that never saw the code writes scenarios and a feature-specific seed from the request and the functional spec, a script brings up a disposable local environment, a cheap model drives a real browser (browser-use) scenario by scenario leaving a screenshot per step, Jev judges each scenario, and a report with a verdict lands in the feature folder. Run it after kss-execute, before or alongside kss-review.
-argument-hint: NNN-<slug> [--replan] [--only S-01,S-02] [--keep-up]
+argument-hint: NNN-<slug> [--replan] [--only S-01,S-02] [--keep-up] [--fix S-02,S-03]
 disable-model-invocation: true
 ---
 
@@ -39,6 +39,27 @@ environment catalog) — never widen it, never add hints to the plan from what y
 5. The working tree is on the feature branch (or its integrated worktree) — the run records
    `HEAD`; warn in one line if the tree is dirty.
 6. The dev stack's app ports are free (the script checks and names them).
+
+## Fix tickets for failed scenarios (`--fix`)
+
+`--fix S-02[,S-03]` is the Route step alone, already accepted — kss-desktop's **Create fix task**
+button on a failed scenario runs it. Nothing is planned, brought up or run.
+
+1. For each id, take its newest run with evidence (`qa/runs/<run>/<id>/` — `result.json`,
+   `judge.json`, `steps.jsonl`, the failed steps' screenshots). An id whose final (or, unjudged,
+   driver) verdict is not `fail` is skipped with one line naming its verdict — an `environment`,
+   `blocked` or `inconclusive` scenario is never a fix ticket (step 4).
+2. Write one fix ticket per defect from that evidence: what the scenario did, what it expected and
+   what it observed (the failing step, verbatim), the FR it covers. This mode is sighted — no blind
+   agent runs in it — so read the code to name the files the fix touches; never change `plan.json`
+   or the seed to make the scenario pass. Number the tickets after the last one, in the ticket
+   template, and add them to `05-tickets/graph.md`.
+3. Append to `<feature>/qa/fixes.json` (an array; create it) one entry per scenario:
+   `{ "scenario": "S-02", "run": "<run id>", "tickets": ["17"], "fr": ["FR-03"], "title": "<one line>", "at": "<ISO-8601>" }`
+   — the app reads it to show the ticket on the scenario.
+4. Commit `docs(NNN): qa fix tickets` with the tickets, `graph.md` and `qa/fixes.json`, set the
+   README `**Next:**` with `next.mjs --back execute --ticket NN … --then qa` exactly as in step 4,
+   and end with `Fix tickets: <NN · S-xx · title>` lines followed by that Next line. No phase report.
 
 ## Steps
 

@@ -7,7 +7,8 @@ import { test } from 'node:test'
 
 import { launchOf } from '../shared/commands.ts'
 import { pickTarget } from './live.ts'
-import { envOf, holder, imageData, latestRuns, parseScenarios, parseSteps, qaInfo, runIds } from './qa.ts'
+import { fixActions, fixFor, verdictOf } from '../shared/qa.ts'
+import { envOf, holder, imageData, latestRuns, parseFixes, parseScenarios, parseSteps, qaInfo, runIds } from './qa.ts'
 
 test('qa terminals run qa.mjs; down and status name no feature', () => {
   const l = (step: any, extra = {}) => launchOf({ cwd: '/s', kind: 'qa', qa: { step, feature: '012-x', ...extra } }, '/bin/zsh')
@@ -80,4 +81,29 @@ test('the live view follows the real page, not about:blank or devtools', () => {
   assert.equal(pickTarget([t('page', 'about:blank'), t('service_worker', 'http://a'), t('page', 'http://app/login')])?.url, 'http://app/login')
   assert.equal(pickTarget([t('page', 'about:blank')])?.url, 'about:blank')
   assert.equal(pickTarget([t('page', 'devtools://x')]), null)
+})
+
+test('a failed scenario: fix task, then execute the fix, then re-run it', () => {
+  const run = (runId: string, final: string | null, status = 'fail'): any => ({ runId, status, final, note: null, summary: null, issues: [], turns: null, cost: null, steps: [] })
+  const latest = { 'S-01': run('r1', 'pass', 'pass'), 'S-02': run('r1', 'fail'), 'S-03': run('r2', null), 'S-04': run('r1', 'inconclusive') }
+  const ids = ['S-01', 'S-02', 'S-03', 'S-04']
+  const fixes = parseFixes([{ scenario: 'S-02', run: 'r1', tickets: [17], fr: ['FR-03'], title: 'empty CSV', at: 'x' }, { scenario: 'S-03', run: 'r1', tickets: ['16'] }, { nope: 1 }])
+  assert.deepEqual(fixes.map(f => [f.scenario, f.tickets]), [['S-02', ['17']], ['S-03', ['16']]])
+  // S-03's ticket came from an older run; its newer failing run needs its own.
+  assert.equal(fixFor(fixes, 'S-03', latest['S-03']), null)
+  const back = 'Next: /kss-execute 012-x --ticket 17 (then: /kss-qa 012-x)'.replace(/^Next: /, '')
+  assert.deepEqual(fixActions(ids, latest, fixes, back), { toFix: ['S-03'], execute: { phase: 'execute', args: '012-x --ticket 17', tickets: ['17'] }, rerun: [] })
+  assert.deepEqual(fixActions(ids, latest, fixes, '/kss-qa 012-x'), { toFix: ['S-03'], execute: null, rerun: ['S-02'] })
+  // An execute that does not return to QA is not QA's fix.
+  assert.equal(fixActions(ids, latest, fixes, '/kss-execute 012-x --ticket 17 (then: /kss-review 012-x)').execute, null)
+  assert.equal(verdictOf(latest['S-03']), 'fail')
+})
+
+test('qaInfo reads qa/fixes.json', () => {
+  const s = mkdtempSync(join(tmpdir(), 'kss-qa-'))
+  const qa = join(s, 'f/qa')
+  mkdirSync(qa, { recursive: true })
+  assert.deepEqual(qaInfo(s, join(s, 'f'), '012-x', [s]).fixes, [])
+  writeFileSync(join(qa, 'fixes.json'), JSON.stringify([{ scenario: 'S-02', run: 'r1', tickets: ['17'] }]))
+  assert.deepEqual(qaInfo(s, join(s, 'f'), '012-x', [s]).fixes, [{ scenario: 'S-02', run: 'r1', tickets: ['17'], fr: [], title: null, at: null }])
 })
