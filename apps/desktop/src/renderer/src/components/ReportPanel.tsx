@@ -25,7 +25,7 @@ export function scenarioOf(data: unknown): Scenario | null {
   const rec = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined)
   return {
     simulator: d.simulator.slice(0, 80),
-    title: typeof d.title === 'string' ? d.title.slice(0, 120) : undefined,
+    title: typeof d.title === 'string' ? `${d.title.slice(0, 100)}${typeof d.scenario === 'string' && d.scenario ? ` — ${d.scenario.slice(0, 60)}` : ''}` : undefined,
     inputs: rec(d.inputs)!,
     outputs: rec(d.outputs),
     fired: Array.isArray(d.fired) ? d.fired.filter((x): x is string => typeof x === 'string').slice(0, 20) : undefined,
