@@ -139,7 +139,7 @@ Then, still one turn each:
     Say that the KSS statusline prints the previous statusline's output whenever no KSS run is
     active, so nothing is lost. **Never edit `~/.claude/settings.json` without this yes.**
 
-18. **Codex only** — ask whether to install the three metrics hooks into the user-level
+18. **Codex only** — ask whether to install the four KSS hooks into the user-level
     `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json` when `CODEX_HOME` is unset). A Codex plugin
     cannot ship them: the plugin ingestion contract does not accept a `hooks` field, so they are a
     user-level file here, exactly as the statusline is on Claude Code. On Claude Code skip this
@@ -153,13 +153,14 @@ Then, still one turn each:
       "hooks": {
         "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-subagent.mjs" }] }],
         "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-session.mjs" }] }],
-        "Stop":         [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-stop.mjs" }] }]
+        "Stop":         [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-stop.mjs" }] }],
+        "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-prompt.mjs" }] }]
       }
     }
     ```
 
     Rules for the write: **merge, never replace** — keep every event and every entry already there,
-    and add only the three whose command is not present yet; back the file up to
+    and add only the ones whose command is not present yet; back the file up to
     `~/.kss/codex-hooks.backup.json` before the first change, and never overwrite an existing
     backup. Say afterwards that **Codex asks to trust a hook before it runs it** (`/hooks`), and
     that until it is trusted every phase still works and `metrics.jsonl` simply stays empty.
@@ -205,11 +206,12 @@ On confirmation, write — in this order:
 
    On Codex there is no agent registry and nothing is written: the role preambles live in
    `.kss/references/harness-codex.md`, which write step 4 already installed.
-6. `.gitignore` — append `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
+6. `.gitignore` — append `.kss/current`, `.kss/worktrees/`, `.kss/inbox/`, `.kss/statusline.backup.json` and
    `.kss/config.local.json` if they are not already ignored. The first two are live state, not
    history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each ticket's git worktree);
-   the third is the legacy per-project backup, a user setting that must never be committed; the
-   fourth is the per-machine preferences file `kss-config` writes — it carries the Jev API key, so
+   `.kss/inbox/` holds the asks and answers exchanged with kss-desktop (DESIGN.md §26); the
+   next is the legacy per-project backup, a user setting that must never be committed; the
+   last is the per-machine preferences file `kss-config` writes — it carries the Jev API key, so
    it is ignored **before** it can exist. Leave
    `.kss/config.md`, `.kss/templates/`, `.kss/scripts/`, `.kss/references/` and the feature folders
    tracked.
@@ -250,7 +252,7 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
 | `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |
 | `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
-| `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
+| `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/inbox/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
 
 `.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
 

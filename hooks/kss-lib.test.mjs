@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext, rootFromCommonDir, mainWorktreeRoot } from './kss-lib.mjs'
+import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext, tailLastText, rootFromCommonDir, mainWorktreeRoot } from './kss-lib.mjs'
 
 const jsonl = (lines) => lines.map((l) => JSON.stringify(l)).join('\n') + '\n'
 
@@ -171,6 +171,27 @@ test('mainWorktreeRoot never throws, even outside a repository', () => {
   try {
     const r = mainWorktreeRoot(dir)
     assert.ok(r === null || typeof r === 'string')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('tailLastText: the newest assistant text, either format, cut from the front', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'kss-tail-'))
+  try {
+    const claude = join(dir, 'c.jsonl')
+    writeFileSync(claude, [
+      JSON.stringify({ message: { role: 'assistant', content: [{ type: 'text', text: 'first' }] } }),
+      JSON.stringify({ message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: {} }] } }),
+      JSON.stringify({ message: { role: 'assistant', content: [{ type: 'text', text: 'Third suite run failed. Retry?' }] } }),
+      JSON.stringify({ message: { role: 'user', content: 'hook output' } }),
+    ].join('\n'))
+    assert.equal(tailLastText(claude), 'Third suite run failed. Retry?')
+    const codex = join(dir, 'x.jsonl')
+    writeFileSync(codex, JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Approve the plan?' }] } }))
+    assert.equal(tailLastText(codex), 'Approve the plan?')
+    assert.equal(tailLastText(claude, 10), '…d. Retry?')
+    assert.equal(tailLastText(join(dir, 'none')), null)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
