@@ -1825,3 +1825,32 @@ A precondition that names an earlier phase (`Run kss-spec NNN-slug first`) publi
 with `run` (that phase) and `then` (this one), prints its stop line and ends. The app runs `run`,
 and when it finishes starts `then` again; every phase resumes from the feature folder, so nothing
 is lost and the person never retypes a command.
+
+An ask may be published before its phase has entered `.kss/current` (a precondition runs first),
+so the phase alone cannot tell a stale ask from a live one. `current.mjs set` settles it: a patch
+that sets `phase` drops an ask that belongs to another phase. Whatever ask is in the file is live.
+
+### 26.8 In the app
+
+- **One status, everywhere.** `shared/status.ts` turns a board and its terminals into one of
+  *starting · working · waiting for you · blocked · running an earlier phase · finished · process
+  ended · not running*. The sidebar (a dot per session, and a "n sessions waiting for you" line),
+  the header pill, the terminal tab's dot and the phase view all read it. Waiting from the Stop
+  mark does not count while tickets or explorers are still out: the coordinator only waits on them.
+- **The phase view.** Every phase but execute (§24.8) is followed in **Phase**: the status, the
+  `progress` step, the ask card (options, free text, a draft with Preview / Edit and "Approve with
+  my edits"; a letter key answers a question), or — with no ask — the agent's last words and a
+  reply box; the main conversation's words and commands; the subagents it sent out
+  (`<conversation>/subagents/agent-*.jsonl`); the answers already given; and the file the phase is
+  writing (`00-brief.md` … `07-review.md`), rendered live. "Ask about this" opens the read-only side
+  chat of §24.7 for any ask. Execute shows the same card on top of its view.
+- **Run gives feedback, never a second process.** A click switches to the phase's view at once and
+  the button reads *Starting…* until the phase writes `.kss/current`, then *running · open*, with ⟲
+  to restart. The main process refuses a second terminal of the same phase in a session; a restart
+  (or a handoff's return) closes the running one first and forgets its conversation.
+- **Handoffs.** The banner says which phase runs first and why; when it finishes, the app counts
+  down five seconds and returns — *Return now* or *Cancel*. Nested handoffs stack.
+- **Notifications.** A session that starts waiting while the app is in the background posts a
+  system notification; the Dock badge counts the sessions waiting.
+- **Layout.** Both side panels fold (⌘B, ⌥⌘B); ⌘1–⌘6 switch views; terminal tabs reorder by drag,
+  rename on double-click, close on middle-click; ⌘T opens a shell, ⌃Tab cycles tabs.

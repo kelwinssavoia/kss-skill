@@ -10,10 +10,13 @@ const since = (iso: string | null) => {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`
 }
 
-export function Board({ board: b, onInspect }: { board: KssBoard; onInspect: (ticket: string) => void }) {
+export function Board({ board: b, onInspect, onClose }: { board: KssBoard; onInspect: (ticket: string) => void; onClose: () => void }) {
   return (
     <aside className="board">
-      <h3>{b.feature}</h3>
+      <div className="board-head">
+        <h3>{b.feature}</h3>
+        <button className="icon" onClick={onClose} title="Hide the board — ⌥⌘B">⟩</button>
+      </div>
       <Phases board={b} />
       <div className="stats">
         <div><span>tokens</span>{human(b.tokens)}</div>

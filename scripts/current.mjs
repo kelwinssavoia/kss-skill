@@ -73,6 +73,10 @@ if (cmd === 'set') {
     process.exit(1)
   }
   const next = merge(current, patch)
+  // A phase entering drops what another phase was waiting on (DESIGN.md §26): asks are published
+  // from preconditions too, before their phase writes itself here, so the app cannot tell a stale
+  // one by the phase alone — this is the one place that sees the hand-over.
+  if (typeof patch.phase === 'string' && next.ask && typeof next.ask === 'object' && next.ask.phase !== patch.phase) delete next.ask
   if (!writeJsonFile(currentPath(cwd), next)) {
     console.error('current.mjs set: could not write .kss/current')
     process.exit(1)

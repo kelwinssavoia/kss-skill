@@ -2,7 +2,7 @@
 // `.kss/config.md` and the feature README. Nothing here touches `$`, so the tests drive it directly.
 // The tracks mirror scripts/next.mjs (DESIGN.md §3.9), the one place that owns them.
 
-import type { KssBoard, KssGrill, KssGrillCategory, KssGrillOption, KssGrillQuestion, KssLogEntry, KssPending, KssPhase, KssQuota, KssQuotaWindow, KssTicket } from '../types'
+import type { KssAsk, KssAskLogEntry, KssBoard, KssGrill, KssGrillCategory, KssGrillOption, KssGrillQuestion, KssLogEntry, KssPending, KssPhase, KssProgress, KssQuota, KssQuotaWindow, KssTicket } from '../types'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
@@ -212,6 +212,64 @@ function grill(current: Json): KssGrill | null {
   }
 }
 
+const ASK_KINDS = ['question', 'confirm', 'approve', 'blocked', 'handoff']
+
+function phaseRef(v: unknown): { phase: string; args: string } | null {
+  const r = obj(v)
+  const phase = r && str(r.phase)
+  return phase ? { phase, args: str(r!.args) ?? '' } : null
+}
+
+/**
+ * `.kss/current.ask` (DESIGN.md §26), or — from a kss-grill older than the ask — its
+ * `grill.question`. It may belong to a phase that has not entered yet (a precondition's handoff);
+ * `current.mjs set` drops it when another phase enters, so whatever is here is live.
+ */
+export function askOf(current: Json, phase: string): KssAsk | null {
+  const a = obj(current.ask)
+  if (!a) {
+    const q = phase === 'grill' ? question(obj(current.grill)?.question) : null
+    return q
+      ? { id: `grill-q${q.n}`, phase: 'grill', kind: 'question', title: `Q${q.n}`, text: q.text, options: q.options, category: q.category, source: q.source, draft: null, draftSource: null, run: null, then: null, at: null, legacy: true }
+      : null
+  }
+  const q = question({ ...a, n: 0 })
+  const id = str(a.id)
+  const kind = str(a.kind)
+  const title = str(a.title)
+  if (!id || !kind || !ASK_KINDS.includes(kind) || !title) return null
+  const at = str(a.at)
+  return {
+    id,
+    phase: str(a.phase),
+    kind: kind as KssAsk['kind'],
+    title,
+    text: str(a.text),
+    options: q?.options ?? [],
+    category: str(a.category),
+    source: str(a.source),
+    draft: str(a.draft),
+    draftSource: str(a.draftSource),
+    run: phaseRef(a.run),
+    then: phaseRef(a.then),
+    at,
+  }
+}
+
+function progressOf(v: unknown): KssProgress | null {
+  const p = obj(v)
+  const label = p && str(p.label)
+  return label ? { step: num(p!.step), total: num(p!.total), label } : null
+}
+
+function askLog(v: unknown): KssAskLogEntry[] {
+  return (Array.isArray(v) ? v : []).flatMap(e => {
+    const r = obj(e)
+    const id = r && str(r.id)
+    return id ? [{ id, phase: str(r!.phase), title: str(r!.title), answer: str(r!.answer), at: str(r!.at) }] : []
+  })
+}
+
 export type KssExtra = { graph?: string | null; log?: string | null }
 
 export function buildBoard(current: Json | null, readme: KssReadme, tokens: number | null, extra: KssExtra = {}): KssBoard | null {
@@ -249,6 +307,10 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     tokens,
     phaseStartedAt: str(current.phase_started_at),
     log: parseLog(extra.log ?? null),
+    ask: isClosed ? null : askOf(current, phase),
+    waiting: !isClosed && session && obj(session.waiting) && str(obj(session.waiting)!.since) ? { since: str(obj(session.waiting)!.since)!, last: str(obj(session.waiting)!.last) } : null,
+    progress: isClosed ? null : progressOf(current.progress),
+    askLog: askLog(current.ask_log),
   }
 }
 
@@ -275,6 +337,9 @@ export function withPending(b: KssBoard | null, pending: KssPending | null): Kss
     isPhaseFinished: false,
     grill: null,
     explorers: null,
+    ask: null,
+    waiting: null,
+    progress: null,
   }
 }
 

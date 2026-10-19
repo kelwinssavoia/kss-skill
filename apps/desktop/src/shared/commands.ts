@@ -23,8 +23,9 @@ export const READONLY: Record<Harness, string[]> = {
   codex: ['--sandbox', 'read-only', '--ask-for-approval', 'never'],
 }
 
-/** Phases the app answers itself get `--app`: the grill then publishes each question for the app's panel. */
-export const appArgs = (phase: string, args: string) => (phase === 'grill' && !/(^|\s)--app\b/.test(args) ? `${args.trim()} --app`.trim() : args)
+/** Every phase the app starts gets `--app`: it then publishes what it waits on for the app (DESIGN.md §26). */
+const NO_APP = new Set(['status'])
+export const appArgs = (phase: string, args: string) => (!NO_APP.has(phase) && !/(^|\s)--app\b/.test(args) ? `${args.trim()} --app`.trim() : args)
 
 export const label = (h: Harness) => (h === 'codex' ? 'Codex' : 'Claude')
 

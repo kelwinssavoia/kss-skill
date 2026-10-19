@@ -3,7 +3,7 @@
 
 import type { KssBoard } from '../../../../mods/kss-ui/types/index.d.ts'
 
-export type { KssBoard, KssTicket, KssPhase, KssLogEntry } from '../../../../mods/kss-ui/types/index.d.ts'
+export type { KssAsk, KssAskLogEntry, KssBoard, KssTicket, KssPhase, KssLogEntry, KssProgress, KssWaiting } from '../../../../mods/kss-ui/types/index.d.ts'
 
 export type Harness = 'claude-code' | 'codex'
 
@@ -54,6 +54,8 @@ export type TerminalSpec = {
   prompt?: string
   /** For a chat: read-only — Claude Code in plan mode, Codex in its read-only sandbox; never bypass. */
   readonly?: boolean
+  /** Start even though this phase already runs here: the running one is closed first (a handoff's return). */
+  replace?: boolean
   /** A title shown instead of the derived one. */
   title?: string
   /** Resume this conversation (`claude --resume <id>`, `codex resume <id>`) instead of starting one. */
@@ -253,3 +255,19 @@ export type ExecOverview = {
   log: { at: string; ticket: string | null; event: string; detail: string }[]
 }
 
+
+// ── App mode (DESIGN.md §26) ────────────────────────────────────────────────────────────────────
+
+/** The person's answer to an ask: an option, a free text, an edited draft — any of them. */
+export type AskAnswer = { choice: { key: string; label: string } | null; text: string | null; draft: string | null }
+
+/** A subagent the running phase spawned (an explorer, a report writer), from its transcript. */
+export type PhaseAgent = { id: string; description: string | null; type: string | null; turns: number; tokens: number; updatedAt: string | null; doing: string | null; saying: string | null }
+
+/** The phase view's model: the main conversation, its subagents, and the file the phase is writing. */
+export type PhaseOverview = {
+  phase: string
+  activity: TicketActivity | null
+  agents: PhaseAgent[]
+  artifact: { path: string; text: string; updatedAt: number } | null
+}

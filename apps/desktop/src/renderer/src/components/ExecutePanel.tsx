@@ -4,10 +4,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-import type { ExecOverview, ExecTicket, Session, TerminalInfo } from '../../../shared/types.ts'
+import type { ExecOverview, ExecTicket, Harness, Session, TerminalInfo } from '../../../shared/types.ts'
+import type { Run } from '../App.tsx'
 import { api } from '../api.ts'
 import '../graph.css'
 import { exitCode, onAnyExit } from '../terminals.ts'
+import { Attention } from './Attention.tsx'
 import { Pane } from './TerminalTabs.tsx'
 import { TicketGraph } from './TicketGraph.tsx'
 
@@ -161,9 +163,9 @@ function Detail({ t, onInspect }: { t: ExecTicket; onInspect: () => void }) {
   )
 }
 
-type Props = { session: Session; terms: TerminalInfo[]; visible: boolean; onInspect: (id: string) => void }
+type Props = { session: Session; terms: TerminalInfo[]; visible: boolean; onInspect: (id: string) => void; onRun: Run; harnessFor: (phase: string) => Harness; onError: (e: unknown) => void }
 
-export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
+export function ExecutePanel({ session, terms, visible, onInspect, onRun, harnessFor, onError }: Props) {
   const [data, setData] = useState<ExecOverview | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [showTerm, setShowTerm] = useState(false)
@@ -221,6 +223,13 @@ export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
         <span className="spacer" />
         {term && <button onClick={() => setShowTerm(s => !s)}>{showTerm ? 'Hide' : 'Show'} execute terminal</button>}
       </div>
+      {/* A stopped run says why and waits for the person — never just silent (DESIGN.md §26). */}
+      {session.board?.phase === 'execute' && (
+        <div className="xattention">
+          <Attention session={session.path} board={session.board} terms={terms} onError={onError} onShowTerminal={() => setShowTerm(true)}
+            onResume={() => onRun({ kind: 'phase', harness: harnessFor('execute'), phase: 'execute', args: session.feature ?? '', replace: true })} />
+        </div>
+      )}
       {data.last && <div className="xlast"><span className="dim">Latest:</span> {data.last}</div>}
       {data.criticalPath.length > 0 && (
         <div className="xpath">

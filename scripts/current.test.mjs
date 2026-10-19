@@ -86,3 +86,17 @@ test('clear removes the file and is idempotent', () => {
     s.done()
   }
 })
+
+test('a phase entering drops the ask another phase left; its own stays', () => {
+  const s = sandbox()
+  try {
+    current(s.cwd, 'set', JSON.stringify({ feature: '001-x', phase: 'spec' }))
+    current(s.cwd, 'set', JSON.stringify({ ask: { id: 'plan-1', phase: 'plan', kind: 'handoff' } }))
+    current(s.cwd, 'set', JSON.stringify({ phase: 'plan' }))
+    assert.equal(JSON.parse(readFileSync(join(s.cwd, '.kss/current'), 'utf8')).ask.id, 'plan-1')
+    current(s.cwd, 'set', JSON.stringify({ phase: 'spec' }))
+    assert.equal(JSON.parse(readFileSync(join(s.cwd, '.kss/current'), 'utf8')).ask, undefined)
+  } finally {
+    s.done()
+  }
+})

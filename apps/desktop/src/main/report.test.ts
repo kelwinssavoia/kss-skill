@@ -30,4 +30,5 @@ test('only a session’s own report page is served', () => {
 
 test('the framed URL carries the file, a version that busts the cache, and the phase', () => {
   assert.equal(reportUrl('/w/r/report/index.html', 5, 'spec'), 'kss-report://local/?f=%2Fw%2Fr%2Freport%2Findex.html&v=5#phase-spec')
+  assert.equal(reportUrl('/w/r/report/index.html', 5, 'feature'), 'kss-report://local/?f=%2Fw%2Fr%2Freport%2Findex.html&v=5#feature')
 })
