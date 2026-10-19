@@ -16,6 +16,13 @@ export function sessionBoard(path: string, branchFeature: string | null): Sessio
   const config = parseConfig(read(join(path, '.kss/config.md')))
   const current = parseJson(read(join(path, '.kss/current')))
   const feature = (typeof current?.feature === 'string' && current.feature) || branchFeature
+  // Clarify asks before anything exists — no feature, no folder (DESIGN.md §7): its questions still
+  // need a board to be answered from, so the ask alone makes a provisional one.
+  const ask = current?.ask && typeof current.ask === 'object' ? (current.ask as { phase?: unknown }) : null
+  if (!feature && config && ask) {
+    const phase = typeof current!.phase === 'string' ? current!.phase : typeof ask.phase === 'string' ? ask.phase : 'clarify'
+    return { featureDir: null, board: buildBoard({ ...current!, feature: 'new feature', phase }, parseReadme(null), null), feature: null }
+  }
   if (!feature || !config) return { featureDir: null, board: null, feature: feature ?? null }
   const dir = join(path, config.featuresRoot, feature)
   const readme = parseReadme(read(join(dir, 'README.md')))

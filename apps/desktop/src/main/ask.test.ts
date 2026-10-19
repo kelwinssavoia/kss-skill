@@ -67,3 +67,17 @@ test('an old grill question still shows, as a legacy ask', () => {
   assert.equal(a?.legacy, true)
   assert.equal(a?.options[0]?.label, 'Top')
 })
+
+test('clarify asks before the feature exists: the ask alone makes a provisional board', async () => {
+  const { sessionBoard } = await import('./board.ts')
+  const s = mkdtempSync(join(tmpdir(), 'kss-pre-'))
+  const { mkdirSync } = await import('node:fs')
+  mkdirSync(join(s, '.kss'))
+  writeFileSync(join(s, '.kss/config.md'), 'features_root: docs/features\n')
+  assert.equal(sessionBoard(s, null).board, null)
+  writeFileSync(join(s, '.kss/current'), JSON.stringify({ ask: { id: 'clarify-1', phase: 'clarify', kind: 'question', title: 'Who uses it?' } }))
+  const r = sessionBoard(s, null)
+  assert.equal(r.feature, null)
+  assert.equal(r.board?.phase, 'clarify')
+  assert.equal(r.board?.ask?.title, 'Who uses it?')
+})

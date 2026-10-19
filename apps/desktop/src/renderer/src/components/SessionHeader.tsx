@@ -122,7 +122,7 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
           </div>
         </div>
       </div>
-      {session.feature && (
+      {(session.feature || b) && (
         <nav className="view-tabs">
           {tab('terminals', 'Terminals', 'Every terminal and chat of this session', 1)}
           {tab('phase', 'Phase', 'Follow the running phase and answer what it asks', 2, status && NEEDS_YOU.has(status) && b?.phase !== 'execute' ? <span className="tab-alert" /> : null)}
