@@ -6,8 +6,10 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { ExecOverview, ExecTicket, Session, TerminalInfo } from '../../../shared/types.ts'
 import { api } from '../api.ts'
+import '../graph.css'
 import { exitCode, onAnyExit } from '../terminals.ts'
 import { Pane } from './TerminalTabs.tsx'
+import { TicketGraph } from './TicketGraph.tsx'
 
 const POLL_MS = 2500
 
@@ -53,10 +55,30 @@ function Bar({ value, max }: { value: number; max: number | null }) {
   return <span className={`xbar ${max && value > max ? 'over' : ''}`}><i style={{ width: `${pct}%` }} /></span>
 }
 
-function TicketCard({ t, selected, onSelect }: { t: ExecTicket; selected: boolean; onSelect: () => void }) {
+/** `compact`: above the graph, only who is on it and what it says, so the active work stays in view. */
+function TicketCard({ t, selected, onSelect, compact = false }: { t: ExecTicket; selected: boolean; onSelect: () => void; compact?: boolean }) {
   const a = t.agent
   const last = t.events[t.events.length - 1]
   const ev = last ? eventOf(last) : null
+  if (compact)
+    return (
+      <div className={`xcard compact ${t.state} ${selected ? 'on' : ''}`} onClick={onSelect}>
+        <div className="xcard-head">
+          <span className="xid">{t.id}</span>
+          <span className="xtitle">{t.title ?? '—'}</span>
+          <span className={`xstate ${t.state}`}>{STATE_LABEL[t.state] ?? t.state}</span>
+        </div>
+        {a && (
+          <div className="xmeta">
+            <span>{ROLE_LABEL[a.role]}</span>
+            <span>{a.turns}{t.est ? `/${t.est}` : ''} turns</span>
+            <Bar value={a.turns} max={t.est} />
+            {a.updatedAt && <span className="dim">{ago(a.updatedAt)}</span>}
+          </div>
+        )}
+        {(a?.saying || a?.doing) && <div className="xsay">{a.saying ? `“${a.saying}”` : <span className="xdo">{a.doing}</span>}</div>}
+      </div>
+    )
   return (
     <div className={`xcard ${t.state} ${selected ? 'on' : ''}`} onClick={onSelect}>
       <div className="xcard-head">
@@ -145,6 +167,7 @@ export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
   const [data, setData] = useState<ExecOverview | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [showTerm, setShowTerm] = useState(false)
+  const [mode, setMode] = useState<'graph' | 'cards' | null>(null)
   const [, tick] = useState(0)
   useEffect(() => onAnyExit(() => tick(n => n + 1)), [])
 
@@ -180,6 +203,8 @@ export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
   const execTerms = terms.filter(t => t.kind === 'phase' && t.phase === 'execute')
   const term = [...execTerms].reverse().find(t => exitCode(t.id) === null) ?? execTerms[execTerms.length - 1] ?? null
   const pct = data.total ? Math.round((data.integrated / data.total) * 100) : 0
+  // A single ticket is no graph: cards until the user picks otherwise.
+  const graph = (mode ?? (data.tickets.length >= 2 ? 'graph' : 'cards')) === 'graph'
 
   return (
     <div className="execute">
@@ -212,14 +237,22 @@ export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
 
       <div className="xmain">
         <div className="xleft">
+          <div className="xmode">
+            <div className="seg">
+              <button className={graph ? 'on' : ''} onClick={() => setMode('graph')} title="Tickets as a dependency graph">Graph</button>
+              <button className={graph ? '' : 'on'} onClick={() => setMode('cards')} title="Tickets as cards and waves">Cards</button>
+            </div>
+          </div>
           <h4>Now{active.length ? ` · ${active.length}` : ''}</h4>
           {active.length === 0 && <p className="dim">No ticket is being implemented or reviewed right now.</p>}
-          <div className="xcards">
-            {active.map(t => <TicketCard key={t.id} t={t} selected={current?.id === t.id} onSelect={() => setSelected(t.id)} />)}
+          <div className={`xcards ${graph ? 'compact' : ''}`}>
+            {active.map(t => <TicketCard key={t.id} t={t} compact={graph} selected={current?.id === t.id} onSelect={() => setSelected(t.id)} />)}
           </div>
 
-          <h4>Plan · by dependency wave</h4>
-          <div className="xwaves">
+          {graph && <TicketGraph tickets={data.tickets} criticalPath={data.criticalPath} selected={current?.id ?? null} onSelect={setSelected} />}
+
+          {!graph && <h4>Plan · by dependency wave</h4>}
+          {!graph && <div className="xwaves">
             {data.waves.map((w, i) => (
               <div key={i} className="xwave">
                 <span className="dim">wave {i + 1}</span>
@@ -233,7 +266,7 @@ export function ExecutePanel({ session, terms, visible, onInspect }: Props) {
                 })}
               </div>
             ))}
-          </div>
+          </div>}
 
           <h4>Coordinator log</h4>
           <div className="xlog">

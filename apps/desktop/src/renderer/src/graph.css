@@ -1,0 +1,128 @@
+/* the Execute view's ticket graph (DESIGN.md §24.8) — same tokens as styles.css: graphite greys,
+   the orange accent for work in progress and the critical path, status colours for outcomes */
+
+.xmode { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; }
+.xcards.compact { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+.xcard.compact { padding: 6px 10px; gap: 3px; }
+.xcard.compact .xsay { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tgraph { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.tgraph-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gwaves { display: flex; gap: 6px; flex-wrap: wrap; }
+.gwave { display: inline-flex; align-items: center; gap: 6px; height: 24px; line-height: 1; padding: 0 8px; font: 600 11px var(--mono); background: var(--bg-2); color: var(--dim); }
+.gwave.live { color: var(--accent); border-color: var(--accent-2); }
+.gwave.done { color: var(--ok); border-color: #2f3d26; }
+.gwave-bar { display: inline-flex; gap: 2px; }
+.gwave-bar i { width: 8px; height: 6px; border-radius: 2px; background: var(--line); }
+.gwave-bar i.integrated { background: var(--ok); }
+.gwave-bar i.running { background: var(--accent); }
+.gwave-bar i.reviewing { background: var(--run); }
+.gwave-bar i.rejected { background: var(--bad); }
+.gwave-bar i.ready { background: #5a5d64; }
+.gtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); cursor: pointer; user-select: none; }
+.gtoggle input { accent-color: var(--accent); margin: 0; }
+.gtoggle input:checked + span { color: var(--text); }
+
+.tgraph-canvas {
+  position: relative; height: max(380px, 60vh); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+  background-color: var(--term); background-image: radial-gradient(circle, #26282c 1px, transparent 1.2px);
+  cursor: grab; touch-action: none; user-select: none;
+}
+.tgraph-canvas.dragging { cursor: grabbing; }
+.tgraph-canvas svg { display: block; }
+.tgraph-empty { position: absolute; inset: 0; display: grid; place-items: center; }
+
+/* columns */
+.gcol rect { fill: rgba(255, 255, 255, .015); stroke: #212327; }
+.gcol text { font: 600 10px var(--mono); letter-spacing: .08em; fill: var(--dim); }
+.gcol-n { fill: #6a6d74; }
+
+/* edges */
+.gedge { fill: none; stroke: #4a4d54; stroke-width: 1.4; transition: opacity .15s, stroke .15s; }
+.gedge.met { stroke: #3b4a33; }
+.gedge.crit { stroke: var(--accent); stroke-width: 2.6; opacity: .85; }
+.gedge.back { stroke: var(--bad); stroke-dasharray: 3 4; }
+.gedge.fr { stroke: #3a3d44; stroke-width: 1; stroke-dasharray: 2 3; }
+.gedge.flow { stroke: var(--accent); stroke-dasharray: 6 5; animation: gflow .7s linear infinite; }
+.gedge.hl { stroke: var(--text); opacity: 1; }
+.gedge.crit.hl, .gedge.flow.hl { stroke: var(--accent); }
+.gedge.dim { opacity: .12; }
+@keyframes gflow { from { stroke-dashoffset: 11; } to { stroke-dashoffset: 0; } }
+
+/* ticket nodes */
+.gnode { cursor: pointer; transition: opacity .15s; }
+.gnode .gcard { fill: var(--bg-2); stroke: var(--line); stroke-width: 1; }
+.gnode:hover .gcard { fill: #212327; stroke: #4a4d54; }
+.gnode .gside { fill: var(--line); }
+.gnode .gid { font: 700 12px var(--mono); fill: var(--accent); }
+.gnode .gtitle { font: 600 12px -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; fill: var(--text); }
+.gnode .gchip { fill: var(--bg-3); stroke: var(--line); }
+.gnode .gchip-t { font: 600 10px var(--mono); fill: var(--dim); }
+.gnode .gmeta { font: 10px var(--mono); fill: var(--dim); }
+.gnode .gbar-bg { fill: var(--bg-3); }
+.gnode .gbar { fill: var(--accent); }
+.gnode .gbar.over { fill: var(--bad); }
+.gnode .gturns { font: 10px var(--mono); fill: var(--dim); }
+
+.gnode.running .gcard { stroke: var(--accent-2); }
+.gnode.running .gside { fill: var(--accent); }
+.gnode.running .gchip { fill: var(--accent-soft); stroke: var(--accent-2); }
+.gnode.running .gchip-t { fill: var(--accent); }
+.gnode .gpulse { fill: none; stroke: var(--accent); stroke-width: 2; animation: gpulse 1.8s ease-in-out infinite; }
+@keyframes gpulse { 0%, 100% { stroke-opacity: .05; } 50% { stroke-opacity: .5; } }
+
+.gnode.reviewing .gcard { stroke: #6b4a22; }
+.gnode.reviewing .gside, .gnode.reviewing .gbar { fill: var(--run); }
+.gnode.reviewing .gchip { stroke: #6b4a22; }
+.gnode.reviewing .gchip-t { fill: var(--run); }
+
+.gnode.rejected .gcard { stroke: var(--bad); }
+.gnode.rejected .gside { fill: var(--bad); }
+.gnode.rejected .gchip { stroke: var(--bad); }
+.gnode.rejected .gchip-t { fill: var(--bad); }
+
+.gnode.integrated .gcard { stroke: #2f3d26; }
+.gnode.integrated .gside, .gnode.integrated .gbar { fill: var(--ok); }
+.gnode.integrated .gchip { stroke: #2f3d26; }
+.gnode.integrated .gchip-t { fill: var(--ok); }
+
+.gnode.ready .gchip-t { fill: var(--text); }
+.gnode.blocked { opacity: .55; }
+.gnode.blocked .gcard { fill: var(--bg); stroke-dasharray: 4 3; }
+
+.gnode.crit .gcard { stroke-width: 1.5; }
+.gnode.on .gcard { stroke: var(--accent); stroke-width: 2; }
+.gnode.dim, .gfr.dim { opacity: .18; }
+
+/* requirement nodes */
+.gfr { cursor: default; transition: opacity .15s; }
+.gfr rect { fill: var(--bg-2); stroke: var(--line); }
+.gfr .gfr-id { font: 700 11px var(--mono); fill: var(--dim); }
+.gfr .gfr-n { font: 10px var(--mono); fill: var(--dim); }
+.gfr.active rect { stroke: var(--accent-2); fill: var(--accent-soft); }
+.gfr.active .gfr-id { fill: var(--accent); }
+.gfr.done rect { stroke: #2f3d26; fill: rgba(143, 207, 111, .08); }
+.gfr.done .gfr-id { fill: var(--ok); }
+
+/* overlays */
+.tgraph-ui { position: absolute; display: flex; gap: 4px; cursor: default; }
+.gzoom { top: 8px; right: 8px; }
+.gzoom button { padding: 2px 9px; background: var(--bg-2); min-width: 28px; }
+.glegend { left: 8px; bottom: 8px; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 16px); padding: 5px 9px; background: rgba(23, 24, 27, .88); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; color: var(--dim); }
+.glegend span { display: inline-flex; align-items: center; gap: 5px; }
+.gdot { width: 9px; height: 9px; border-radius: 3px; border: 1px solid var(--line); background: var(--bg-2); display: inline-block; }
+.gdot.running { background: var(--accent); border-color: var(--accent); }
+.gdot.reviewing { background: var(--run); border-color: var(--run); }
+.gdot.rejected { background: var(--bad); border-color: var(--bad); }
+.gdot.integrated { background: var(--ok); border-color: var(--ok); }
+.gdot.ready { background: var(--bg-3); border-color: #5a5d64; }
+.gdot.blocked { background: transparent; border-style: dashed; opacity: .7; }
+.gdot.fr { border-radius: 5px; width: 14px; border-color: var(--accent-2); background: var(--accent-soft); }
+.gline { width: 16px; height: 0; border-top: 2.5px solid var(--accent); display: inline-block; }
+.gline.flow { border-top: 2px dashed var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gedge.flow, .gnode .gpulse { animation: none; }
+  .gnode .gpulse { stroke-opacity: .3; }
+}
+.tgraph-canvas.hovering .gnode.blocked:not(.dim) { opacity: .9; }

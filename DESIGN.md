@@ -1662,6 +1662,15 @@ away:
   the reviewer that sent it back is newer.
 - **Plan**: the tickets by dependency wave (`Blocked by` depth in `graph.md`, ranges such as
   `01–13` expanded).
+- **Graph** (the default from two tickets; **Cards** shows the waves as chips): the `Blocked by`
+  DAG drawn as columns of waves, each column ordered by barycenter sweeps so edges cross little,
+  long edges routed through the columns they span. A node is the ticket's state, tier, layer and
+  turns against the estimate; the critical path (`execution.critical_path`, else the heaviest
+  chain by estimate) is drawn in the accent, edges into an implementing ticket flow. Hovering a
+  ticket keeps only its upstream and downstream chain lit; a click selects it for the Detail;
+  pan, zoom and fit. *Show requirements* adds the FRs each ticket covers (`Requirements
+  covered`) as a last column, an FR done once all its tickets are integrated. The **Now** cards
+  stay above it, compact. Layout in `shared/graph.ts`, pure and tested.
 - **Coordinator log**: `06-execution.md`'s events as sentences, coloured by outcome.
 - **Detail** of the selected ticket: goal, its own timeline, the agent's last steps, and the
   inspector (§24.4) for the full diff and transcript.

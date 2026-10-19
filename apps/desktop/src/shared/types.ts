@@ -230,6 +230,10 @@ export type ExecTicket = {
   startedAt: string | null
   /** The ticket's Goal, cut short: what is being implemented. */
   goal: string | null
+  /** The FRs it covers (`Requirements covered`), for the graph's requirements column. */
+  fr: string[]
+  /** Its `**Layer:**` header field, when the ticket names one. */
+  layer: string | null
   agent: ExecAgent | null
   diff: { files: number; added: number; deleted: number; uncommitted: number } | null
   events: { at: string; event: string; detail: string }[]
