@@ -1746,6 +1746,42 @@ escaped JSON and builds every element with `textContent` — nothing in a report
 `report.mjs`; its phases skip the step and say to run `kss-init` again. kss-desktop shows the
 page in the session's **Report** view and opens it on the phase that just finished (§24).
 
+### 25.1 The living feature
+
+A phase report is a snapshot; the person also wants the feature *as it is now*. So besides its
+`report/<phase>.json`, every phase patches one cumulative model, `report/feature.json`: the
+product (problem → outcome, actors, scope), stories, requirements with their status, the rules
+with the code that implements each, the decisions in force, the architecture, state machines and
+simulators, and a change log. The page opens on it, in the **Feature** tab (`#feature`).
+
+**One writer, patches only.** The model never edits the file: it pipes a patch to
+`node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase <phase>`. Objects merge, lists of
+items with ids are upserted by id, `{ "id", "removed": true }` drops a requirement or removes
+anything else, and a required `change` line goes to the log — so a phase sends only what it
+changed and never rewrites what earlier phases wrote. When a decision's text changes, the script
+moves the old text, phase and reason to its `history`; the page marks it *changed* and shows
+before → after. Each phase's share is in `.kss/references/feature.md`.
+
+**Checked like the report, and more.** The script validates shapes and that every id a link
+names exists; quotes each code block the patch sends against the repository (§25); compiles every
+simulator expression; and runs every simulator scenario that states an `expect`, refusing with
+the rule that fired and the mismatch — the simulator must model the rule as it really behaves.
+On any problem nothing is written.
+
+**Progress is derived.** `report.mjs` reads the ticket files ("Requirements covered"),
+`graph.md`, `06-execution.md` and `.kss/current`: a requirement is done when all its tickets are
+integrated, building when any has started; the ticket graph is drawn colored by state. Execute
+rebuilds the page (`report.mjs <dir>`) after every integration, so the view stays live.
+
+**Two interactive sections**, usable in phase reports too. `states` draws a state machine the
+reader walks — current state lit, its events as buttons with their guards, the path so far.
+`simulator` turns a rule into a form: inputs, derived values, ordered rules (`when` → outputs)
+and scenarios from the spec's examples; the page recomputes as the user types, shows which rule
+fired and every condition's truth, and lets the user save their own edge cases and send one to
+the agent (`postMessage` of `kss:scenario`; kss-desktop opens a chat with it). Expressions are a
+small language interpreted by `scripts/expr.mjs` — no `eval`, no property access, names resolve
+only against the simulator's own inputs — embedded into the page the way the client is.
+
 ## 26. App mode
 
 ### 26.1 Why
