@@ -102,11 +102,24 @@ export function localFiles(root: string): string[] {
   return out
 }
 
+/**
+ * Where a session starts: `origin/<base_branch>` freshly fetched, since the local branch is only as
+ * new as the last time someone checked it out — it can miss the very kss sync a phase needs. Offline
+ * or without a remote, the local branch; without that, HEAD.
+ */
+export async function sessionBase(root: string, baseBranch: string): Promise<string> {
+  await git(root, ['fetch', '--quiet', 'origin', baseBranch], { ...process.env, GIT_TERMINAL_PROMPT: '0' })
+  for (const ref of [`origin/${baseBranch}`, baseBranch]) {
+    if ((await git(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).ok) return ref
+  }
+  return 'HEAD'
+}
+
 export async function createSession(project: ProjectInfo, request: string): Promise<string> {
   mkdirSync(project.sessionsDir, { recursive: true })
   const taken = new Set(existsSync(project.sessionsDir) ? readdirSync(project.sessionsDir) : [])
   const path = join(project.sessionsDir, sessionSlug(request, taken))
-  const base = (await git(project.root, ['rev-parse', '--verify', '--quiet', project.baseBranch])).ok ? project.baseBranch : 'HEAD'
+  const base = await sessionBase(project.root, project.baseBranch)
   const r = await git(project.root, ['worktree', 'add', '--detach', path, base])
   if (!r.ok) throw new Error(r.stderr.trim() || 'git worktree add failed')
   for (const f of localFiles(project.root)) {
