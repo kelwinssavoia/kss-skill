@@ -453,3 +453,50 @@ export function activeTicket(current) {
   const running = Object.entries(current.tickets).find(([, t]) => t && (t.state === 'running' || t.state === 'reviewing'))
   return running ? running[0] : null
 }
+
+/**
+ * The main agent's last words, from the tail of its transcript: what it is waiting on when a Stop
+ * fires (DESIGN.md §26). Both formats; the newest assistant text wins, cut to `max`.
+ */
+export function tailLastText(path, max = 700, tailBytes = 256 * 1024) {
+  let fd
+  try {
+    if (!path || !existsSync(path)) return null
+    fd = openSync(path, 'r')
+    const size = fstatSync(fd).size
+    const len = Math.min(size, tailBytes)
+    const buf = Buffer.alloc(len)
+    readSync(fd, buf, 0, len, size - len)
+    const lines = buf.toString('utf8').split('\n')
+    const textOf = (content) =>
+      typeof content === 'string'
+        ? content
+        : Array.isArray(content)
+          ? content.map((b) => (b && (b.type === 'text' || b.type === 'output_text') && typeof b.text === 'string' ? b.text : '')).filter(Boolean).join('\n')
+          : ''
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const raw = lines[i]
+      if (!raw || raw.indexOf('assistant') === -1) continue
+      let o
+      try {
+        o = JSON.parse(raw)
+      } catch {
+        continue
+      }
+      const m = o && o.message && o.message.role === 'assistant' ? o.message : o && o.type === 'response_item' && o.payload && o.payload.role === 'assistant' ? o.payload : null
+      const t = m ? textOf(m.content).trim() : ''
+      if (t) return t.length > max ? '…' + t.slice(t.length - max + 1) : t
+    }
+    return null
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}

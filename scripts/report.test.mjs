@@ -132,3 +132,74 @@ test('the page embeds the client and builds nothing from markup', () => {
   assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML/.test(page))
   assert.ok(page.includes('\\u003cb>x\\u003c/b>'))
 })
+
+const MACHINE = { type: 'states', id: 'batch', initial: 'open', states: [{ id: 'open', label: 'Open' }, { id: 'sent', label: 'Sent' }], transitions: [{ from: 'open', to: 'sent', event: 'send', guard: 'before cutoff' }] }
+const SIM = {
+  type: 'simulator', id: 'fee', title: 'Fee', hit: 'first',
+  inputs: [{ id: 'amount', label: 'Amount', type: 'number', default: 100 }, { id: 'plan', label: 'Plan', type: 'enum', options: ['free', 'pro'], default: 'free' }],
+  rules: [{ id: 'pro', when: 'plan == "pro"', then: { fee: '0' } }, { id: 'base', when: 'true', then: { fee: 'round(amount * 0.01, 2)' } }],
+  outputs: [{ id: 'fee', label: 'Fee', format: 'money' }],
+  scenarios: [{ name: 'free', inputs: { amount: 250 }, expect: { fee: 2.5 } }],
+}
+
+test('states: an initial among the states, transitions joining them, at most 12 states', () => {
+  assert.deepEqual(validateSection(MACHINE, 0), [])
+  assert.match(validateSection({ ...MACHINE, initial: 'x' }, 0).join('\n'), /initial must be one of the state ids/)
+  assert.match(validateSection({ ...MACHINE, transitions: [{ from: 'open', to: 'gone', event: 'e' }] }, 0).join('\n'), /must join two state ids/)
+  const many = Array.from({ length: 13 }, (_, i) => ({ id: 's' + i, label: 'S' }))
+  assert.match(validateSection({ ...MACHINE, states: many, initial: 's0', transitions: [{ from: 's0', to: 's1', event: 'e' }] }, 0).join('\n'), /more than 12 states/)
+})
+
+test('simulator: typed inputs, compiled expressions, scenarios held to their expectation', () => {
+  assert.deepEqual(validateSection(SIM, 0), [])
+  const bad = (patch) => validateSection({ ...SIM, ...patch }, 0).join('\n')
+  assert.match(bad({ inputs: [{ id: 'min', label: 'x', type: 'number', default: 1 }] }), /reserved word/)
+  assert.match(bad({ inputs: [{ id: 'a', label: 'x', type: 'enum', options: ['p'], default: 'q' }] }), /one of its options/)
+  assert.match(bad({ rules: [{ id: 'r', when: 'amount >', then: { fee: '1' } }] }), /\(r\)\.when: unexpected the end/)
+  assert.match(bad({ rules: [{ id: 'r', when: 'true', then: { cost: '1' } }] }), /then\.cost is not an output/)
+  assert.match(bad({ scenarios: [{ name: 'pro', inputs: { plan: 'pro' }, expect: { fee: 1 } }] }), /"pro": expected fee = 1, the rules give 0 \(rule pro fired\)/)
+})
+
+test('the feature model joins the page, with requirement progress derived from the tickets', () => {
+  const root = mkdtempSync(join(tmpdir(), 'repo-'))
+  mkdirSync(join(root, '.git'))
+  mkdirSync(join(root, '.kss'))
+  const dir = join(root, 'specs/012-x')
+  mkdirSync(join(dir, 'report'), { recursive: true })
+  mkdirSync(join(dir, '05-tickets'))
+  writeFileSync(join(dir, 'README.md'), '# 012-x\n\n**Size:** M\n')
+  writeFileSync(join(dir, '05-tickets/01-a.md'), '# 01 · Contract\n\n**Layer:** domain · **Blocked by:** — \n\n## Requirements covered\n- **FR-01** · x\n- **FR-2** · y\n\n## Plan excerpt\nFR-09 is mentioned elsewhere\n')
+  writeFileSync(join(dir, '05-tickets/02-b.md'), '# 02 · Endpoint\n\n**Layer:** api · **Blocked by:** 01\n\n## Requirements covered\n- **FR-02** · y\n')
+  writeFileSync(join(dir, '06-execution.md'), '- `t` · **01** · spawn · T2\n- `t` · **01** · integrate · ok\n')
+  writeFileSync(join(root, '.kss/current'), JSON.stringify({ feature: '012-x', tickets: { '02': { state: 'running' } } }))
+  const f = {
+    feature: '012-x', lang: 'en',
+    requirements: [{ id: 'FR-01', text: 'a' }, { id: 'FR-02', text: 'b' }, { id: 'FR-03', text: 'c' }, { id: 'FR-04', text: 'd', status: 'dropped' }],
+    states: [MACHINE], simulators: [SIM],
+  }
+  writeFileSync(join(dir, 'report/feature.json'), JSON.stringify(f))
+  const m = model(dir)
+  assert.deepEqual(m.errors, [])
+  assert.deepEqual(m.reports, [])
+  const p = m.living.progress
+  assert.equal(p.requirements['FR-01'].status, 'done')
+  assert.equal(p.requirements['FR-02'].status, 'building')
+  assert.deepEqual(p.requirements['FR-02'].tickets, ['01', '02'])
+  assert.equal(p.requirements['FR-03'].status, 'planned')
+  assert.equal(p.requirements['FR-04'].status, 'dropped')
+  assert.deepEqual([p.done, p.total], [1, 3])
+  assert.deepEqual(m.living.ticketFlow.edges, [{ from: '01', to: '02' }])
+  assert.deepEqual(m.living.ticketFlow.nodes.map((n) => n.tone), ['ok', 'accent'])
+  // A plain rebuild includes it and embeds the expression language for the simulators.
+  const r = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8' })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /\(0 phases, feature\)/)
+  const page = readFileSync(join(dir, 'report/index.html'), 'utf8')
+  assert.match(page, /var kssExpr = \(function exprLib\(\)/)
+  assert.ok(!/innerHTML|insertAdjacentHTML|outerHTML|\beval\(|new Function/.test(page))
+  // An invalid feature.json fails the rebuild with the reason.
+  writeFileSync(join(dir, 'report/feature.json'), JSON.stringify({ ...f, rules: [{ id: 'R-01', title: 'T', text: 't', fr: ['FR-99'] }] }))
+  const bad = spawnSync(process.execPath, [SCRIPT, dir], { encoding: 'utf8' })
+  assert.equal(bad.status, 1)
+  assert.match(bad.stderr, /feature\.json: rules\[R-01\]\.fr names FR-99/)
+})

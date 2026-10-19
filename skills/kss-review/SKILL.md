@@ -1,7 +1,7 @@
 ---
 name: kss-review
 description: Work a feature's PR review round — collect comments and CI findings, triage them, fix, dispute, answer or defer, reply on the threads; optionally watch the PR and run rounds automatically. Run it after kss-execute has opened the PR.
-argument-hint: NNN-<slug> [--watch | --done]
+argument-hint: NNN-<slug> [--watch | --done] [--app]
 disable-model-invocation: true
 ---
 
@@ -40,6 +40,18 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it: the triage table (step 3) is an `approve` whose
+draft is the table written to `notes/review-<round>-triage.md` — an edited table replaces yours; a
+held item, a `question` finding opened for a mini grill and a dispute's reply text are a `question`
+each; `--done`'s `Finish the review anyway?` is a `confirm`. Precondition 2 publishes a `handoff`
+(`run`: execute, `then`: review) before its stop line. Set `progress` at each procedure step; the
+Summary starts with `ask.mjs clear` and `{"progress":null}`.
 
 ## Rounds, and finishing
 
@@ -190,6 +202,12 @@ this phase keeps up to date afterwards.
     hook owns `session`).
 
 ## Summary
+
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
+**Living feature:** when a fix or an override changed a rule or a decision, pipe a patch to
+`node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase review` per
+`.kss/references/feature.md` (skip when the script is absent).
 
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/review.json` as `.kss/references/report.md` describes — short, and shown

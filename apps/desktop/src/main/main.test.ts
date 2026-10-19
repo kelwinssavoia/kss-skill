@@ -24,14 +24,14 @@ test('phase prompts use each harness prefix', () => {
 test('launches: shell, chat and phase', () => {
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'shell' }, '/bin/zsh'), { file: '/bin/zsh', args: ['-l'], title: 'Terminal' })
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'chat', harness: 'codex' }, '/bin/zsh'), { file: 'codex', args: [], title: 'Codex chat' })
-  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'clarify', args: 'add csv export' }, '/bin/zsh').args, ['/kss-clarify add csv export'])
+  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'clarify', args: 'add csv export' }, '/bin/zsh').args, ['/kss-clarify add csv export --app'])
   assert.throws(() => launchOf({ cwd: '/r', kind: 'phase' }, '/bin/zsh'))
 })
 
 test('bypass: each CLI gets its own flag before the prompt; shells and qa never do', () => {
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'chat', harness: 'claude-code', bypass: true }, '/bin/zsh').args, ['--dangerously-skip-permissions'])
-  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'codex', phase: 'spec', args: '012-x', bypass: true }, '/bin/zsh').args, ['--dangerously-bypass-approvals-and-sandbox', '$kss-spec 012-x'])
-  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'spec', args: '012-x', bypass: false }, '/bin/zsh').args, ['/kss-spec 012-x'])
+  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'codex', phase: 'spec', args: '012-x', bypass: true }, '/bin/zsh').args, ['--dangerously-bypass-approvals-and-sandbox', '$kss-spec 012-x --app'])
+  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'spec', args: '012-x', bypass: false }, '/bin/zsh').args, ['/kss-spec 012-x --app'])
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'shell', bypass: true }, '/bin/zsh').args, ['-l'])
   assert.ok(!launchOf({ cwd: '/r', kind: 'qa', qa: { step: 'up', feature: '012-x' }, bypass: true }, '/bin/zsh').args.some(a => a.startsWith('--dangerously')))
 })

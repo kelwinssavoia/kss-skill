@@ -6,6 +6,9 @@
 // language (.kss/references/report.md) — and running this script, which validates every phase
 // file and rebuilds <feature-dir>/report/index.html: one self-contained, interactive page with
 // the track, each phase, every decision, and the cost of each phase from metrics.jsonl.
+// When report/feature.json exists (the living feature, written only by feature.mjs — §25.1) the
+// page opens on it, with each requirement's progress derived here from the tickets and the run;
+// execute rebuilds after every integration so that progress stays live.
 //
 //   node .kss/scripts/report.mjs specs/012-x               validate all, write index.html
 //   node .kss/scripts/report.mjs specs/012-x --check spec  validate report/spec.json only
@@ -14,17 +17,18 @@
 // computed here, so every report looks the same and costs a few hundred tokens to produce.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { ORDER, TRACKS, readHeader } from './next.mjs'
 import { aggregate } from './render-cost.mjs'
 import { client } from './report-client.mjs'
+import { FUNCTIONS, check, compile, exprLib } from './expr.mjs'
 
 export const DIR = 'report'
 
-const KINDS = ['business', 'layout', 'technical', 'scope', 'design', 'auto', 'review', 'execution', 'quality']
-const STATUSES = ['decided', 'auto', 'accepted', 'overridden', 'reopened', 'deferred', 'open', 'rejected']
+export const KINDS = ['business', 'layout', 'technical', 'scope', 'design', 'auto', 'review', 'execution', 'quality']
+export const STATUSES =['decided', 'auto', 'accepted', 'overridden', 'reopened', 'deferred', 'open', 'rejected']
 
 // Short by construction: a report illustrates, it does not narrate. Past these the script refuses
 // the file, so the phase cuts words or turns them into a diagram, an example or a table.
@@ -33,7 +37,13 @@ export const CAP = { summary: 600, line: 200, did: 7, text: 700, decision: 400, 
 /** The limits reports written before the succinct rule were held to: still accepted for them. */
 export const LOOSE = { ...CAP, summary: 1500, line: 600, did: 50, decision: 1500 }
 
-export const SECTION_TYPES = ['text', 'callout', 'code', 'diff', 'flow', 'sequence', 'example', 'table', 'files']
+export const SECTION_TYPES = ['text', 'callout', 'code', 'diff', 'flow', 'sequence', 'example', 'table', 'files', 'states', 'simulator']
+
+export const INPUT_TYPES = ['number', 'text', 'boolean', 'enum', 'date', 'time']
+export const OUTPUT_FORMATS = ['money', 'percent', 'text', 'number', 'boolean']
+const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/
+// Words an input or derived id cannot take: the expression language reads them as something else.
+const RESERVED = ['true', 'false', 'null', ...FUNCTIONS, 'constructor', '__proto__', 'prototype', 'toString', 'valueOf', 'hasOwnProperty']
 
 const isStr = (v) => typeof v === 'string' && v.trim().length > 0
 
@@ -186,7 +196,155 @@ export function validateSection(s, i) {
         if (f && longer(f.what, 100)) errs.push(`${at}.items[${j}].what is over 100 characters`)
       })
       break
+    case 'states':
+      errs.push(...validateStates(s, at))
+      break
+    case 'simulator':
+      errs.push(...validateSimulator(s, at))
+      break
   }
+  return errs
+}
+
+const list = (v) => (Array.isArray(v) ? v : [])
+const strList = (v) => v === undefined || (Array.isArray(v) && v.every(isStr))
+
+/** A state machine: states, the events that move between them, the guards on those events. */
+function validateStates(s, at) {
+  const errs = []
+  if (!isStr(s.id)) errs.push(`${at} (states).id is required`)
+  if (!Array.isArray(s.states) || !s.states.length) return [...errs, `${at} (states).states must list [{ "id", "label", "detail"? }]`]
+  const ids = new Set()
+  s.states.forEach((st, j) => {
+    if (!st || !isStr(st.id) || !isStr(st.label)) return errs.push(`${at}.states[${j}] needs "id" and "label"`)
+    if (ids.has(st.id)) errs.push(`${at}.states[${j}].id "${st.id}" is repeated`)
+    ids.add(st.id)
+    if (longer(st.label, 44)) errs.push(`${at}.states[${j}].label is over 44 characters`)
+    if (longer(st.detail, CAP.note)) errs.push(`${at}.states[${j}].detail is over ${CAP.note} characters`)
+  })
+  if (ids.size > 12) errs.push(`${at} has more than 12 states — split the machine`)
+  if (!ids.has(s.initial)) errs.push(`${at} (states).initial must be one of the state ids`)
+  if (!Array.isArray(s.transitions) || !s.transitions.length) errs.push(`${at} (states).transitions must list [{ "from", "to", "event", "guard"?, "fr"? }]`)
+  list(s.transitions).forEach((t, j) => {
+    if (!t || !ids.has(t.from) || !ids.has(t.to)) return errs.push(`${at}.transitions[${j}] must join two state ids`)
+    if (!isStr(t.event)) errs.push(`${at}.transitions[${j}].event is required`)
+    else if (longer(t.event, 40)) errs.push(`${at}.transitions[${j}].event is over 40 characters`)
+    if (t.guard !== undefined && !isStr(t.guard)) errs.push(`${at}.transitions[${j}].guard must be a string`)
+    if (longer(t.guard, 120)) errs.push(`${at}.transitions[${j}].guard is over 120 characters`)
+    if (!strList(t.fr)) errs.push(`${at}.transitions[${j}].fr must be FR ids`)
+  })
+  return errs
+}
+
+const fmt = (v) => (typeof v === 'string' ? JSON.stringify(v) : String(v))
+
+/**
+ * A simulator: inputs, derived values, rules (`when` → outputs) and scenarios. Every expression
+ * must compile against the names it may see, and every scenario with an `expect` must produce it
+ * — a mismatch is refused with the rule that fired, so the model fixes its rules (or the spec).
+ */
+function validateSimulator(s, at) {
+  const errs = []
+  if (!isStr(s.id)) errs.push(`${at} (simulator).id is required`)
+  if (!isStr(s.title)) errs.push(`${at} (simulator).title is required`)
+  if (s.hit !== undefined && !['first', 'all'].includes(s.hit)) errs.push(`${at}.hit — "first" (the first rule that holds) or "all"`)
+  if (!Array.isArray(s.inputs) || !s.inputs.length) errs.push(`${at} (simulator).inputs must list [{ "id", "label", "type", "default" }]`)
+  if (!Array.isArray(s.outputs) || !s.outputs.length) errs.push(`${at} (simulator).outputs must list [{ "id", "label", "format"? }]`)
+  if (!Array.isArray(s.rules) || !s.rules.length) errs.push(`${at} (simulator).rules must list [{ "id", "when", "then" }]`)
+  if (errs.length) return errs
+  const seen = new Set()
+  const name = (id, where) => {
+    if (!isStr(id) || !IDENT.test(id)) return errs.push(`${where}.id must be a plain name (letters, digits, _)`), false
+    if (RESERVED.includes(id)) return errs.push(`${where}.id "${id}" is a reserved word of the expressions`), false
+    if (seen.has(id)) return errs.push(`${where}.id "${id}" is repeated`), false
+    seen.add(id)
+    return true
+  }
+  if (s.inputs.length > 12) errs.push(`${at} has more than 12 inputs`)
+  s.inputs.forEach((i, j) => {
+    const w = `${at}.inputs[${j}]`
+    if (!i || typeof i !== 'object') return errs.push(`${w} must be an object`)
+    name(i.id, w)
+    if (!isStr(i.label)) errs.push(`${w}.label is required`)
+    else if (longer(i.label, CAP.label)) errs.push(`${w}.label is over ${CAP.label} characters`)
+    if (!INPUT_TYPES.includes(i.type)) return errs.push(`${w}.type — one of ${INPUT_TYPES.join(', ')}`)
+    if (i.type === 'enum' && !(Array.isArray(i.options) && i.options.length && i.options.every((o) => isStr(o) || typeof o === 'number'))) errs.push(`${w}.options must list the choices`)
+    const d = i.default
+    const okDefault =
+      i.type === 'number' ? d === null || typeof d === 'number'
+      : i.type === 'boolean' ? typeof d === 'boolean'
+      : i.type === 'enum' ? Array.isArray(i.options) && i.options.includes(d)
+      : i.type === 'date' ? typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+      : i.type === 'time' ? typeof d === 'string' && /^\d{1,2}:\d{2}$/.test(d)
+      : typeof d === 'string'
+    if (!okDefault) errs.push(`${w}.default must be a ${i.type === 'enum' ? 'one of its options' : i.type === 'date' ? "date 'YYYY-MM-DD'" : i.type === 'time' ? "time 'HH:MM'" : i.type} value`)
+    for (const k of ['min', 'max']) if (i[k] !== undefined && typeof i[k] !== 'number') errs.push(`${w}.${k} must be a number`)
+    if (longer(i.unit, 12)) errs.push(`${w}.unit is over 12 characters`)
+  })
+  const inputIds = s.inputs.map((i) => i && i.id)
+  const known = [...inputIds]
+  if (list(s.derive).length > 12) errs.push(`${at} has more than 12 derived values`)
+  list(s.derive).forEach((d, j) => {
+    const w = `${at}.derive[${j}]`
+    if (!d || typeof d !== 'object') return errs.push(`${w} must be an object`)
+    if (!name(d.id, w)) return
+    const c = compile(d.expr, known)
+    if (!c.ok) errs.push(`${w} (${d.id}).expr: ${c.error}`)
+    known.push(d.id)
+  })
+  const outIds = []
+  s.outputs.forEach((o, j) => {
+    const w = `${at}.outputs[${j}]`
+    if (!o || !isStr(o.id) || !IDENT.test(o.id)) return errs.push(`${w}.id must be a plain name (letters, digits, _)`)
+    if (outIds.includes(o.id)) errs.push(`${w}.id "${o.id}" is repeated`)
+    outIds.push(o.id)
+    if (!isStr(o.label)) errs.push(`${w}.label is required`)
+    if (o.format !== undefined && !OUTPUT_FORMATS.includes(o.format)) errs.push(`${w}.format — one of ${OUTPUT_FORMATS.join(', ')}`)
+    if (longer(o.unit, 12)) errs.push(`${w}.unit is over 12 characters`)
+  })
+  if (s.rules.length > 24) errs.push(`${at} has more than 24 rules`)
+  const ruleIds = new Set()
+  s.rules.forEach((r, j) => {
+    const w = `${at}.rules[${j}]`
+    if (!r || typeof r !== 'object') return errs.push(`${w} must be an object`)
+    if (!isStr(r.id)) errs.push(`${w}.id is required`)
+    else if (ruleIds.has(r.id)) errs.push(`${w}.id "${r.id}" is repeated`)
+    ruleIds.add(r.id)
+    if (longer(r.label, 120)) errs.push(`${w}.label is over 120 characters`)
+    const c = compile(r.when, known)
+    if (!c.ok) errs.push(`${w} (${r.id}).when: ${c.error}`)
+    if (!r.then || typeof r.then !== 'object' || Array.isArray(r.then)) return errs.push(`${w}.then must map output ids to expressions`)
+    for (const [k, v] of Object.entries(r.then)) {
+      if (!outIds.includes(k)) errs.push(`${w}.then.${k} is not an output — outputs: ${outIds.join(', ')}`)
+      const t = compile(typeof v === 'string' ? v : JSON.stringify(v), known)
+      if (!t.ok) errs.push(`${w} (${r.id}).then.${k}: ${t.error}`)
+    }
+    if (!strList(r.fr)) errs.push(`${w}.fr must be FR ids`)
+    if (r.rule !== undefined && !isStr(r.rule)) errs.push(`${w}.rule must be a rule id such as "R-01"`)
+  })
+  if (list(s.scenarios).length > 20) errs.push(`${at} has more than 20 scenarios`)
+  list(s.scenarios).forEach((sc, j) => {
+    const w = `${at}.scenarios[${j}]`
+    if (!sc || !isStr(sc.name)) return errs.push(`${w}.name is required`)
+    if (longer(sc.name, CAP.label)) errs.push(`${w}.name is over ${CAP.label} characters`)
+    if (longer(sc.note, CAP.note)) errs.push(`${w}.note is over ${CAP.note} characters`)
+    if (!sc.inputs || typeof sc.inputs !== 'object') return errs.push(`${w}.inputs must map input ids to values`)
+    for (const k of Object.keys(sc.inputs)) if (!inputIds.includes(k)) errs.push(`${w}.inputs.${k} is not an input`)
+    if (sc.expect !== undefined && (!sc.expect || typeof sc.expect !== 'object')) errs.push(`${w}.expect must map output ids to values`)
+    for (const k of Object.keys(sc.expect ?? {})) if (!outIds.includes(k)) errs.push(`${w}.expect.${k} is not an output`)
+  })
+  if (errs.length) return errs
+  // Everything compiles: run each scenario and hold it to what it says it expects.
+  const ruleRef = (id) => {
+    const r = s.rules.find((x) => x.id === id)
+    return r && r.rule ? `${id} (${r.rule})` : id
+  }
+  list(s.scenarios).forEach((sc, j) => {
+    const r = check(s, sc)
+    const fired = r.result.fired.length ? `rule ${r.result.fired.map(ruleRef).join(', ')} fired` : 'no rule fired'
+    r.result.errors.forEach((e) => errs.push(`${at}.scenarios[${j}] "${sc.name}": ${e}`))
+    r.mismatches.forEach((m) => errs.push(`${at}.scenarios[${j}] "${sc.name}": expected ${m.output} = ${fmt(m.expected)}, the rules give ${fmt(m.got)} (${fired}) — fix the rule to match the behaviour, or the expectation`))
+  })
   return errs
 }
 
@@ -253,6 +411,281 @@ export function checkSnippets(report, root) {
   return errs
 }
 
+// ── The living feature (DESIGN.md §25.1) ────────────────────────────────────────────────────────
+// report/feature.json is the feature as it is now — product and technical — that every phase
+// updates through feature.mjs. Its shape is checked here so a plain rebuild and the writer agree.
+
+export const FEATURE_FILE = 'feature.json'
+export const REQ_STATUSES = ['planned', 'building', 'done', 'dropped']
+export const FCAP = { title: 120, problem: 600, item: 200, actors: 12, scope: 20, text: 400, items: 60, sims: 8, machines: 8, code: 12, changes: 300 }
+
+/** Problems with feature.json, as `feature.json: …` lines; empty when it is valid. */
+export function validateFeature(f) {
+  const errs = []
+  const where = (k) => `feature.json: ${k}`
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return [where('not a JSON object')]
+  if (!isStr(f.feature)) errs.push(where('"feature" is required'))
+  if (f.lang !== undefined && !isStr(f.lang)) errs.push(where('"lang" must be a string such as "pt-BR"'))
+  const p = f.product
+  if (p !== undefined) {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) errs.push(where('"product" must be an object'))
+    else {
+      for (const [k, n] of [['title', FCAP.title], ['problem', FCAP.problem], ['outcome', FCAP.problem]]) {
+        if (p[k] !== undefined && typeof p[k] !== 'string') errs.push(where(`product.${k} must be a string`))
+        else if (longer(p[k], n)) errs.push(where(`product.${k} is over ${n} characters`))
+      }
+      for (const [k, n] of [['actors', FCAP.actors], ['inScope', FCAP.scope], ['outOfScope', FCAP.scope]]) {
+        if (p[k] === undefined) continue
+        if (!Array.isArray(p[k]) || !p[k].every(isStr)) errs.push(where(`product.${k} must be an array of strings`))
+        else if (p[k].length > n) errs.push(where(`product.${k} has ${p[k].length} entries — at most ${n}`))
+        else if (p[k].some((x) => x.length > FCAP.item)) errs.push(where(`an entry of product.${k} is over ${FCAP.item} characters`))
+      }
+    }
+  }
+  const items = (k, check) => {
+    if (f[k] === undefined) return []
+    if (!Array.isArray(f[k])) return errs.push(where(`"${k}" must be an array`)), []
+    if (f[k].length > FCAP.items) errs.push(where(`"${k}" has ${f[k].length} entries — at most ${FCAP.items}`))
+    const ids = new Set()
+    f[k].forEach((x, i) => {
+      const at = `${k}[${i}]`
+      if (!x || typeof x !== 'object') return errs.push(where(`${at} must be an object`))
+      if (!isStr(x.id)) return errs.push(where(`${at}.id is required`))
+      if (ids.has(x.id)) errs.push(where(`${at}.id "${x.id}" is repeated`))
+      ids.add(x.id)
+      check(x, `${k}[${x.id}]`)
+    })
+    return [...ids]
+  }
+  const text = (x, at, k, n = FCAP.text, required = true) => {
+    if (x[k] === undefined && !required) return
+    if (!isStr(x[k])) errs.push(where(`${at}.${k} is required`))
+    else if (x[k].length > n) errs.push(where(`${at}.${k} is over ${n} characters`))
+  }
+  const refs = (x, at, k) => {
+    if (x[k] !== undefined && !(Array.isArray(x[k]) && x[k].every(isStr))) errs.push(where(`${at}.${k} must be an array of ids`))
+  }
+  const stories = items('stories', (x, at) => text(x, at, 'text'))
+  const decisions = items('decisions', (x, at) => {
+    text(x, at, 'title', CAP.label)
+    text(x, at, 'decision', CAP.decision)
+    text(x, at, 'why', CAP.decision, false)
+    if (x.kind !== undefined && !KINDS.includes(x.kind)) errs.push(where(`${at}.kind — one of ${KINDS.join(', ')}`))
+    if (x.status !== undefined && !STATUSES.includes(x.status)) errs.push(where(`${at}.status — one of ${STATUSES.join(', ')}`))
+    if (!ORDER.includes(x.phase)) errs.push(where(`${at}.phase — the phase that recorded it, one of ${ORDER.join(', ')}`))
+    if (x.history !== undefined && !(Array.isArray(x.history) && x.history.every((h) => h && isStr(h.decision) && isStr(h.phase)))) errs.push(where(`${at}.history is written by feature.mjs — leave it out`))
+  })
+  const requirements = items('requirements', (x, at) => {
+    text(x, at, 'text')
+    refs(x, at, 'stories')
+    refs(x, at, 'decisions')
+    if (x.status !== undefined && !REQ_STATUSES.includes(x.status)) errs.push(where(`${at}.status — one of ${REQ_STATUSES.join(', ')}`))
+  })
+  const rules = items('rules', (x, at) => {
+    text(x, at, 'title', CAP.label)
+    text(x, at, 'text')
+    refs(x, at, 'fr')
+    refs(x, at, 'decisions')
+    if (x.code !== undefined) {
+      if (!x.code || typeof x.code !== 'object') errs.push(where(`${at}.code must be { "file", "line", "code" }`))
+      else errs.push(...validateSection({ ...x.code, type: 'code' }, 0).map((e) => where(e.replace('sections[0]', `${at}.code`))))
+    }
+  })
+  // Sections kept in the model: each validated as the section type it is.
+  const sections = (k, type, max) => {
+    if (f[k] === undefined) return
+    if (!Array.isArray(f[k])) return errs.push(where(`"${k}" must be an array`))
+    if (f[k].length > max) errs.push(where(`"${k}" has ${f[k].length} — at most ${max}`))
+    f[k].forEach((s, i) => errs.push(...validateSection({ ...s, type }, i).map((e) => where(e.replace(`sections[${i}]`, `${k}[${i}]`)))))
+  }
+  sections('states', 'states', FCAP.machines)
+  sections('simulators', 'simulator', FCAP.sims)
+  sections('code', 'code', FCAP.code)
+  const a = f.architecture
+  if (a !== undefined) {
+    if (!a || typeof a !== 'object' || Array.isArray(a)) errs.push(where('"architecture" must be { "flow"?, "sequence"? }'))
+    else
+      for (const k of ['flow', 'sequence']) if (a[k] !== undefined) errs.push(...validateSection({ ...a[k], type: k }, 0).map((e) => where(e.replace('sections[0]', `architecture.${k}`))))
+  }
+  if (f.changes !== undefined && !(Array.isArray(f.changes) && f.changes.every((c) => c && isStr(c.text) && isStr(c.phase)))) errs.push(where('"changes" is written by feature.mjs — [{ "at", "phase", "text" }]'))
+  // Links must land: an FR, story, decision or rule named somewhere exists in the model.
+  const dangling = (ids, known, what) => ids.filter((x) => !known.includes(x)).forEach((x) => errs.push(where(`${what} names ${x}, which is not in the model`)))
+  list(f.requirements).forEach((r) => {
+    if (!r || !isStr(r.id)) return
+    dangling(list(r.stories), stories, `requirements[${r.id}].stories`)
+    dangling(list(r.decisions), decisions, `requirements[${r.id}].decisions`)
+  })
+  list(f.rules).forEach((r) => {
+    if (!r || !isStr(r.id)) return
+    dangling(list(r.fr), requirements, `rules[${r.id}].fr`)
+    dangling(list(r.decisions), decisions, `rules[${r.id}].decisions`)
+  })
+  list(f.simulators).forEach((s, i) => {
+    list(s && s.rules).forEach((r) => {
+      if (!r) return
+      if (isStr(r.rule)) dangling([r.rule], rules, `simulators[${i}] rule ${r.id}`)
+      dangling(list(r.fr), requirements, `simulators[${i}] rule ${r.id} fr`)
+    })
+  })
+  list(f.states).forEach((s, i) => list(s && s.transitions).forEach((t, j) => dangling(list(t && t.fr), requirements, `states[${i}].transitions[${j}].fr`)))
+  return errs
+}
+
+const frKey = (id) => {
+  const m = /^FR-0*(\d+)/i.exec(String(id))
+  return m ? `FR-${m[1]}` : String(id)
+}
+const ticketKey = (id) => (/^\d+$/.test(String(id)) ? String(Number(id)).padStart(2, '0') : String(id))
+const RUNNING = ['running', 'reviewing', 'rejected']
+
+/**
+ * The tickets of the feature and where each stands: the ticket files (`05-tickets/NN-*.md` — title,
+ * layer, blockers, the FRs under "Requirements covered"), the graph table as a fallback, the
+ * execution log's events, and `.kss/current` at the repository root, the live truth while execute
+ * runs. Returns [] before kss-tickets has run.
+ */
+export function tickets(dir) {
+  const tdir = join(dir, '05-tickets')
+  const out = new Map()
+  const get = (id) => {
+    const k = ticketKey(id)
+    if (!out.has(k)) out.set(k, { id: k, title: null, layer: null, blockedBy: [], fr: [], state: 'pending' })
+    return out.get(k)
+  }
+  const ids = (s) => (String(s ?? '').match(/\d+/g) ?? []).map(ticketKey)
+  let names = []
+  try {
+    names = readdirSync(tdir)
+  } catch {
+    return []
+  }
+  for (const n of names.filter((x) => /^\d+[-_.].*\.md$/.test(x))) {
+    let t
+    try {
+      t = readFileSync(join(tdir, n), 'utf8')
+    } catch {
+      continue
+    }
+    const tk = get(/^\d+/.exec(n)[0])
+    tk.title = /^#\s+\d+\s*[·.:-]\s*(.+)$/m.exec(t)?.[1]?.trim() ?? n.replace(/^\d+[-_.]|\.md$/g, '')
+    tk.layer = /\*\*Layer:\*\*\s*([^·\n*]+)/.exec(t)?.[1]?.trim() || null
+    const blocked = /\*\*Blocked by:\*\*\s*([^·\n*]+)/.exec(t)?.[1]
+    if (blocked) tk.blockedBy = ids(blocked)
+    const covered = /^##\s+Requirements covered\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(t)?.[1] ?? ''
+    tk.fr = [...new Set((covered.match(/FR-\d+/gi) ?? []).map(frKey))]
+  }
+  try {
+    // The graph table: | # | Ticket | Layer | Blocked by | … — fills what a ticket file left out.
+    for (const line of readFileSync(join(tdir, 'graph.md'), 'utf8').split('\n')) {
+      const c = line.split('|').map((x) => x.trim())
+      if (c.length < 6 || !/^\d+$/.test(c[1])) continue
+      const tk = get(c[1])
+      tk.title ??= c[2]
+      tk.layer ??= c[3] || null
+      if (!tk.blockedBy.length) tk.blockedBy = ids(c[4])
+    }
+  } catch {
+    /* no graph yet */
+  }
+  try {
+    // The execution log, in order: the last event of a ticket says where it stands.
+    const EVENT = { spawn: 'running', escalate: 'running', report: 'reviewing', integrate: 'integrated' }
+    for (const line of readFileSync(join(dir, '06-execution.md'), 'utf8').split('\n')) {
+      const m = /\*\*(\d+)\*\*\s*·\s*(spawn|report|verdict|integrate|escalate)\b\s*·?\s*(.*)$/.exec(line)
+      if (!m || !out.has(ticketKey(m[1]))) continue
+      const tk = get(m[1])
+      tk.state = m[2] === 'verdict' ? (/reject/i.test(m[3]) ? 'rejected' : 'reviewing') : EVENT[m[2]]
+    }
+  } catch {
+    /* not executing yet */
+  }
+  const root = repoRoot(dir)
+  if (root) {
+    try {
+      const cur = JSON.parse(readFileSync(join(root, '.kss', 'current'), 'utf8'))
+      const name = basename(resolve(dir))
+      if (cur && cur.tickets && typeof cur.tickets === 'object' && (!cur.feature || cur.feature === name || String(cur.feature).endsWith('/' + name))) {
+        for (const [id, t] of Object.entries(cur.tickets)) {
+          if (!t || !isStr(t.state) || !out.has(ticketKey(id))) continue
+          get(id).state = ['blocked', 'ready'].includes(t.state) ? 'pending' : t.state
+        }
+      }
+    } catch {
+      /* no run in progress */
+    }
+  }
+  return [...out.values()].sort((a, b) => a.id.localeCompare(b.id, 'en', { numeric: true }))
+}
+
+/**
+ * Where each requirement stands, from the tickets that cover it: done when all are integrated,
+ * building when any has started, planned otherwise. A dropped requirement stays dropped, and
+ * one no ticket covers keeps the status the model gave it.
+ */
+export function progress(f, ts) {
+  const byFr = {}
+  for (const t of ts) for (const fr of t.fr) (byFr[fr] ??= []).push(t)
+  const reqs = {}
+  let done = 0
+  let total = 0
+  for (const r of f.requirements ?? []) {
+    const ts = byFr[frKey(r.id)] ?? []
+    const integrated = ts.filter((t) => t.state === 'integrated').length
+    let status = r.status ?? 'planned'
+    if (status !== 'dropped' && ts.length) status = integrated === ts.length ? 'done' : integrated || ts.some((t) => RUNNING.includes(t.state)) ? 'building' : 'planned'
+    reqs[r.id] = { status, tickets: ts.map((t) => t.id), integrated, total: ts.length }
+    if (status === 'dropped') continue
+    total++
+    if (status === 'done') done++
+  }
+  const integrated = ts.filter((t) => t.state === 'integrated').length
+  return { requirements: reqs, done, total, tickets: { integrated, total: ts.length } }
+}
+
+const TICKET_TONE = { integrated: 'ok', running: 'accent', reviewing: 'warn', rejected: 'bad', pending: 'dim' }
+
+/** The ticket graph as a flow: columns by dependency wave, each box colored by its state. */
+export function ticketFlow(ts) {
+  if (!ts.length) return null
+  const ids = new Set(ts.map((t) => t.id))
+  return {
+    type: 'flow',
+    nodes: ts.slice(0, 40).map((t) => ({
+      id: t.id,
+      label: `${t.id} · ${t.title ?? ''}`.slice(0, 44),
+      group: t.state,
+      tone: TICKET_TONE[t.state] ?? 'dim',
+      detail: [t.layer, t.fr.join(', ')].filter(Boolean).join(' · ') || undefined,
+    })),
+    edges: ts.flatMap((t) => t.blockedBy.filter((b) => ids.has(b) && b !== t.id).map((b) => ({ from: b, to: t.id }))),
+  }
+}
+
+/** report/feature.json, validated, with live progress from the tickets; null when absent. */
+export function readFeature(dir, errors = []) {
+  const p = join(dir, DIR, FEATURE_FILE)
+  if (!existsSync(p)) return null
+  let f
+  try {
+    f = JSON.parse(readFileSync(p, 'utf8'))
+  } catch (e) {
+    errors.push(`${FEATURE_FILE}: invalid JSON — ${e.message}`)
+    return null
+  }
+  return living(dir, f, errors)
+}
+
+/** The feature model as the page shows it: validated, plus progress and the ticket graph. */
+export function living(dir, f, errors = []) {
+  const errs = validateFeature(f)
+  if (errs.length) {
+    errors.push(...errs)
+    return null
+  }
+  const ts = tickets(dir)
+  return { ...f, progress: progress(f, ts), tickets: ts, ticketFlow: ticketFlow(ts) }
+}
+
 /** Every `report/<phase>.json` of the feature: parsed, validated, in track order. */
 export function readReports(dir, strict = null) {
   const rdir = join(dir, DIR)
@@ -260,7 +693,7 @@ export function readReports(dir, strict = null) {
   const errors = []
   let names = []
   try {
-    names = readdirSync(rdir).filter((n) => n.endsWith('.json'))
+    names = readdirSync(rdir).filter((n) => n.endsWith('.json') && n !== FEATURE_FILE)
   } catch {
     return { reports: out, errors }
   }
@@ -318,17 +751,22 @@ function readmeExtras(dir) {
   }
 }
 
-/** Everything the page shows, as one object. */
-export function model(dir, now = new Date().toISOString(), strict = null) {
+/**
+ * Everything the page shows, as one object. `feature` is the living model to show instead of
+ * the one on disk — feature.mjs passes the merged model before it writes it.
+ */
+export function model(dir, now = new Date().toISOString(), strict = null, feature = undefined) {
   const header = readHeader(dir)
   const { reports, errors } = readReports(dir, strict)
+  const live = feature === undefined ? readFeature(dir, errors) : feature && living(dir, feature, errors)
   const size = header.size
   const track = size && TRACKS[size] ? TRACKS[size] : ORDER
   const ran = new Set(reports.map((r) => r.phase))
   // The track, plus any optional phase that actually ran, in canonical order.
   const phases = ORDER.filter((p) => track.includes(p) || ran.has(p))
-  const lang = [...reports].reverse().find((r) => isStr(r.lang))?.lang ?? 'en'
+  const lang = [...reports].reverse().find((r) => isStr(r.lang))?.lang ?? (live && isStr(live.lang) ? live.lang : 'en')
   return {
+    living: live,
     feature: header.feature ?? dir.split('/').filter(Boolean).pop(),
     size,
     state: header.state,
@@ -361,7 +799,8 @@ export function html(m) {
 <body>
 <div id="app"></div>
 <script type="application/json" id="kss-data">${embed(m)}</script>
-<script>(${client.toString()})()</script>
+<script>var kssExpr = (${exprLib.toString()})();
+(${client.toString()})()</script>
 </body>
 </html>
 `
@@ -477,6 +916,108 @@ th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);verti
 .fch{font:700 10px var(--mono);width:16px;height:16px;display:inline-grid;place-items:center;border-radius:4px;background:var(--bg3)}
 .fch.added{background:rgba(143,207,111,.2);color:var(--ok)}.fch.deleted{background:rgba(239,100,97,.2);color:var(--bad)}.fch.modified{background:var(--accent-soft);color:var(--accent)}
 .fnum{font:11px var(--mono);color:var(--dim)}.fwhat{color:var(--dim)}
+.hero .lbl,.fsec .lbl,.machine .lbl,.sim .lbl{color:var(--dim);font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.04em}
+@keyframes kss-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes kss-ping{0%{box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 10px transparent}}
+@keyframes kss-flash{0%{background:var(--accent-soft)}100%{background:var(--bg2)}}
+.ping{animation:kss-ping .9s ease-out}
+.hero{padding:22px 22px 18px;background:linear-gradient(135deg,var(--accent-soft),transparent 55%),var(--bg2)}
+.eyebrow{font:600 11px var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+.htitle{font-size:24px;margin:4px 0 14px;letter-spacing:-.01em}
+.po{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch;margin-bottom:14px}
+.pobox{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--bg)}.pobox p{margin:4px 0 0}
+.pobox.prob{border-left:3px solid var(--bad)}.pobox.out{border-left:3px solid var(--ok)}
+.poarrow{display:grid;place-items:center;color:var(--accent);font-size:22px}
+@media (max-width:640px){.po{grid-template-columns:1fr}.poarrow{transform:rotate(90deg)}}
+.scope{display:grid;gap:8px;margin-bottom:12px}.srow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.srow>.lbl{min-width:96px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.fchip{border:1px solid var(--line);background:var(--bg);border-radius:14px;padding:2px 10px;font-size:12.5px}
+.fchip.actor{border-color:var(--accent);color:var(--text)}.fchip.in{border-color:var(--ok)}.fchip.out{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--bad)}
+.fchip.chg{border-color:var(--warn);color:var(--warn)}.fchip.rm{border-color:var(--bad);color:var(--bad)}
+.mtrack{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px}
+.mstep{font:600 11px var(--mono);padding:3px 9px;border-radius:12px;background:var(--bg3);color:var(--dim);opacity:.65}
+.mstep.done{opacity:1;color:var(--text)}.mstep.done:before{content:'✓ ';color:var(--ok)}
+.mstep.cur{opacity:1;background:var(--accent);color:#1c1206}.mstep.cur:before{content:'● ';color:#1c1206}
+.updated{font-size:12.5px;color:var(--dim);display:flex;align-items:center;gap:4px;flex-wrap:wrap}.updated b{color:var(--text);font-family:var(--mono)}
+.updated .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:4px;box-shadow:0 0 0 3px rgba(143,207,111,.25)}
+.ulast{color:var(--text)}
+details.fsec{background:var(--bg2);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;animation:kss-in .25s ease-out}
+details.fsec>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:13px 18px;cursor:pointer;user-select:none}
+details.fsec>summary::-webkit-details-marker{display:none}
+.ficon{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-weight:700}
+.ftitle{font-size:16px;font-weight:700;flex:1}.fmeta{font:600 12px var(--mono);color:var(--dim);background:var(--bg3);border-radius:10px;padding:2px 9px}
+details.fsec>summary .chev{color:var(--dim);transition:transform .15s}details.fsec[open]>summary .chev{transform:rotate(90deg)}
+.fbody{padding:0 18px 16px}
+.ptop{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:8px}.pbig b{font:700 26px var(--mono);display:block;line-height:1.1}.pbig span{color:var(--dim);font-size:12px}
+.pbar{height:6px;border-radius:4px;background:var(--bg3);overflow:hidden;flex:1;min-width:60px}.pbar i{display:block;height:100%;background:var(--ok);border-radius:4px;transition:width .5s ease}
+.pbar.big{height:10px;margin:4px 0 14px}
+.reqs{display:grid;gap:6px}
+.req{display:flex;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);transition:border-color .2s}
+.req.done{border-left:3px solid var(--ok)}.req.building{border-left:3px solid var(--accent)}.req.planned{border-left:3px solid var(--line)}.req.dropped{opacity:.55}.req.dropped .rtext{text-decoration:line-through}
+.rmark{font-size:16px;width:20px;text-align:center;color:var(--dim)}.req.done .rmark{color:var(--ok)}.req.building .rmark{color:var(--accent)}
+.rmid{flex:1;min-width:0}.rhead{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.rid{font:700 12px var(--mono);color:var(--accent)}
+.rstat{font:600 10px var(--mono);padding:1px 7px;border-radius:8px;background:var(--bg3);color:var(--dim)}
+.rstat.done{background:rgba(143,207,111,.18);color:var(--ok)}.rstat.building{background:var(--accent-soft);color:var(--accent)}.rstat.dropped{color:var(--bad)}
+.rtext{margin-top:3px}.rbar{display:flex;align-items:center;gap:8px;margin-top:6px}.rnum{font:11px var(--mono);color:var(--dim)}
+.tag.frchip.done{color:var(--ok);border-color:var(--ok)}.tag.frchip.building{color:var(--accent);border-color:var(--accent)}
+button.tag{background:none;cursor:pointer;font-family:var(--mono)}button.tag:hover{color:var(--accent);border-color:var(--accent)}
+.tag.sim{border-style:dashed}.tag.changed{color:var(--warn);border-color:var(--warn)}
+.rules{display:grid;gap:12px}
+.rule{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--bg);animation:kss-in .25s ease-out}
+.rulehead{display:flex;gap:10px;align-items:baseline}.rulehead .id{font:700 12px var(--mono);color:var(--accent)}.rulehead b{font-size:15px}
+.rlinks{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 10px}.rlinks .tag{margin-left:0}
+.codelbl{display:block;margin:4px 0 6px}.empty.small{font-size:12.5px;margin:6px 0 0}
+.dec.haschange{border-left-color:var(--warn)}
+.hist{margin:10px 0 4px}.hitem{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg2);opacity:.75}
+.hitem.now{opacity:1;border-color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}.hitem:not(.now) .htext{text-decoration:line-through;text-decoration-color:var(--dim)}
+.hmeta{display:flex;gap:6px;align-items:center;margin-bottom:3px}.hmeta .tag{margin-left:0}.when{font:11px var(--mono);color:var(--dim)}
+.hwhy{color:var(--dim);font-size:12.5px;margin-top:2px}.harrow{text-align:center;color:var(--dim);line-height:1.4}
+.timeline.changes .tl{cursor:default}.timeline .h .tag{margin-left:0;margin-right:8px}.ctext{color:var(--text)!important}
+.machine .fsm-events{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.evt{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--text);border-radius:10px;padding:6px 12px;cursor:pointer;font:inherit;font-size:12.5px;transition:transform .12s}
+.evt:hover{transform:translateY(-1px)}.evt b{font-family:var(--mono)}.evt .to{color:var(--dim)}.evt .guard{color:var(--warn);font-size:11.5px}.evt .fr{font:10px var(--mono);color:var(--dim)}
+.fsm-path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-top:1px dashed var(--line);font-size:12.5px}
+.fsm-path .crumb{padding:2px 8px;border-radius:10px;background:var(--bg3)}.fsm-path .crumb.on{background:var(--accent);color:#1c1206;font-weight:600}
+.fsm-path .ev{font:11px var(--mono);color:var(--dim)}.fsm-path .ev:before{content:'—';margin-right:4px}.fsm-path .ev:after{content:'→';margin-left:4px}
+svg .st rect{stroke:var(--line);stroke-width:1.5;transition:fill .25s,stroke .25s}
+svg .st.seen rect{stroke:var(--ok);fill:var(--bg2)}svg .st.on rect{stroke:var(--accent);stroke-width:3;fill:var(--accent-soft)}
+svg .st.on{animation:kss-in .3s ease-out}
+svg .init{fill:var(--text)}svg .initline{stroke:var(--text);stroke-width:1.6;fill:none}
+svg .tr path{transition:stroke .25s}
+.sim{border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:14px}
+.sim-h{font:600 11px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+.sim-grid{display:grid;grid-template-columns:minmax(220px,1fr) 1.3fr;gap:16px}
+@media (max-width:720px){.sim-grid{grid-template-columns:1fr}}
+.sim-in{display:flex;flex-direction:column;gap:3px;margin-bottom:10px}.sim-lbl{font-size:12.5px;font-weight:600}
+.sim-ctl{display:flex;align-items:center;gap:8px}.sim-ctl .unit,.sim-ctl .range{font:11px var(--mono);color:var(--dim)}
+.sim input,.sim select{background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:inherit;min-width:0}
+.sim-ctl input:not([type=checkbox]),.sim-ctl select{flex:1}
+.sim input:focus,.sim select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.sim input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.sim-result{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg2)}
+.sim-fired{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;font-size:12.5px}
+.sim-fired.no{color:var(--warn)}.firedchip{background:var(--accent);color:#1c1206;border-radius:12px;padding:2px 10px;font-weight:600}
+.sim-outs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.sim-out{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg2)}.sim-out.flash{animation:kss-flash .6s ease-out}
+.sim-out .k{font-size:11.5px;color:var(--dim)}.sim-out .v{font:700 18px var(--mono);margin-top:2px;word-break:break-word}
+.sim-derived{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.dv{font-size:12px;border:1px dashed var(--line);border-radius:8px;padding:2px 8px}.dv .k{color:var(--dim);margin-right:6px}
+.sim-errors{color:var(--bad);font-size:12px;margin-top:6px}.sim-errors:empty{display:none}
+.sim-rules{margin-top:16px}
+.sim-rule{display:flex;gap:10px;border:1px solid var(--line);border-radius:9px;padding:7px 10px;margin-bottom:6px;transition:background .2s,border-color .2s,opacity .2s}
+.sim-rule .mark{font-weight:700;width:18px;text-align:center}.sim-rule.false{opacity:.6}.sim-rule.false .mark{color:var(--dim)}
+.sim-rule.true .mark{color:var(--ok)}.sim-rule.err .mark{color:var(--bad)}
+.sim-rule.fired{border-color:var(--accent);background:var(--accent-soft);opacity:1}.sim-rule.fired .mark{color:var(--accent)}
+.sim-rule .rb{flex:1;min-width:0}.sim-rule .rh{font-size:12.5px}.sim-rule .rh .tag{margin-left:6px}
+.sim-rule .when{display:inline-block;margin:4px 0}.then{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--dim)}.then .k{color:var(--text)}
+.sim-scen,.sim-custom{margin-top:16px}
+.scn{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:7px 10px;margin-bottom:6px;background:var(--bg2)}
+.verdict{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;background:var(--bg3);color:var(--dim)}
+.verdict.ok{background:rgba(143,207,111,.2);color:var(--ok)}.verdict.bad{background:rgba(239,100,97,.2);color:var(--bad)}
+.scn-main{flex:1;min-width:0}.scn-name{all:unset;cursor:pointer;font-weight:600}.scn-name:hover{color:var(--accent)}
+.scn-meta{font:11.5px var(--mono);color:var(--dim);overflow-wrap:anywhere}.scn-meta .got{color:var(--bad)}.scn-note{font-size:12px;color:var(--dim)}
+.scn-acts{display:flex;gap:4px;flex-wrap:wrap}.mini.acc{border-color:var(--accent);color:var(--accent)}
+.sim-save{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}.sim-save input{flex:1;min-width:160px}
+.sim-exp{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}.sim-exp input{flex:1;min-width:140px}
 `
 
 function main() {
@@ -510,15 +1051,26 @@ function main() {
     console.log(`report: ${check}.json ok`)
     return
   }
-  const m = model(dir, undefined, phase)
-  if (m.errors.length) {
-    console.error(m.errors.map((e) => `report: ${e}`).join('\n'))
+  const b = build(dir, { phase })
+  if (!b.ok) {
+    console.error(b.errors.map((e) => `report: ${e}`).join('\n'))
     process.exit(1)
   }
+  console.log(`report: ${b.out} (${b.phases} phase${b.phases === 1 ? '' : 's'}${b.feature ? ', feature' : ''})`)
+}
+
+/**
+ * Validates everything and writes report/index.html. `phase` holds that phase's file to the
+ * succinct limits and checks its code; `feature` is a living model not yet on disk (feature.mjs).
+ * Nothing is written when anything is invalid.
+ */
+export function build(dir, { phase = null, feature = undefined, now } = {}) {
+  const m = model(dir, now, phase, feature)
+  if (m.errors.length) return { ok: false, errors: m.errors }
   mkdirSync(join(dir, DIR), { recursive: true })
   const out = join(dir, DIR, 'index.html')
   writeFileSync(out, html(m))
-  console.log(`report: ${out} (${m.reports.length} phase${m.reports.length === 1 ? '' : 's'})`)
+  return { ok: true, out, phases: m.reports.length, feature: !!m.living, model: m }
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)

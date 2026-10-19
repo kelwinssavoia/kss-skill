@@ -88,6 +88,9 @@ The tool takes 2–4 options. With more than four found in the repo, or when the
 available, print the text format the skill gives instead. The answer is recorded exactly as from
 a typed reply.
 
+With `--app` (kss-desktop, DESIGN.md §26) no phase opens a dialog: every turn that waits for the
+person is published with `ask.mjs post` and printed as text (`.kss/references/app-mode.md`).
+
 ## Running commands
 
 The coordinator has `Bash` and runs the final suite itself, or hands the exact command to a

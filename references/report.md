@@ -30,6 +30,9 @@ At the end of the phase, **after its artifacts are final and before the commit**
    and checks every `code` section against the repository (below).
 3. The phase's commit already adds `<features_root>/NNN-slug`, so `report/` goes with it.
 
+Then update the living feature: send this phase's patch to `feature.mjs` — what is now planned,
+decided, built — following `.kss/references/feature.md`. The page opens on it.
+
 If `.kss/scripts/report.mjs` does not exist (a project set up before reports), skip the report
 and print `Report: run kss-init to enable reports` in the summary instead of the `Report:` line.
 
@@ -85,6 +88,8 @@ a `text` body also accepts `- ` lists and blank-line paragraphs.
 | `table` | `columns`, `rows` | cases, mappings, limits, permissions |
 | `files` | `items: [{path, change?: added\|modified\|deleted\|renamed, added?, deleted?, what?}]` | the files touched, grouped by folder |
 | `callout` | `body`, `tone?: info\|warn\|ok\|bad` | one caveat that must not be missed |
+| `states` | `id`, `initial`, `states: [{id, label, detail?}]`, `transitions: [{from, to, event, guard?, fr?}]` | a lifecycle the reader can walk: current state lit, its events as buttons, the path so far. ≤ 12 states |
+| `simulator` | `id`, `title`, `inputs`, `derive?`, `rules: [{id, when, then, rule?, fr?}]`, `hit`, `outputs`, `scenarios` | a business rule as a live form: the user types values, sees which rule fires and why, and saves edge cases. Scenarios with `expect` are run and refused when they fail — see `feature.md` |
 | `text` | `body` | what no block above can say — briefly |
 
 **Code is quoted, never written.** A `code` section names `file` (relative to the repository

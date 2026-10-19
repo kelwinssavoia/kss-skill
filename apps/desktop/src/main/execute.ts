@@ -98,6 +98,17 @@ export function waves(tickets: { id: string; blockedBy: string[] }[]): string[][
   return out.filter(Boolean)
 }
 
+/** The FRs a ticket covers, from its `Requirements covered` section, in order and once each. */
+export function coverage(requirements: string | null): string[] {
+  return [...new Set((requirements ?? '').match(/\bFR-\d+\b/g) ?? [])]
+}
+
+/** The `**Layer:** …` field of a multi-agent ticket header. */
+export function layerOf(header: string | null): string | null {
+  const v = /\*\*Layer:\*\*\s*([^·*\n]+)/.exec(header ?? '')?.[1]?.trim()
+  return v && !v.includes('{{') ? v : null
+}
+
 /** `3 files changed, 40 insertions(+), 2 deletions(-)` → numbers. */
 export function shortstat(text: string): { files: number; added: number; deleted: number } {
   const n = (re: RegExp) => Number(re.exec(text)?.[1] ?? 0)
@@ -130,7 +141,8 @@ export async function executeOverview(session: string, featureDir: string, board
     board.tickets.map(async (t): Promise<ExecTicket> => {
       const e = entries[t.id] ?? {}
       const file = ticketFile(featureDir, t.id)
-      const goal = cut(parseTicket(file ? read(file) : null, file).goal?.replace(/\s+/g, ' ').trim() ?? null, GOAL_MAX)
+      const parsed = parseTicket(file ? read(file) : null, file)
+      const goal = cut(parsed.goal?.replace(/\s+/g, ' ').trim() ?? null, GOAL_MAX)
       const worktree: string | null = typeof e.worktree === 'string' && e.worktree ? e.worktree : null
       let agent: ExecAgent | null = null
       let diff: ExecTicket['diff'] = null
@@ -150,6 +162,8 @@ export async function executeOverview(session: string, featureDir: string, board
         blockedBy: t.blockedBy,
         startedAt: t.startedAt,
         goal,
+        fr: coverage(parsed.requirements),
+        layer: layerOf(parsed.header),
         agent,
         diff,
         events: log.filter(l => l.ticket === t.id).map(({ at, event, detail }) => ({ at, event, detail })),

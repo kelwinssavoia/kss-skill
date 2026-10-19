@@ -1,14 +1,14 @@
 ---
 name: kss-spec
 description: Write the functional specification for a KSS feature from its brief and decisions — audits the inputs, agrees the test seams in one turn, then writes 03-spec.md with cited FRs and traceability. Use after the grill (or after investigation on an M track with no open items).
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
 # kss-spec
 
 Write `03-spec.md` for feature `NNN-<slug>`: the functional specification. You audit the inputs
-first, take exactly one confirmation turn on the test seams, then write the file. The spec says
+first, take one confirmation turn on the test seams, then write the file. The spec says
 **what the system must do and how it is proven**, never how it is coded — shape and design belong
 to `kss-plan`. Every requirement is traceable to a recorded decision; an uncited requirement is a
 requirement someone invented, and this skill refuses it.
@@ -43,6 +43,18 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it: step 1's questions are a `question` in the
+grill's shape; the test seams (step 3) are an `approve` whose draft is the seams list written to
+`notes/spec-seams-draft.md` — an edited draft replaces your list. Precondition 2 and step 1's
+past-five stop publish a `handoff` (`run`: the phase they name, `then`: spec) before the stop line.
+Set `progress` at each procedure step; the Summary starts with `ask.mjs clear` and
+`{"progress":null}`.
 
 ## Preconditions
 
@@ -80,9 +92,16 @@ this phase keeps up to date afterwards.
    | Every actor and surface in the brief is covered | ok / uncovered: … |
    | The layout view exists | ok / missing: … |
 
-   - An undecided question that is not a `D-`, `AD-` or `DF-` → **stop**:
-     `Undecided: <list>. Run kss-grill NNN-slug — the spec cannot cite what was never decided.`
-   - A `DF-` without an owner or a date → **stop** with the same instruction, naming the entries.
+   - An undecided question that is not a `D-`, `AD-` or `DF-` → **ask it now**, one per turn, in
+     the grill's question format (category, `from <source>`, the options the inputs name, a
+     `Lean:` never on business). Record the answer as the next `D-NN` in `02-decisions.md` with
+     `Source: spec` (create it from `.kss/templates/02-decisions.md` when missing; an answer
+     overriding an `AD-` marks it `overridden`); "don't know" → a `DF-NN` with owner and date,
+     asked in the same turn. Then continue. Never pick an option on the user's behalf.
+   - A `DF-` without an owner or a date → ask for them now, the same way.
+   - **More than five** such questions → the investigation missed an area: stop with
+     `Undecided: <list>. Run kss-investigate NNN-slug` (on L: `kss-grill`) `— too many open
+     decisions for the spec.`
    - An actor or surface with no coverage → do not stop; record it under **Open items**.
    - The layout view is missing → do not stop; record it under **Open items** and leave the Layout
      row as `missing — <path> not found`. **Never invent a layout**: no invented views, columns,
@@ -90,7 +109,7 @@ this phase keeps up to date afterwards.
 
 2. **Derive the requirements** from the decisions and the brief. One FR per behaviour, each
    citing the decision(s) it comes from. An FR you cannot cite is not yours to write — it is an
-   open decision; go back to step 1's stop.
+   open decision; ask it as in step 1.
 
 3. **Propose the test seams — the one confirmation turn.** Rank existing seams above new ones,
    highest-value first. A new seam is only proposed when a rule in `standards` requires it, and
@@ -106,7 +125,7 @@ this phase keeps up to date afterwards.
    Confirm, or say which to drop, add or reorder.
    ```
 
-   Wait for the answer. This is the only interactive turn in the phase.
+   Wait for the answer. Besides step 1's questions, this is the only interactive turn.
 
 4. **Source the NFRs.** Only from `standards`, and only where the feature actually triggers the
    rule. Each cites its file and rule. No NFR without a citation; no invented performance,
@@ -164,6 +183,12 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase spec`
+per `.kss/references/feature.md` — stories, requirements, rules, states and simulators (scenarios
+from the spec's examples and edge cases) (skip when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/spec.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase spec`
@@ -200,13 +225,16 @@ what it consumed.
 ## Rules
 
 - **An FR without a `[D-…]` / `[AD-…]` citation is refused.** Not softened, not marked TODO —
-  refused, and the missing decision goes back to the grill.
+  refused, and the missing decision is asked on the spot (step 1).
 - **Never invent a layout.** No view, column, field, copy string or component name that is not in
   the referenced layout file. A gap is an Open item and a question, never a plausible filler.
+- An undecided question is asked on the spot and recorded as a `D-` (`Source: spec`); past five,
+  the phase goes back to investigate (L: the grill).
 - **NFRs come only from `standards`**, and only when the feature triggers them. Each cites its rule.
 - FR form is exactly one sentence: `Given <state>, when <event>, then <outcome>. [D-xx, AD-yy]`.
 - Never schedule, size, or assign work here; no file paths as instructions, no code, no pseudo-code.
-- Write **only** `03-spec.md` and the Spec block of `README.md`. No other file is yours.
+- Write **only** `03-spec.md`, the Spec block of `README.md`, the `D-`/`DF-` entries step 1
+  recorded, `notes/spec-seams-draft.md` (app mode) and `report/`. No other file is yours.
 - Do not read code, and do not spawn subagents: this phase synthesises recorded inputs only.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the

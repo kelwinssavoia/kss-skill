@@ -1,7 +1,7 @@
 ---
 name: kss-review-decisions
 description: Optional KSS phase — show every decision kss-investigate took without asking, sorted by confidence, and accept, reopen or override them in a single turn. Run it after kss-investigate, or later to revisit an auto decision.
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
@@ -34,6 +34,15 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish the one answer of step 3 with `node .kss/scripts/ask.mjs post` before
+printing it: a `question`, `text` the table, option `accept all`; reopens and overrides come as free
+text. Precondition 4 publishes a `handoff` (`run`: investigate, `then`: review-decisions) before its
+stop line. The Summary starts with `ask.mjs clear`.
 
 ## Preconditions
 
@@ -118,6 +127,12 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase review-decisions`
+per `.kss/references/feature.md` — the decisions whose status changed, and every new `D-` (skip
+when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/review-decisions.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase review-decisions`
@@ -161,7 +176,7 @@ spec; run after the spec, at the spec again — it rewrites only the affected FR
 - Nothing is ever deleted — statuses change in place.
 - The skill is optional and may run after the grill or the spec; then the README records
   `decisions changed after spec: AD-xx → D-yy` and only the affected FRs are rewritten later.
-- Write only `auto-decisions.md`, `02-decisions.md`, `report/review-decisions.json` (+ `report/index.html`) and the Decisions block of `README.md`.
+- Write only `auto-decisions.md`, `02-decisions.md`, `report/review-decisions.json` (+ `report/index.html`, `report/feature.json`) and the Decisions block of `README.md`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.

@@ -18,7 +18,7 @@ test('resume: each CLI resumes its own way, without the phase prompt', () => {
 })
 
 test('a new Claude conversation gets the id the app chose; Codex picks its own', () => {
-  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'spec', args: '012-x', sessionId: 'u-1' }, '/bin/zsh').args, ['--session-id', 'u-1', '/kss-spec 012-x'])
+  assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'claude-code', phase: 'spec', args: '012-x', sessionId: 'u-1' }, '/bin/zsh').args, ['--session-id', 'u-1', '/kss-spec 012-x --app'])
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'chat', harness: 'codex', sessionId: 'u-1' }, '/bin/zsh').args, [])
 })
 
@@ -27,10 +27,12 @@ test('the grill side chat: read-only in both CLIs, never bypass, with its briefi
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'chat', harness: 'codex', readonly: true, prompt: 'hi' }, '/bin/zsh').args, ['--sandbox', 'read-only', '--ask-for-approval', 'never', 'hi'])
 })
 
-test('the app starts the grill in app mode, once', () => {
+test('the app starts every phase in app mode, once; status prints and asks nothing', () => {
   assert.equal(appArgs('grill', '061-x'), '061-x --app')
   assert.equal(appArgs('grill', '061-x --app'), '061-x --app')
-  assert.equal(appArgs('spec', '061-x'), '061-x')
+  assert.equal(appArgs('spec', '061-x'), '061-x --app')
+  assert.equal(appArgs('init', ''), '--app')
+  assert.equal(appArgs('status', '061-x'), '061-x')
   assert.deepEqual(launchOf({ cwd: '/r', kind: 'phase', harness: 'codex', phase: 'grill', args: '061-x' }, '/bin/zsh').args, ['$kss-grill 061-x --app'])
 })
 

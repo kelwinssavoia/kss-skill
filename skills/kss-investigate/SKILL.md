@@ -1,7 +1,7 @@
 ---
 name: kss-investigate
 description: Second KSS phase — read-only explorers map where the feature lives and what to reuse, and every decision is classified auto or open. Run it after kss-clarify on an M or L track.
-argument-hint: NNN-<slug> [--deep]
+argument-hint: NNN-<slug> [--deep] [--app]
 disable-model-invocation: true
 ---
 
@@ -38,6 +38,17 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it. Here: the decision check (step 9b, and its
+re-ask) is a `question` — `text` the table (open items only when it passes the cap), options `ok`
+and `grill` with their consequences; the by-id answers come as free text. Preconditions 2–3 publish
+a `handoff` (`run`: clarify, `then`: investigate) before their stop line. Set `progress` at each
+procedure step; the Summary starts with `ask.mjs clear` and `{"progress":null}`.
 
 ## Preconditions
 
@@ -218,6 +229,12 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase investigate`
+per `.kss/references/feature.md` — `architecture.flow` (where it lives) and the `AD-` decisions,
+plus the `D-`/`DF-` of the decision check (skip when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/investigate.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase investigate`
@@ -275,7 +292,7 @@ when the user answered `grill` in the decision check. On L the result is `kss-gr
   answer is never written as fact without its confidence next to it.
 - Every auto decision is written to `auto-decisions.md`; nothing there is ever deleted.
 - `01-investigation.md` is ≤12k chars; overflow goes to `notes/` and is linked.
-- Write only `01-investigation.md`, `auto-decisions.md`, `report/investigate.json` (+ `report/index.html`) and the Investigation block of `README.md`.
+- Write only `01-investigation.md`, `auto-decisions.md`, `report/investigate.json` (+ `report/index.html`, `report/feature.json`) and the Investigation block of `README.md`.
 - A size revision is recorded with its reason.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the

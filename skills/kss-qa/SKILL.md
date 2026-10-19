@@ -1,7 +1,7 @@
 ---
 name: kss-qa
 description: Blind acceptance test of a feature through its web UI — a planner that never saw the code writes scenarios and a feature-specific seed from the request and the functional spec, a script brings up a disposable local environment, a cheap model drives a real browser (browser-use) scenario by scenario leaving a screenshot per step, Jev judges each scenario, and a report with a verdict lands in the feature folder. Run it after kss-execute, before or alongside kss-review.
-argument-hint: NNN-<slug> [--replan] [--only S-01,S-02] [--keep-up] [--fix S-02,S-03]
+argument-hint: NNN-<slug> [--replan] [--only S-01,S-02] [--keep-up] [--fix S-02,S-03] [--app]
 disable-model-invocation: true
 ---
 
@@ -26,6 +26,16 @@ verdict and route what failed. You never test by hand and never "help" a scenari
 **Do not read:** source files, diffs, `04-plan.md` or the tickets. What the blind agents get is
 decided by the script (the request, the spec sections listed in `spec.sections`, the schemas, the
 environment catalog) — never widen it, never add hints to the plan from what you know of the code.
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it: `run as planned, or edit first?` (step 1) and a
+spec conflict to judge are a `question`; the offer to open fix tickets (step 4) is a `confirm`; a
+setup error you cannot fix in the adapter is `blocked`. Precondition 3 (M and L) publishes a
+`handoff` (`run`: spec, `then`: qa) before its stop line. Step 5 starts with `ask.mjs clear`.
 
 ## Preconditions
 
@@ -96,7 +106,10 @@ button on a failed scenario runs it. Nothing is planned, brought up or run.
    its base fixture), or re-audit (`qa.mjs audit --force`) for a stub miss, then re-run with
    `--only`. *Spec conflicts* from the audit are shown as possible defects for the user to judge. An adjustment is listed, not ticketed, unless
    the user asks.
-5. **Report** (DESIGN.md §25): explain this phase to a human before committing — write
+5. **Report** (DESIGN.md §25). App mode: first `node .kss/scripts/ask.mjs clear`. When a fix
+   changed a rule or a decision, pipe a patch to `node .kss/scripts/feature.mjs
+   <features_root>/NNN-slug --phase qa` per `.kss/references/feature.md` (skip when absent).
+   Then explain this phase to a human before committing — write
    `<features_root>/NNN-slug/report/qa.json` as `.kss/references/report.md` describes — short, and shown
    rather than told — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase qa`
    and fix the file until it prints `report: …/index.html`. The commit carries `report/`.

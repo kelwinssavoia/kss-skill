@@ -128,8 +128,11 @@ README, so every skill works the same without it ([DESIGN.md §23](DESIGN.md)).
 
 Optional, desktop: **kss-desktop** (`apps/desktop/`, Electron) opens a repository, runs several
 features in parallel — one git worktree each — runs every phase in Claude Code or Codex inside an
-embedded terminal, and inspects each subagent's objective, diff and activity during execute. See
-[apps/desktop/README.md](apps/desktop/README.md) and [DESIGN.md §24](DESIGN.md).
+embedded terminal, and inspects each subagent's objective, diff and activity during execute. It
+starts each phase with `--app`: every question, confirmation, draft to approve, stop and handoff is
+published as a card the app answers, and a phase that needs an earlier one runs it and comes back
+by itself. See [apps/desktop/README.md](apps/desktop/README.md), [DESIGN.md §24](DESIGN.md) and
+[§26](DESIGN.md).
 
 ### Codex
 

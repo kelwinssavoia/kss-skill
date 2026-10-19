@@ -1,7 +1,7 @@
 ---
 name: kss-docs-product
 description: Write the product-facing documentation for a finished feature and link it from the docs index. Run it after kss-review, for the people who use the feature rather than build it.
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
@@ -39,6 +39,15 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish the project-summary confirmation (step 4) with
+`node .kss/scripts/ask.mjs post` before printing it — a `confirm`. Precondition 3 publishes a
+`handoff` (`run`: clarify, `then`: docs-product) before its stop line. The Summary starts with
+`ask.mjs clear`.
 
 ## Preconditions
 
@@ -109,6 +118,8 @@ this phase keeps up to date afterwards.
   cleared here too. `session` is the `Stop` hook's; never write it.
 
 ## Summary
+
+**App mode:** first `node .kss/scripts/ask.mjs clear`.
 
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/docs-product.json` as `.kss/references/report.md` describes — short, and shown

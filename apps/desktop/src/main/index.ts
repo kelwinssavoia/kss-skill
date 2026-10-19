@@ -4,9 +4,11 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, shell } from 'electron'
 
-import type { Harness, ProjectInfo, SavedTab, Session, TerminalInfo, TerminalSpec } from '../shared/types.ts'
+import type { AskAnswer, Harness, KssAsk, ProjectInfo, SavedTab, Session, TerminalInfo, TerminalSpec } from '../shared/types.ts'
+import { answerLine, clearAsk, readDraft, writeAnswer } from './ask.ts'
+import { phaseOverview } from './phase.ts'
 import { LiveView } from './live.ts'
 import { reportOf, reportUrl, SCHEME, servable } from './report.ts'
 import { holder, imageData, qaInfo } from './qa.ts'
@@ -37,8 +39,22 @@ const CODEX_WATCH_MS = 15 * 60_000
 
 const isCli = (spec: TerminalSpec) => spec.kind === 'chat' || spec.kind === 'phase'
 
+/** The newest live terminal running `phase` in `cwd`: the one an answer goes to. */
+const phaseTerminal = (cwd: string, phase: string | null) => [...terminalsIn(cwd)].reverse().find(t => t.kind === 'phase' && (!phase || t.phase === phase)) ?? null
+
 /** Opens a terminal; a chat or a phase is also remembered as a tab of its session, with its conversation. */
 function openTerminal(spec: TerminalSpec): TerminalInfo {
+  // One process per phase and session: a second click while the first starts, or a Run pressed
+  // from another view, would otherwise run the phase twice over the same files (DESIGN.md §26).
+  if (spec.kind === 'phase' && spec.phase && !spec.resume) {
+    const running = terminalsIn(spec.cwd).filter(t => t.kind === 'phase' && t.phase === spec.phase)
+    if (running.length && !spec.replace) throw new Error(`${spec.phase} is already running in this session — open its view, or restart it`)
+    // The replaced process's conversation is superseded: it is not resumed with the session.
+    for (const t of running) {
+      killTerminal(t.id)
+      if (t.tab) saveTabs(tabsFile(), withoutTab(loadTabs(tabsFile()), t.tab))
+    }
+  }
   // The bypass flag comes from the prefs here, so every chat and phase follows the switch.
   spec = { ...spec, bypass: loadPrefs(prefsFile()).bypass }
   const harness = spec.harness ?? 'claude-code'
@@ -130,9 +146,30 @@ async function sessions(): Promise<Session[]> {
   })
 }
 
+/** What each session waits on, last poll: a new key is a new question for the person. */
+const waitingSeen = new Map<string, string>()
+
+/** A session that starts waiting on the person says so, even when the app is in the background. */
+function notifyWaiting(list: Session[]) {
+  let count = 0
+  for (const s of list) {
+    const b = s.board
+    const key = b?.ask ? `ask:${b.ask.id}` : b?.waiting && !b.isPhaseFinished ? `wait:${b.waiting.since}` : ''
+    if (key) count++
+    const before = waitingSeen.get(s.path)
+    waitingSeen.set(s.path, key)
+    if (!key || before === undefined || before === key || win?.isFocused()) continue
+    if (b?.ask?.kind === 'handoff') continue
+    const body = b?.ask ? b.ask.title : (b?.waiting?.last ?? 'The phase is waiting for you').slice(-160)
+    if (Notification.isSupported()) new Notification({ title: `${s.feature ?? s.name} · ${b?.phase ?? ''} is waiting`, body, silent: false }).show()
+  }
+  if (process.platform === 'darwin') app.dock?.setBadge(count ? String(count) : '')
+}
+
 async function poll() {
   try {
     const list = await sessions()
+    notifyWaiting(list)
     const json = JSON.stringify(list)
     if (json !== lastSessions) {
       lastSessions = json
@@ -194,6 +231,19 @@ function handlers() {
     if (!feature || !s.board || !s.featureDir) return null
     return executeOverview(session, s.featureDir, s.board)
   })
+  ipcMain.handle('phase:overview', (_e, session: string, phase: string) => {
+    const s = sessionBoard(session, null)
+    const term = [...liveTerminals()].reverse().find(t => t.cwd === session && t.kind === 'phase' && t.phase === phase) ?? null
+    return phaseOverview(phase, s.featureDir, term, s.board?.phaseStartedAt ?? null)
+  })
+  ipcMain.handle('ask:answer', (_e, session: string, ask: KssAsk, answer: AskAnswer) => {
+    const term = phaseTerminal(session, ask.phase)
+    if (!term) throw new Error(`${ask.phase ?? 'the phase'} is not running in this session — resume it, then answer`)
+    if (!ask.legacy) writeAnswer(session, ask, answer)
+    submitTerminal(term.id, answerLine(ask, answer))
+  })
+  ipcMain.handle('ask:draft', (_e, session: string, path: string) => readDraft(session, path))
+  ipcMain.handle('ask:clear', (_e, session: string) => clearAsk(session))
   ipcMain.handle('ticket:inspect', (_e, session: string, feature: string, id: string) => inspectTicket(session, featureDirOf(session, feature), feature, id))
   ipcMain.handle('term:create', async (_e, spec: TerminalSpec) => {
     if (spec.kind === 'qa' && spec.qa?.step === 'up') {

@@ -52,6 +52,36 @@ export type KssGrill = {
   question: KssGrillQuestion | null
 }
 
+export type KssAskKind = 'question' | 'confirm' | 'approve' | 'blocked' | 'handoff'
+
+/** What a phase waits on, published with `ask.mjs post` in app mode (DESIGN.md §26). */
+export type KssAsk = {
+  id: string
+  phase: string | null
+  kind: KssAskKind
+  title: string
+  text: string | null
+  options: KssGrillOption[]
+  category: string | null
+  source: string | null
+  /** For `approve`: the draft snapshot, relative to the repository root (`.kss/inbox/<id>.draft.md`). */
+  draft: string | null
+  draftSource: string | null
+  /** For `handoff`: the phase to run first, and the one to come back to. */
+  run: { phase: string; args: string } | null
+  then: { phase: string; args: string } | null
+  at: string | null
+  /** A kss-grill from before the ask: answered by typing `b) <label>`, with no inbox file. */
+  legacy?: boolean
+}
+
+/** Set by the Stop hook when the main agent ends its turn, cleared when the person answers. */
+export type KssWaiting = { since: string; last: string | null }
+
+export type KssProgress = { step: number | null; total: number | null; label: string }
+
+export type KssAskLogEntry = { id: string; phase: string | null; title: string | null; answer: string | null; at: string | null }
+
 export type KssBoard = {
   feature: string
   phase: string
@@ -75,6 +105,11 @@ export type KssBoard = {
   tokens: number | null
   phaseStartedAt: string | null
   log: KssLogEntry[]
+  /** The ask on screen, when it belongs to the running phase (an older one is stale). */
+  ask: KssAsk | null
+  waiting: KssWaiting | null
+  progress: KssProgress | null
+  askLog: KssAskLogEntry[]
 }
 
 /**

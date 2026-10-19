@@ -1,7 +1,7 @@
 ---
 name: kss-init
 description: Set up KSS in this project — interview for .kss/config.md, copy the templates, scripts and harness references into the project, and install whatever the current harness needs. Run once per project, before any other kss- skill.
-argument-hint: "[--preferences]"
+argument-hint: "[--preferences] [--app]"
 disable-model-invocation: true
 ---
 
@@ -25,9 +25,20 @@ The harness decides three of the write steps below (agents, statusline, hooks) a
 harness is fully usable from the other, because the parts that differ live in
 `.kss/references/harness-*.md` and **both** are installed (DESIGN.md §19).
 
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this skill, DESIGN.md §26), strip it, read
+`<PLUGIN>/references/app-mode.md` once (Precondition 3 finds `<PLUGIN>`; the project copy does not
+exist yet), and publish every turn that waits for the person with
+`node <PLUGIN>/scripts/ask.mjs post` before printing it: each interview question is a `question` —
+its choices as options with the default as the `lean`, or `[]` for a free value; the
+`overwrite / edit / cancel` turn is a `question`; the confirmation (16) and each user-level install
+(17, 18) are a `confirm`. That ask is the one write before the confirmation. The summary starts with
+`ask.mjs clear`.
+
 ## Inputs
 
-- No arguments.
+- No arguments besides the flags.
 - The repository root (`git rev-parse --show-toplevel`) — everything is written relative to it.
 - `templates/`, `scripts/`, `references/` and `hooks/` in this plugin, next to this skill's folder.
 - `~/.kss/preferences.md`, if it exists — the user-local `conversation_language`. It is **never**
@@ -139,7 +150,7 @@ Then, still one turn each:
     Say that the KSS statusline prints the previous statusline's output whenever no KSS run is
     active, so nothing is lost. **Never edit `~/.claude/settings.json` without this yes.**
 
-18. **Codex only** — ask whether to install the three metrics hooks into the user-level
+18. **Codex only** — ask whether to install the four KSS hooks into the user-level
     `$CODEX_HOME/hooks.json` (`~/.codex/hooks.json` when `CODEX_HOME` is unset). A Codex plugin
     cannot ship them: the plugin ingestion contract does not accept a `hooks` field, so they are a
     user-level file here, exactly as the statusline is on Claude Code. On Claude Code skip this
@@ -153,13 +164,14 @@ Then, still one turn each:
       "hooks": {
         "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-subagent.mjs" }] }],
         "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/metrics-session.mjs" }] }],
-        "Stop":         [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-stop.mjs" }] }]
+        "Stop":         [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-stop.mjs" }] }],
+        "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node <PLUGIN>/hooks/progress-prompt.mjs" }] }]
       }
     }
     ```
 
     Rules for the write: **merge, never replace** — keep every event and every entry already there,
-    and add only the three whose command is not present yet; back the file up to
+    and add only the ones whose command is not present yet; back the file up to
     `~/.kss/codex-hooks.backup.json` before the first change, and never overwrite an existing
     backup. Say afterwards that **Codex asks to trust a hook before it runs it** (`/hooks`), and
     that until it is trusted every phase still works and `metrics.jsonl` simply stays empty.
@@ -205,11 +217,12 @@ On confirmation, write — in this order:
 
    On Codex there is no agent registry and nothing is written: the role preambles live in
    `.kss/references/harness-codex.md`, which write step 4 already installed.
-6. `.gitignore` — append `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and
+6. `.gitignore` — append `.kss/current`, `.kss/worktrees/`, `.kss/inbox/`, `.kss/statusline.backup.json` and
    `.kss/config.local.json` if they are not already ignored. The first two are live state, not
    history (`.kss/worktrees/NNN-slug/NN` is where `kss-execute` puts each ticket's git worktree);
-   the third is the legacy per-project backup, a user setting that must never be committed; the
-   fourth is the per-machine preferences file `kss-config` writes — it carries the Jev API key, so
+   `.kss/inbox/` holds the asks and answers exchanged with kss-desktop (DESIGN.md §26); the
+   next is the legacy per-project backup, a user setting that must never be committed; the
+   last is the per-machine preferences file `kss-config` writes — it carries the Jev API key, so
    it is ignored **before** it can exist. Leave
    `.kss/config.md`, `.kss/templates/`, `.kss/scripts/`, `.kss/references/` and the feature folders
    tracked.
@@ -245,18 +258,19 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `.kss/templates/` | the project's copy of the KSS templates |
 | `.kss/config.json` | the committed Jev policy — everything but the key, so it reaches every worktree and every teammate |
 | `.kss/scripts/` | `harness.mjs`, `current.mjs`, `next.mjs`, `render-cost.mjs`, `project-cost.mjs`, `statusline.mjs`, `jev.mjs`, `dispatch.mjs`, `review.mjs`, `qa.mjs`, `qa-stub.mjs`, `report.mjs`, `report-client.mjs`, `kss-lib.mjs` |
-| `.kss/references/` | `tiers.md`, `tier-calibration.md`, `spend-discipline.md`, `report.md` and **both** harness adapters |
+| `.kss/references/` | `tiers.md`, `tier-calibration.md`, `spend-discipline.md`, `report.md`, `feature.md`, `app-mode.md` and **both** harness adapters |
 | `.claude/agents/kss-*.md` | the fourteen-agent matrix (six executors, five reviewers, explorer, runner, dispatcher) — Claude Code, vendored installs only |
 | `~/.kss/statusline.backup.json` | the previous statusline, when a non-KSS one was replaced — Claude Code only, user-local, never in the repo |
 | `$CODEX_HOME/hooks.json` | the three metrics hooks — Codex only, user-local, never in the repo |
 | `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
-| `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
+| `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/inbox/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
 
-`.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
+`.kss/current` is not created here (in app mode it holds only the ask) — `kss-clarify` writes it
+when a feature starts.
 
 ## Summary
 
-Print exactly:
+App mode: first `node .kss/scripts/ask.mjs clear`. Then print exactly:
 
 ```
 KSS ready · <repo name>
@@ -283,8 +297,8 @@ Next: <prefix>kss-clarify <what you want to build>
 - **Resolve the harness before the first question**, and install **both** adapters regardless. A
   project set up from one harness must be usable from the other without re-running this skill.
 - One question per turn. Never ask two, never assume an answer that was not given.
-- Nothing on disk before the confirmation turn; nothing in `~/.claude/settings.json` before its own
-  yes.
+- Nothing on disk before the confirmation turn (in app mode, the ask in `.kss/current` aside);
+  nothing in `~/.claude/settings.json` before its own yes.
 - Never overwrite a file the user did not agree to overwrite — that includes agents and templates.
 - Never invent a `layout_references` path. Empty is a valid answer with a stated consequence.
 - `~/.kss/preferences.md` is user-local: never write it inside the repository, never commit it, and

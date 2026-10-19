@@ -2,7 +2,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
-import type { ExecOverview, Harness, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
+import type { AskAnswer, ExecOverview, Harness, KssAsk, PhaseOverview, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
 
 const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
   const h = (_e: unknown, ...args: unknown[]) => fn(...(args as A))
@@ -22,6 +22,10 @@ const api = {
   removeSession: (path: string, force: boolean): Promise<void> => ipcRenderer.invoke('sessions:remove', path, force),
   inspect: (session: string, feature: string, id: string): Promise<TicketInspection> => ipcRenderer.invoke('ticket:inspect', session, feature, id),
   executeOverview: (session: string): Promise<ExecOverview | null> => ipcRenderer.invoke('execute:overview', session),
+  phaseOverview: (session: string, phase: string): Promise<PhaseOverview> => ipcRenderer.invoke('phase:overview', session, phase),
+  answer: (session: string, ask: KssAsk, answer: AskAnswer): Promise<void> => ipcRenderer.invoke('ask:answer', session, ask, answer),
+  draft: (session: string, path: string): Promise<string | null> => ipcRenderer.invoke('ask:draft', session, path),
+  clearAsk: (session: string): Promise<void> => ipcRenderer.invoke('ask:clear', session),
   createTerminal: (spec: TerminalSpec): Promise<TerminalInfo> => ipcRenderer.invoke('term:create', spec),
   write: (id: string, data: string) => ipcRenderer.send('term:write', id, data),
   resize: (id: string, cols: number, rows: number) => ipcRenderer.send('term:resize', id, cols, rows),

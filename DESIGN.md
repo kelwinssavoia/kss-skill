@@ -196,7 +196,12 @@ statusline falls back.
 | `tickets.<NN>` | `kss-execute` | a **map keyed by ticket id**; each value is `{state, tier, started_at, turns, est_turns, worktree}`, `state` exactly `blocked` \| `ready` \| `running` \| `reviewing` \| `rejected` \| `integrated` |
 | `execution` | `kss-execute` | roll-up of the run: `integrated`, `total`, `critical_path`, `last` (the last event, as printed on the board) |
 | `review` | `kss-review` | `round`, `watching` (the watch target the statusline prints, absent when not watching) and `cursor` `{last_comment_at, last_ci_at}`, which the next round reads from; `pr`, `state`, `open` and `held` are optional extras |
-| `grill` | `kss-grill` | the interview queue: `asked`, `total`, `deferred`, one `{done, total}` per category with open items, and `current` (`Qn · <category> · <question, ≤60 chars>`); in app mode also `question` — `{n, category, source, text, options: [{key, label, description, lean}]}`, the question on screen (§24.7). Set when the queue is built, updated per question, cleared after the closing turn |
+| `grill` | `kss-grill` | the interview queue: `asked`, `total`, `deferred`, one `{done, total}` per category with open items, and `current` (`Qn · <category> · <question, ≤60 chars>`). Set when the queue is built, updated per question, cleared after the closing turn. (`grill.question`, the question on screen, is written only by grills from before §26; the app still reads it for them) |
+| `ask` | `scripts/ask.mjs post`, in app mode (§26) | what the phase waits on: `{id, phase, kind, title, text, options, category, source, draft, run, then, at}`. Cleared by `ask.mjs answer`/`clear` |
+| `ask_seq` | `ask.mjs post` | the last ask number; ids are `<phase>-<seq>` |
+| `ask_log` | `ask.mjs answer` | the last 30 answered asks, `{id, phase, title, answer, at}` |
+| `progress` | every longer phase, in app mode | `{step, total, label}` — where the phase is now; cleared with the summary |
+| `session.waiting` | the `Stop` hook; dropped by the `UserPromptSubmit` hook | `{since, last}` — the main session ended its turn and waits on the person; `last` is its last words |
 | `explorers` | `kss-investigate`, `kss-plan`, `kss-grill` | always the object `{running, returned}` — the size of the fan-out and how many are back, for the statusline. Never a bare number; absent when nothing is out |
 
 Every key is optional; a reader treats a missing key as unknown and prints `—`. Writers merge
@@ -635,7 +640,8 @@ writing its outputs, and before the commit and the summary, it runs one closing 
 5. `grill` as the answer skips 3–4, leaves everything as classified and makes Next
    `/kss-grill NNN-slug` (`next.mjs --escalate grill`).
 
-On L the check does not run — the grill is the interview, one decision per turn.
+On L the check does not run — the grill is the interview, one decision per turn. In app mode the
+one answer is an ask (`kind: question`, the table as text, `ok` and `grill` as options, §26).
 
 ---
 
@@ -713,6 +719,7 @@ Writes `02-decisions.md`:
 ```
 ## D-NN · <category>
 Question:
+Source:            grill — or the later phase that asked it on the spot (§26)
 Decision:
 Why:
 Rejected:
@@ -733,15 +740,18 @@ brief points to.
 
 ### 11.1 Input audit (first)
 
-- Every open decision must be a `D-`, `AD-` or `DF-` — otherwise stop and go back to the grill.
-- Every `DF-` has an owner and a date.
+- Every open decision must be a `D-`, `AD-` or `DF-` — otherwise the spec **asks it on the spot**
+  in the grill's format and records a `D-` (`Source: spec`), then continues (§26). More than five
+  such questions means the investigation missed an area: back to investigate (L: the grill).
+- Every `DF-` has an owner and a date — a missing one is asked for on the spot.
 - Every actor and surface appears somewhere — otherwise flag it under Open items.
 - The layout view exists — otherwise flag it. **Never invent a layout.**
 
 ### 11.2 One turn
 
 Proposes the **Test seams**: existing seams before new ones, highest first; a new seam only when
-a project rule requires it, and the rule is named. The user confirms.
+a project rule requires it, and the rule is named. The user confirms (in the app: approves or
+edits the list as a draft).
 
 ### 11.3 Output
 
@@ -776,8 +786,9 @@ Reads `README.md`, `03-spec.md`, the decisions and the investigation sections.
 Spawns `explorer`s for file-level facts — signatures, model and message shapes, component props —
 and `explorer-deep` (with the warning) for contract, tenant or money questions.
 
-The plan designs **shape, not code**. A missing product or architecture decision stops the plan
-and sends it back to the grill.
+The plan designs **shape, not code**. A missing product or architecture decision is **asked on
+the spot** in the grill's format and recorded as a `D-` (`Source: plan`) — never picked on the
+user's behalf — with the same five-question limit as the spec (§26).
 
 ### 12.1 Output
 
@@ -804,14 +815,17 @@ and sends it back to the grill.
 Every item traces back to an FR or a decision.
 
 Approval: the skill prints the Approach, the models/contracts table and the File map, then takes
-one turn for approve/adjust. Then the README block and the summary.
+one turn for approve/adjust (in the app: a draft to approve or edit). Then the README block and
+the summary.
 
 ---
 
 ## 13. `kss-tickets`
 
 Reads `README.md`, `04-plan.md` (File map, Test plan, Contracts, Reuse), the FRs of `03-spec.md`
-and `config.execution`. **An FR blocked by a `DF-` is never scheduled.**
+and `config.execution`. **An FR blocked by a `DF-` is never scheduled.** A new dependency the plan
+left `Confirmed: pending` is confirmed on the spot, in the plan's format; a rejected one goes back
+to the plan.
 
 ### 13.1 Multi-agent mode
 
@@ -901,7 +915,8 @@ the plan.**
   tickets' context, then to the reviewer again.
 - **Finish**: the **coordinator itself** runs the project's full suite once, plus its lint,
   build and type-check targets, maps failures back to the owning tickets, and runs it at most
-  once more — a third failure stops and goes to the user. Open a PR against
+  once more — a failure at the cap stops and goes to the user (in the app, a `blocked` ask with
+  the ways out, §26). Open a PR against
   `base_branch` with the feature README as the body. **Never merge** — that is a human decision.
 
 ### 14.2 Coordinator context
@@ -1510,7 +1525,8 @@ one, run each phase in Claude Code or Codex, follow several features in parallel
 chat or a shell next to them, inspect what each subagent is doing, and drive `kss-qa` one scenario
 at a time while watching the browser.
 
-It follows §19 and §23 strictly: **it is a reader and a launcher, never a writer of KSS state.**
+It follows §19 and §23 strictly: **it is a reader and a launcher, never a writer of KSS state** —
+with one exception, the answer to an ask in `.kss/inbox/` (§26).
 Every phase still runs in the harness's own CLI, with the harness's own plugin and hooks, so
 everything a phase writes — the feature folder, `.kss/current`, `metrics.jsonl` — is written exactly
 as it is from a terminal, and a feature started in the app can be continued from a terminal and
@@ -1549,11 +1565,12 @@ worktree, with the phase as the first prompt:
 
 | Harness | Command |
 | --- | --- |
-| Claude Code | `claude "/kss-<phase> NNN-slug"` |
-| Codex | `codex "$kss-<phase> NNN-slug"` |
+| Claude Code | `claude "/kss-<phase> NNN-slug --app"` |
+| Codex | `codex "$kss-<phase> NNN-slug --app"` |
 
-The terminal is a real one (`node-pty` + `xterm.js`), so the grill's multiple-choice questions,
-permission prompts, the statusline and the `kss-ui` mod all work unchanged. The app reads the
+`--app` puts the phase in app mode (§26): what it waits on is published, so the app can show it
+and answer it. The terminal is a real one (`node-pty` + `xterm.js`), so permission prompts, the
+statusline and the `kss-ui` mod all work unchanged. The app reads the
 README's `Next:` line and offers it as **Run next** (a new process: what `/clear` + the command is
 in a terminal) in the harness the user picks for that phase; the choice per phase is remembered
 per project. A new session starts with `kss-clarify <request>`.
@@ -1629,21 +1646,22 @@ whether or not the app is running.
 
 ### 24.7 The grill in the app
 
-The app starts the grill as `kss-grill NNN-slug --app`. In app mode the skill never opens the
-harness's multiple-choice dialog; before printing each question it publishes it as
-`.kss/current` → `grill.question` (`{n, category, source, text, options: [{key, label,
-description, lean}]}`, §3.3). The **Grill** view shows that question as a card — its options as
-buttons, a free-text box for "something else" — and a click types `b) <label>` into the grill's
-own terminal and sends it: the answer reaches the model exactly as if typed, so the skill's rules
-(derived questions, deferrals with owner and date, ADRs, overrides) are unchanged. Free-text-only
-questions (a deferral's owner and date, the closing turn) publish `options: []`.
+The grill is the phase that asks the most, and the first one the app answered; since §26 it asks
+like every other phase. In app mode the skill never opens the harness's multiple-choice dialog;
+before printing each question it publishes it as an ask (`kind: question`, with `category`,
+`source` and the options, §26), and keeps the `grill` counters of §3.3. The **Grill** view shows
+the question as a card — its options as buttons, a free-text box for "something else" — and the
+answer reaches the model exactly as if typed, so the skill's rules (derived questions, deferrals
+with owner and date, ADRs, overrides) are unchanged. Free-text-only questions (a deferral's owner
+and date, the closing turn) publish `options: []`.
 
 Below the card, a **side chat** opens with the grill in the same harness, read-only (Claude Code in
-plan mode, Codex in its read-only sandbox), briefed to read `grill.question` again before every
-reply. It is where the user asks what an option implies or what the code does today; it never
-answers the grill and is a separate conversation, so the grill's context stays clean. The grill's
-terminal stays one click away. A `kss-grill` from before app mode asks through its dialog and
-publishes no question; the app then shows the terminal with a notice to update the plugin.
+plan mode, Codex in its read-only sandbox), briefed to read the ask again before every reply. It
+is where the user asks what an option implies or what the code does today; it never answers the
+grill and is a separate conversation, so the grill's context stays clean. The grill's terminal
+stays one click away. A grill installed before §26 publishes `grill.question` instead of an ask;
+the app still reads that key for it. One from before app mode publishes nothing; the app then
+shows the terminal with a notice to update the plugin.
 
 ### 24.8 Following an execute
 
@@ -1662,6 +1680,15 @@ away:
   the reviewer that sent it back is newer.
 - **Plan**: the tickets by dependency wave (`Blocked by` depth in `graph.md`, ranges such as
   `01–13` expanded).
+- **Graph** (the default from two tickets; **Cards** shows the waves as chips): the `Blocked by`
+  DAG drawn as columns of waves, each column ordered by barycenter sweeps so edges cross little,
+  long edges routed through the columns they span. A node is the ticket's state, tier, layer and
+  turns against the estimate; the critical path (`execution.critical_path`, else the heaviest
+  chain by estimate) is drawn in the accent, edges into an implementing ticket flow. Hovering a
+  ticket keeps only its upstream and downstream chain lit; a click selects it for the Detail;
+  pan, zoom and fit. *Show requirements* adds the FRs each ticket covers (`Requirements
+  covered`) as a last column, an FR done once all its tickets are integrated. The **Now** cards
+  stay above it, compact. Layout in `shared/graph.ts`, pure and tested.
 - **Coordinator log**: `06-execution.md`'s events as sentences, coloured by outcome.
 - **Detail** of the selected ticket: goal, its own timeline, the agent's last steps, and the
   inspector (§24.4) for the full diff and transcript.
@@ -1718,3 +1745,148 @@ escaped JSON and builds every element with `textContent` — nothing in a report
 `report/` is committed with the phase's artifacts. A project set up before reports has no
 `report.mjs`; its phases skip the step and say to run `kss-init` again. kss-desktop shows the
 page in the session's **Report** view and opens it on the phase that just finished (§24).
+
+### 25.1 The living feature
+
+A phase report is a snapshot; the person also wants the feature *as it is now*. So besides its
+`report/<phase>.json`, every phase patches one cumulative model, `report/feature.json`: the
+product (problem → outcome, actors, scope), stories, requirements with their status, the rules
+with the code that implements each, the decisions in force, the architecture, state machines and
+simulators, and a change log. The page opens on it, in the **Feature** tab (`#feature`).
+
+**One writer, patches only.** The model never edits the file: it pipes a patch to
+`node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase <phase>`. Objects merge, lists of
+items with ids are upserted by id, `{ "id", "removed": true }` drops a requirement or removes
+anything else, and a required `change` line goes to the log — so a phase sends only what it
+changed and never rewrites what earlier phases wrote. When a decision's text changes, the script
+moves the old text, phase and reason to its `history`; the page marks it *changed* and shows
+before → after. Each phase's share is in `.kss/references/feature.md`.
+
+**Checked like the report, and more.** The script validates shapes and that every id a link
+names exists; quotes each code block the patch sends against the repository (§25); compiles every
+simulator expression; and runs every simulator scenario that states an `expect`, refusing with
+the rule that fired and the mismatch — the simulator must model the rule as it really behaves.
+On any problem nothing is written.
+
+**Progress is derived.** `report.mjs` reads the ticket files ("Requirements covered"),
+`graph.md`, `06-execution.md` and `.kss/current`: a requirement is done when all its tickets are
+integrated, building when any has started; the ticket graph is drawn colored by state. Execute
+rebuilds the page (`report.mjs <dir>`) after every integration, so the view stays live.
+
+**Two interactive sections**, usable in phase reports too. `states` draws a state machine the
+reader walks — current state lit, its events as buttons with their guards, the path so far.
+`simulator` turns a rule into a form: inputs, derived values, ordered rules (`when` → outputs)
+and scenarios from the spec's examples; the page recomputes as the user types, shows which rule
+fired and every condition's truth, and lets the user save their own edge cases and send one to
+the agent (`postMessage` of `kss:scenario`; kss-desktop opens a chat with it). Expressions are a
+small language interpreted by `scripts/expr.mjs` — no `eval`, no property access, names resolve
+only against the simulator's own inputs — embedded into the page the way the client is.
+
+## 26. App mode
+
+### 26.1 Why
+
+In the app the person looks at cards, not at the terminal — yet the terminal was the only door a
+phase had. Every turn that waited on them (a question, a confirmation, a plan to approve, a stop)
+was text in a scrolled-away pane, and a stop that needed a decision looked like a phase that was
+still working. Measured 2026-10-19: an execute stopped at its full-suite cap and the app showed
+nothing — "it just sits there". App mode gives every waiting turn a second door, and the terminal
+keeps the first: the same text is always printed too.
+
+### 26.2 The ask
+
+A phase started with `--app` (§24.3) strips the flag, reads `.kss/references/app-mode.md`, and
+publishes each turn that waits on the person with `node .kss/scripts/ask.mjs post` before printing
+it — never through the harness's dialog, which the app cannot click. The ask lives in
+`.kss/current` → `ask` (§3.3): `kind`, `title`, `text` (≤1500 characters), `options`
+(`{key, label, description, lean}`, no "something else" — the app always offers free text),
+`category` and `source` for a decision, `draft` for an approval, `run`/`then` for a handoff.
+
+| `kind` | For | The app offers |
+| --- | --- | --- |
+| `question` | a decision, a fact only the person knows, a name | the options and a free text |
+| `confirm` | a creation, a size, a go-ahead, a new dependency | Confirm / Change, or the phase's own options |
+| `approve` | a draft the person may edit first: the plan, the test seams, the ticket graph, the triage table | Approve / Edit draft / Ask for changes |
+| `blocked` | a stop the phase cannot get past alone: the suite failing at the cap, a ticket past its budget, an unresolved conflict | the ways out the phase can take |
+| `handoff` | a precondition naming an earlier phase | nothing to answer — the app runs it |
+
+Each skill maps its own waiting turns to these kinds in its **App mode** paragraph; the rules of
+the phase do not change — app mode changes the door, not what is asked.
+
+### 26.3 The inbox and the answer
+
+`.kss/inbox/` (gitignored by `kss-init`) holds, per ask, the draft snapshot `ask.mjs` copies there
+(`<id>.draft.md`, so the app never edits the phase's own file) and the answer the app writes
+(`<id>.answer.json`, plus `<id>.answer.md` for an edited draft). It is the **one place the app
+writes besides its own data** (§24.1), and that is acceptable for the same reason a typed reply is:
+it is the person's answer, not KSS state — the phase reads it and decides what to do with it, as it
+would with anything typed. The app then types one line into the phase's terminal:
+
+```
+[kss-app] answer plan-3: b) Keep the cache in Redis
+```
+
+On that line the phase runs `ask.mjs answer <id>` first: it prints the choice, the free text and
+whether the draft was edited (an edited draft replaces the phase's own, and its changes are the
+person's decisions), clears the ask and appends it to `ask_log`. An answer typed in the terminal
+instead is followed by `ask.mjs clear`. Every summary starts with `ask.mjs clear`, so no card
+outlives its phase.
+
+### 26.4 The fallback: `session.waiting`
+
+A skill can forget to publish. The `Stop` hook (`progress-stop.mjs`) therefore marks
+`.kss/current.session.waiting` — `{since, last}`, the agent's last words — every time the main
+session ends its turn, and the `UserPromptSubmit` hook (`progress-prompt.mjs`) drops the mark when
+the person answers. Any stop, published or not, shows in the app as "waiting on you", with what the
+agent said.
+
+### 26.5 Progress
+
+The longer phases (investigate, spec, plan, tickets, execute, review) set
+`progress: {step, total, label}` at each main step, so the phase view says where the phase is
+instead of a spinner; the summary clears it.
+
+### 26.6 Decisions inside a phase
+
+In both modes, a phase that meets an undecided product or architecture question — the spec, the
+plan — no longer stops and sends the person to the grill: it asks it on the spot in the grill's
+format, records the next `D-NN` with `Source: <phase>` (a `DF-NN` with owner and date for "later"),
+and continues. The person answers in the process that needs the answer. More than five such
+questions in one phase means the investigation missed an area: then it hands off to investigate
+(the grill on L). `kss-tickets` confirms a pending dependency the same way.
+
+### 26.7 Handoff and the automatic return
+
+A precondition that names an earlier phase (`Run kss-spec NNN-slug first`) publishes a `handoff`
+with `run` (that phase) and `then` (this one), prints its stop line and ends. The app runs `run`,
+and when it finishes starts `then` again; every phase resumes from the feature folder, so nothing
+is lost and the person never retypes a command.
+
+An ask may be published before its phase has entered `.kss/current` (a precondition runs first),
+so the phase alone cannot tell a stale ask from a live one. `current.mjs set` settles it: a patch
+that sets `phase` drops an ask that belongs to another phase. Whatever ask is in the file is live.
+
+### 26.8 In the app
+
+- **One status, everywhere.** `shared/status.ts` turns a board and its terminals into one of
+  *starting · working · waiting for you · blocked · running an earlier phase · finished · process
+  ended · not running*. The sidebar (a dot per session, and a "n sessions waiting for you" line),
+  the header pill, the terminal tab's dot and the phase view all read it. Waiting from the Stop
+  mark does not count while tickets or explorers are still out: the coordinator only waits on them.
+- **The phase view.** Every phase but execute (§24.8) is followed in **Phase**: the status, the
+  `progress` step, the ask card (options, free text, a draft with Preview / Edit and "Approve with
+  my edits"; a letter key answers a question), or — with no ask — the agent's last words and a
+  reply box; the main conversation's words and commands; the subagents it sent out
+  (`<conversation>/subagents/agent-*.jsonl`); the answers already given; and the file the phase is
+  writing (`00-brief.md` … `07-review.md`), rendered live. "Ask about this" opens the read-only side
+  chat of §24.7 for any ask. Execute shows the same card on top of its view.
+- **Run gives feedback, never a second process.** A click switches to the phase's view at once and
+  the button reads *Starting…* until the phase writes `.kss/current`, then *running · open*, with ⟲
+  to restart. The main process refuses a second terminal of the same phase in a session; a restart
+  (or a handoff's return) closes the running one first and forgets its conversation.
+- **Handoffs.** The banner says which phase runs first and why; when it finishes, the app counts
+  down five seconds and returns — *Return now* or *Cancel*. Nested handoffs stack.
+- **Notifications.** A session that starts waiting while the app is in the background posts a
+  system notification; the Dock badge counts the sessions waiting.
+- **Layout.** Both side panels fold (⌘B, ⌥⌘B); ⌘1–⌘6 switch views; terminal tabs reorder by drag,
+  rename on double-click, close on middle-click; ⌘T opens a shell, ⌃Tab cycles tabs.

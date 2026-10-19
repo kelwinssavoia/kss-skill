@@ -20,7 +20,8 @@ export function reportOf(featureDir: string | null): SessionReport | null {
   const phases: { phase: string; at: number }[] = []
   try {
     for (const n of readdirSync(dir)) {
-      if (!n.endsWith('.json')) continue
+      // feature.json is the living feature (§25.1), not a phase's report.
+      if (!n.endsWith('.json') || n === 'feature.json') continue
       try {
         phases.push({ phase: n.slice(0, -5), at: statSync(join(dir, n)).mtimeMs })
       } catch {
@@ -34,9 +35,9 @@ export function reportOf(featureDir: string | null): SessionReport | null {
   return { file: join(dir, 'index.html'), phases: phases.map(p => p.phase), latest: phases[phases.length - 1]?.phase ?? null, updatedAt: Math.round(page) }
 }
 
-/** The URL the renderer frames: the page itself decides what to run; the hash picks the phase. */
+/** The URL the renderer frames: the page itself decides what to run; the hash picks the living feature or a phase. */
 export const reportUrl = (file: string, version: number, phase: string | null) =>
-  `${SCHEME}://local/?f=${encodeURIComponent(file)}&v=${version}${phase ? `#phase-${encodeURIComponent(phase)}` : ''}`
+  `${SCHEME}://local/?f=${encodeURIComponent(file)}&v=${version}${phase === 'feature' ? '#feature' : phase ? `#phase-${encodeURIComponent(phase)}` : ''}`
 
 /** Only a session's own `…/report/index.html` is ever served. */
 export function servable(file: string, sessions: string[]): boolean {

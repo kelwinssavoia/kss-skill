@@ -1,7 +1,7 @@
 ---
 name: kss-plan
 description: Write the implementation plan for a KSS feature — shape rather than code, covering models, contracts, flows, UI, reuse, the file map and the test plan, with file-level facts gathered by read-only explorers. Use after kss-spec, before kss-tickets.
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
@@ -41,6 +41,19 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
 
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it: an undecided question (step 4) is a `question`
+in the grill's shape; each new dependency (step 5) is a `confirm`; the approval turn (step 7) is an
+`approve` whose draft is the Approach, the models/contracts table and the File map written to
+`notes/plan-draft.md` — an edited draft replaces yours, and its changes are the person's decisions.
+Preconditions 2–3 and step 4's past-five stop publish a `handoff` (`run`: the phase they name,
+`then`: plan) before the stop line. Set `progress` at each procedure step; the Summary starts with
+`ask.mjs clear` and `{"progress":null}`.
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -53,11 +66,7 @@ phase may well run in the other one (DESIGN.md §19).
 1. `.kss/config.md` missing → stop: `No .kss/config.md. Run kss-init first.`
 2. `03-spec.md` missing → stop: `No 03-spec.md for NNN-slug. Run kss-spec NNN-slug first.`
 3. The spec lists a story with no FR (an error) → stop:
-   `03-spec.md has unresolved errors: <list>. Fix the spec before planning.`
-4. A product or architecture decision the plan needs is absent — how an entity is keyed, who owns
-   a flow, which service holds the data, what the money or tenancy rule is — → **stop**:
-   `Undecided: <question>. Run kss-grill NNN-slug; the plan cannot choose this.`
-   Never resolve such a question by picking the likely option.
+   `03-spec.md has unresolved errors: <list>. Run kss-spec NNN-slug to fix the spec before planning.`
 
 **Enter the phase before any other work.** As soon as the preconditions pass — before reading the
 inputs, spawning anything or asking anything — run
@@ -85,7 +94,15 @@ this phase keeps up to date afterwards.
 3. **Synthesise only.** The main session does not open source files. An explorer's `Unknown`
    becomes either a follow-up explorer or a Risk — never a guess written as fact.
 
-4. **Design the shape**, section by section, into the draft:
+4. **Design the shape**, section by section, into the draft. A product or architecture decision
+   the shape needs and nobody took — how an entity is keyed, who owns a flow, which service holds
+   the data, what the money or tenancy rule is — is **asked on the spot**, one per turn, in the
+   grill's question format, and recorded as the next `D-NN` in `02-decisions.md` with
+   `Source: plan` (an `AD-` it overrides is marked `overridden`; "don't know" → a `DF-NN` with
+   owner and date, asked in the same turn); then continue. Never pick the likely option on the
+   user's behalf. **More than five** such questions → stop with
+   `Undecided: <list>. Run kss-investigate NNN-slug` (on L: `kss-grill`) `— too many open
+   decisions for the plan.`
    - **Approach** — the strategy in a paragraph, naming the seam the change enters through.
    - **Models and data** — per entity `new | changed | read`, every field with type and
      nullability, migration yes/no.
@@ -164,6 +181,12 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase plan`
+per `.kss/references/feature.md` — `architecture.flow`/`sequence`, the design decisions, and the
+rules the plan refined (skip when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/plan.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase plan`
@@ -202,8 +225,9 @@ final context size, not what it consumed.
 
 - **Shape, not code.** Signatures, field lists, message shapes, component names and props. No
   implementation bodies, no diffs, no pseudo-code longer than a signature.
-- **A missing product or architecture decision stops the plan** and returns it to `kss-grill`.
-  Choosing on the user's behalf is the failure mode this rule exists to prevent.
+- **A missing product or architecture decision is asked on the spot** and recorded as a `D-`
+  (`Source: plan`); past five, the plan goes back to investigate (L: the grill). Choosing on the
+  user's behalf is the failure mode this rule exists to prevent.
 - **The main session never reads source code.** Facts come from `explorer` returns; explorers
   are read-only and never write.
 - **Escalate to `explorer-deep`, with the printed warning, for contract, tenant/authorization and
@@ -213,7 +237,8 @@ final context size, not what it consumed.
 - Every section of the plan traces to an FR or a decision; an item citing neither is removed.
 - Contracts are specified on **both** sides plus the audit spec — one-sided shapes are how fields
   vanish silently on the wire.
-- Write **only** `04-plan.md`, its `notes/` files and the Plan block of `README.md`.
+- Write **only** `04-plan.md`, its `notes/` files, the Plan block of `README.md`, the `D-`/`DF-`
+  entries step 4 recorded and `report/`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.
