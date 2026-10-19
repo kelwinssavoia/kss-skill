@@ -1541,7 +1541,7 @@ worktree, and parallel features need nothing new from the skills:
 | | Where | Branch |
 | --- | --- | --- |
 | The project | the repository the user opened | whatever is checked out |
-| A session | `<parent>/<repo>.kss-sessions/<slug>` — a sibling directory, so no tool running in the project ever globs into it | created detached at `base_branch`; `kss-clarify` then creates and checks out `<branch_prefix>NNN-slug` there, exactly as in a terminal |
+| A session | `<parent>/<repo>.kss-sessions/<slug>` — a sibling directory, so no tool running in the project ever globs into it | created detached at `origin/<base_branch>`, fetched first (offline: the local `base_branch`); `kss-clarify` then creates and checks out `<branch_prefix>NNN-slug` there, exactly as in a terminal |
 | A ticket | `<session>/.kss/worktrees/NNN-slug/NN` — unchanged (§14.1) | `NNN-slug.NN-ticket` |
 
 On creation the app copies the gitignored files a phase needs and a fresh checkout lacks:

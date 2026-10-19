@@ -228,6 +228,30 @@ test('a session is a worktree with its own board; tickets are inspected in their
   assert.equal(existsSync(path), false)
 })
 
+test('a session starts from the fetched base branch, not a stale local one', async () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'kss-base-')))
+  const origin = join(base, 'origin')
+  mkdirSync(join(origin, '.kss'), { recursive: true })
+  sh(base, 'init', '-q', '-b', 'dev', origin)
+  sh(origin, 'config', 'user.email', 't@t')
+  sh(origin, 'config', 'user.name', 't')
+  writeFileSync(join(origin, '.kss/config.md'), 'features_root: docs/features\nbase_branch: dev\n')
+  sh(origin, 'add', '.')
+  sh(origin, 'commit', '-qm', 'init')
+  const root = join(base, 'app')
+  sh(base, 'clone', '-q', origin, root)
+
+  // The kss sync lands on the remote after the clone.
+  mkdirSync(join(origin, '.kss/references'))
+  writeFileSync(join(origin, '.kss/references/app-mode.md'), '# app mode\n')
+  sh(origin, 'add', '.')
+  sh(origin, 'commit', '-qm', 'chore(kss): sync')
+
+  const project = await detectProject(root, { claude: null, codex: null })
+  const path = await createSession(project, 'CSV export')
+  assert.ok(existsSync(join(path, '.kss/references/app-mode.md')))
+})
+
 test("a parent harness session's markers never reach the CLIs; the user's own settings do", () => {
   const env = withoutSessionMarkers({ PATH: '/bin', CLAUDECODE: '1', CLAUDE_CODE_CHILD_SESSION: '1', CLAUDE_CODE_MESSAGING_TOKEN: 't', CLAUDE_CODE_USE_BEDROCK: '1', CODEX_SANDBOX: 'seatbelt', CODEX_HOME: '/c' })
   assert.deepEqual(Object.keys(env).sort(), ['CLAUDE_CODE_USE_BEDROCK', 'CODEX_HOME', 'PATH'])
