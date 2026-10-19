@@ -1,7 +1,7 @@
 ---
 name: kss-tickets
 description: Slice a KSS plan into self-contained tickets plus a dependency graph — layer-sliced parallel tickets in multi-agent mode, vertical tracer-bullet slices in single-session mode. Use after kss-plan, before kss-execute.
-argument-hint: NNN-<slug>
+argument-hint: NNN-<slug> [--app]
 disable-model-invocation: true
 ---
 
@@ -41,6 +41,19 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
 
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it: a dependency confirmation (precondition 3) and
+the go-ahead over budget (2a step 9) are a `confirm`; re-slice or stop (precondition 4) and a Jev
+`ask` fallback are a `question`; the approval turn (step 5) is an `approve` whose draft is
+`05-tickets/graph.md` — an edited graph replaces yours. The stops that name an earlier phase
+(precondition 2, a rejected dependency) publish a `handoff` (`then`: tickets) before the stop line.
+Set `progress` at each procedure step; the Summary starts with `ask.mjs clear` and
+`{"progress":null}`.
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -56,8 +69,10 @@ phase may well run in the other one (DESIGN.md §19).
      from `00-brief.md` alone — see *S track* below. If `00-brief.md` is also missing, stop:
      `No brief for NNN-slug. Run kss-clarify first.`
    - **M or L track** → stop: `No 04-plan.md for NNN-slug. Run kss-plan NNN-slug first.`
-3. `04-plan.md` has an unconfirmed new dependency (`Confirmed: pending`) → stop:
-   `04-plan.md has unconfirmed dependencies: <names>. Re-run kss-plan NNN-slug.`
+3. `04-plan.md` has an unconfirmed new dependency (`Confirmed: pending`) → ask its confirmation
+   now, one per turn, in `kss-plan`'s dependency format; on `yes` set its `Confirmed:` in
+   `04-plan.md` and continue. A `no` or an alternative changes the plan → stop:
+   `Dependency <name> rejected. Re-run kss-plan NNN-slug.`
 4. `05-tickets/` already populated → say so and ask whether to re-slice (replacing) or stop.
    Never silently overwrite tickets that `06-execution.md` shows as started.
 5. `execution` is neither `multi-agent` nor `single-session` → stop:
@@ -284,6 +299,12 @@ Record the card ids in the Tickets block. If publishing fails, say so and contin
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
+**Living feature:** only when slicing changed a requirement, pipe a patch to
+`node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase tickets` per
+`.kss/references/feature.md` (skip when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/tickets.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase tickets`
@@ -343,7 +364,8 @@ tool displays.
 - Every ticket's Tests section demands the **specs written and committed before the
   implementation, and run by nobody** — the coordinator runs the suite once after integration —
   and the report-back shape is fixed and ≤1.5k.
-- Write **only** `05-tickets/*`, `graph.md` and the Tickets block of `README.md`.
+- Write **only** `05-tickets/*`, `graph.md`, the Tickets block of `README.md`, a dependency's
+  `Confirmed:` in `04-plan.md` (precondition 3) and `report/`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the
   conversation's language). File names, headings, field names and identifiers stay English.

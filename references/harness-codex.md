@@ -239,6 +239,9 @@ These four preambles are the Codex packaging of the role definitions in the plug
 Codex has no question dialog: `kss-grill` prints each question in the text format the skill gives,
 and the user answers with the option letter or in their own words.
 
+With `--app` (kss-desktop, DESIGN.md §26) no phase opens a dialog: every turn that waits for the
+person is published with `ask.mjs post` and printed as text (`.kss/references/app-mode.md`).
+
 ## Running commands
 
 The coordinator has the shell and runs the final suite itself, or hands the exact command to a

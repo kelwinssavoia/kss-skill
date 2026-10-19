@@ -1,7 +1,7 @@
 ---
 name: kss-clarify
 description: First KSS phase — turn a vague request into a brief, pick size and track, then create the feature folder and branch. Run it at the start of every feature, before any code is read.
-argument-hint: <free text | path | url>
+argument-hint: <free text | path | url> [--app]
 disable-model-invocation: true
 ---
 
@@ -37,6 +37,23 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it — it is never
+part of the request — read `.kss/references/app-mode.md` once (missing: say
+`Run kss-init again for app mode` and go on as in the terminal), and publish every turn that waits
+for the person with `node .kss/scripts/ask.mjs post` before printing it:
+
+| Turn | `kind` |
+| --- | --- |
+| each interview question | `question` — its natural options, or `[]` |
+| the size proposal | `confirm`, options `S` · `M` · `L` with the criteria as descriptions and `lean: true` on the proposed row (a size is not a business choice) |
+| the feature name | `question`, `options: []` |
+| `Creating … Confirm?` | `confirm` |
+
+The ask in `.kss/current` is the one write allowed before the confirmation. The Summary starts
+with `ask.mjs clear`.
 
 ## Preconditions
 
@@ -122,6 +139,11 @@ phase may well run in the other one (DESIGN.md §19).
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase clarify`
+per `.kss/references/feature.md` — the `product` (skip when the script is absent).
+
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/clarify.json` as `.kss/references/report.md` describes — short, and shown
 rather than told (diagrams, examples, quoted code) — every string in `conversation_language`, then run `node .kss/scripts/report.mjs <features_root>/NNN-slug --phase clarify`
@@ -163,7 +185,7 @@ feature's size (DESIGN.md §3.9). Copy it verbatim into the summary and into the
 - The expected outcome is one sentence and must be verifiable.
 - A fact that needs the code is an Open fact, never a guess.
 - `NNN` = highest of the `features_root` folders and the `<branch_prefix>NNN-*` local branches + 1, or `next_number` when greater.
-- Write only `00-brief.md`, `report/clarify.json` (+ the generated `report/index.html`) and the Brief block of `README.md`; never another phase's file or block.
+- Write only `00-brief.md`, `report/clarify.json` (+ the generated `report/index.html` and `report/feature.json`) and the Brief block of `README.md`; never another phase's file or block.
 - `README.md` stays under 4k chars; overflow goes to `notes/` and is linked.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the

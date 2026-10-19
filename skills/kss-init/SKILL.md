@@ -1,7 +1,7 @@
 ---
 name: kss-init
 description: Set up KSS in this project — interview for .kss/config.md, copy the templates, scripts and harness references into the project, and install whatever the current harness needs. Run once per project, before any other kss- skill.
-argument-hint: "[--preferences]"
+argument-hint: "[--preferences] [--app]"
 disable-model-invocation: true
 ---
 
@@ -25,9 +25,20 @@ The harness decides three of the write steps below (agents, statusline, hooks) a
 harness is fully usable from the other, because the parts that differ live in
 `.kss/references/harness-*.md` and **both** are installed (DESIGN.md §19).
 
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this skill, DESIGN.md §26), strip it, read
+`<PLUGIN>/references/app-mode.md` once (Precondition 3 finds `<PLUGIN>`; the project copy does not
+exist yet), and publish every turn that waits for the person with
+`node <PLUGIN>/scripts/ask.mjs post` before printing it: each interview question is a `question` —
+its choices as options with the default as the `lean`, or `[]` for a free value; the
+`overwrite / edit / cancel` turn is a `question`; the confirmation (16) and each user-level install
+(17, 18) are a `confirm`. That ask is the one write before the confirmation. The summary starts with
+`ask.mjs clear`.
+
 ## Inputs
 
-- No arguments.
+- No arguments besides the flags.
 - The repository root (`git rev-parse --show-toplevel`) — everything is written relative to it.
 - `templates/`, `scripts/`, `references/` and `hooks/` in this plugin, next to this skill's folder.
 - `~/.kss/preferences.md`, if it exists — the user-local `conversation_language`. It is **never**
@@ -254,11 +265,12 @@ hooks — and either way Codex asks to trust them once before it runs them.
 | `~/.kss/codex-hooks.backup.json` | the previous `hooks.json` — Codex only, written once |
 | `.gitignore` | `.kss/current`, `.kss/worktrees/`, `.kss/inbox/`, `.kss/statusline.backup.json` and `.kss/config.local.json` added |
 
-`.kss/current` is not created here — `kss-clarify` writes it when a feature starts.
+`.kss/current` is not created here (in app mode it holds only the ask) — `kss-clarify` writes it
+when a feature starts.
 
 ## Summary
 
-Print exactly:
+App mode: first `node .kss/scripts/ask.mjs clear`. Then print exactly:
 
 ```
 KSS ready · <repo name>
@@ -285,8 +297,8 @@ Next: <prefix>kss-clarify <what you want to build>
 - **Resolve the harness before the first question**, and install **both** adapters regardless. A
   project set up from one harness must be usable from the other without re-running this skill.
 - One question per turn. Never ask two, never assume an answer that was not given.
-- Nothing on disk before the confirmation turn; nothing in `~/.claude/settings.json` before its own
-  yes.
+- Nothing on disk before the confirmation turn (in app mode, the ask in `.kss/current` aside);
+  nothing in `~/.claude/settings.json` before its own yes.
 - Never overwrite a file the user did not agree to overwrite — that includes agents and templates.
 - Never invent a `layout_references` path. Empty is a valid answer with a stated consequence.
 - `~/.kss/preferences.md` is user-local: never write it inside the repository, never commit it, and

@@ -37,6 +37,19 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
 
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it. Here that is **every question** — the open
+items, a derived question, a deferral's owner and date, the closing turn — as `kind: question` with
+`title` `Qn · <category>`, `text` the question, `category`, `source`, and the options in the order
+printed (`something else` is never one; `lean` never on business; `options: []` for the
+free-text-only ones). The `grill` counters below are kept as they are; `grill.question` is no longer
+written. Precondition 2 publishes a `handoff` (`run`: investigate, `then`: grill) before its stop
+line. The Summary starts with `ask.mjs clear`.
+
 ## Preconditions
 
 0. **Sweep** (DESIGN.md §3.8). Run
@@ -99,20 +112,7 @@ this phase keeps up to date afterwards.
    Lean: <only when there is one>
    ```
 
-   **App mode — the arguments include `--app`** (kss-desktop started this phase and answers it from
-   its panel, DESIGN.md §24.7). Then, for **every** question you put to the user in this phase — the
-   open items, a derived question, a deferral's owner and date, the closing turn:
-   - **never open the multiple-choice dialog**, even when the harness has one — the app cannot
-     click it. Print the text format below;
-   - **before printing it**, publish it with one `current.mjs set`, the options in the order printed:
-     `node .kss/scripts/current.mjs set '{"grill":{"question":{"n":<n>,"category":"business|layout|technical","source":"<source>","text":"<the question>","options":[{"key":"a","label":"<short label>","description":"<its consequence>","lean":false}, …]}}}'`
-     — `something else` is not an option there (the app always offers free text); `lean: true` on
-     the lean option only, never on a business question; `options: []` for a free-text-only
-     question (owner and date, the closing turn's "anything to revisit?"). Escape the JSON for the
-     shell (`'\''` for a quote inside the single-quoted argument);
-   - the answer arrives as a plain message: `b) <label>` for an option, anything else is a free
-     answer. Treat both exactly as a typed answer.
-   Clear it with `'{"grill":{"question":null}}'` before the closing summary.
+   In app mode (above) the dialog is never opened: print the text format and publish the question.
 
    `something else` is always the last option. **A `Lean:` is never offered for a business
    question** — business options are consequences, not recommendations; state the consequence of
@@ -147,6 +147,7 @@ this phase keeps up to date afterwards.
   ```
   ## D-NN · <category>
   Question:
+  Source: grill
   Decision:
   Why:
   Rejected:
@@ -176,6 +177,11 @@ this phase keeps up to date afterwards.
   bare number.
 
 ## Summary
+
+**App mode:** first `node .kss/scripts/ask.mjs clear`.
+
+**Living feature:** pipe a patch to `node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase grill`
+per `.kss/references/feature.md` — the `D-` and `DF-` decisions (skip when the script is absent).
 
 **Report** (DESIGN.md §25): explain this phase to a human before committing — write
 `<features_root>/NNN-slug/report/grill.json` as `.kss/references/report.md` describes — short, and shown
@@ -216,7 +222,7 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
 - Order is business → layout → technical, one question per turn, no cap on the count.
 - The question format is fixed, `something else` is always an option, and `Lean:` is never offered
   for a business question.
-- With `--app`: no dialog; every question is published as `grill.question` before it is printed.
+- With `--app`: no dialog; every question is published with `ask.mjs post` before it is printed.
 - Never ask the user for a repository fact — spawn one `explorer` for it. The grill
   spawns nothing else.
 - At most one derived question per answer; further branches go to Deferred or back to
@@ -228,7 +234,7 @@ The `Cost:` line is rendered from `<features_root>/NNN-slug/metrics.jsonl`.
   become ADRs in `docs/adr/`, linked from the `D-`.
 - Closing turn: "Decided N, deferred N, overrode …. Anything to revisit?"
 - On M the grill runs only when there are open items; on L it always runs.
-- Write only `02-decisions.md`, `auto-decisions.md` statuses, `report/grill.json` (+ `report/index.html`), `CONTEXT.md`, `docs/adr/` and the
+- Write only `02-decisions.md`, `auto-decisions.md` statuses, `report/grill.json` (+ `report/index.html`, `report/feature.json`), `CONTEXT.md`, `docs/adr/` and the
   Decisions block of `README.md`.
 - Terminal output follows `conversation_language` from `~/.kss/preferences.md` (absent: the user's
   language). Document content follows `docs_language` from `.kss/config.md` (absent: the

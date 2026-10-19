@@ -1,7 +1,7 @@
 ---
 name: kss-execute
 description: Run a feature's tickets to done — continuous-frontier scheduling in worktrees, report gates, per-ticket review, escalation, integration and the PR. Run it after kss-tickets, or to resume an interrupted run.
-argument-hint: NNN-<slug> [--ticket NN]
+argument-hint: NNN-<slug> [--ticket NN] [--app]
 disable-model-invocation: true
 ---
 
@@ -39,6 +39,30 @@ record it with `node .kss/scripts/harness.mjs --set <name>`.
 
 Nothing this phase writes into the repository may name a harness, a model or an agent type: the next
 phase may well run in the other one (DESIGN.md §19).
+
+## App mode
+
+With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
+`.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
+the terminal), and publish every turn that waits for the person with
+`node .kss/scripts/ask.mjs post` before printing it. **Every stop that goes to the user is a
+`blocked` ask** — `source` names what stopped, the options are the ways out you can take — then wait
+for the answer instead of ending silently:
+
+| Stop | Options |
+| --- | --- |
+| the full suite still failing at the cap (§A.10) | `run the suite once more` · `open the PR with the failures listed` · `stop here` |
+| a ticket past 80 turns (§A.7) | `re-slice it in kss-tickets` · `one more round, one tier up` · `stop here` |
+| a rebase conflict the `T2` and the reviewer could not settle (§A.8) | `retry one tier up` · `I resolve it by hand, then resume` · `stop here` |
+| uncommitted artifacts before the PR (§A.10) | `commit them as docs(NNN): execute` · `stop here` |
+| a dirty worktree, a blocked `--ticket`, any other stop with a message to the user | the ways out it names |
+
+An answer is the user's decision: carry it out and log it in `06-execution.md`. Preconditions 2
+and 4 publish a `handoff` (`run`: tickets, `then`: execute); a fresh-context stop (§B.2, the
+coordinator context) publishes a `handoff` whose `run` is the resume command and whose `then` is
+`execute` for the remaining tickets, or the phase `next.mjs --after execute` names. Set `progress`
+at each step (frontier, `n/N integrated`, full suite, report, PR); the Summary starts with
+`ask.mjs clear` and `{"progress":null}`.
 
 ## Preconditions
 
@@ -176,7 +200,9 @@ this phase keeps up to date afterwards.
    .kss/worktrees/NNN-slug/NN`, then `rm -rf` the directory if it is still there, then delete the
    ticket branch), set the state to `integrated`, and
    unblock the dependants — then immediately spawn whatever that unblocked (step 2). A rebase
-   conflict goes to `T2` with both tickets' context, and then to the reviewer again.
+   conflict goes to `T2` with both tickets' context, and then to the reviewer again. After every
+   integration run `node .kss/scripts/report.mjs <features_root>/NNN-slug` (a plain rebuild, no
+   model tokens; skip when absent) so the report page shows the run's progress.
 9. **Record git stats** for each integrated ticket: append a `kind: "git"` line to
    `<features_root>/NNN-slug/metrics.jsonl` with `git: { files, added, deleted, commits }` from
    `git diff --shortstat` and `git rev-list --count` on the merged range.
@@ -190,8 +216,8 @@ this phase keeps up to date afterwards.
     owns the file (its Files section) and send the failure list back to that ticket's executor —
     same worktree if it was kept, otherwise a fresh worktree off the feature branch — with the
     failing output pasted in. The executor fixes it **without running anything**; re-integrate,
-    then run the suite **once more**. **Cap: two full runs per feature**; a third failure stops
-    the run with a message to the user. Then commit
+    then run the suite **once more**. **Cap: two full runs per feature**; a failure at the cap
+    stops the run with a message to the user (a `blocked` ask in app mode). Then commit
     `06-execution.md`, `metrics.jsonl`, the updated README and any other phase artifact on the
     feature branch (`docs(NNN): execute`), run `git worktree prune` and remove anything left under
     `.kss/worktrees/NNN-slug/`, and verify `git status --porcelain` is empty except `.kss/current`;
@@ -284,6 +310,8 @@ reset to `ready`.
 
 ## Summary
 
+**App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
+
 **Report** (DESIGN.md §25) — **delegated**, because the report of what was built quotes the code
 and you never read it. After the full suite and before the commit, spawn **one** subagent at tier
 **T2** (the harness adapter maps it) with this brief, and wait for it:
@@ -293,9 +321,13 @@ Write the execute report for <features_root>/NNN-slug, following .kss/references
 (read it first; it is short). Language: conversation_language from ~/.kss/preferences.md.
 What was built: git diff <base_branch>...HEAD (stat first, then the files that carry the
 rules), the ticket files 05-tickets/NN-*.md, and 06-execution.md for deviations, escalations
-and rejections. Write only <features_root>/NNN-slug/report/execute.json, then run
-node .kss/scripts/report.mjs <features_root>/NNN-slug --phase execute until it prints
-"report: …". Return that line and nothing else. Do not edit any other file, run no tests.
+and rejections. Write <features_root>/NNN-slug/report/execute.json. Then, when
+.kss/scripts/feature.mjs exists, update the living feature per .kss/references/feature.md: pipe
+a patch to node .kss/scripts/feature.mjs <features_root>/NNN-slug --phase execute with every
+rule's code from the real diff, the code blocks, the simulator rules corrected to what the code
+does, and the requirement statuses. Then run node .kss/scripts/report.mjs
+<features_root>/NNN-slug --phase execute until it prints "report: …". Return that line and
+nothing else. Edit no other file, run no tests.
 ```
 
 If its last line is not `report: …`, say `Report: failed — <its last line>` in the summary and go
@@ -349,7 +381,8 @@ review and docs as optional.
 - Integration is a `T1` job; conflicts go to `T2` and then the reviewer.
 - **No agent runs tests, lint, build or tsc — ever.** Executors write the specs and commit them
   first; the coordinator runs the suite itself, once, after every ticket is `integrated`, and at
-  most once more after the fixes. A third failing run stops and goes to the user.
+  most once more after the fixes. A failure at the cap stops and goes to the user.
+- In app mode no stop is silent: every one is a `blocked` ask or a `handoff`.
 - Never read `03-spec.md` or `04-plan.md`, and never write the feature's code yourself.
 - Never merge the PR.
 - The board is printed on every event; `06-execution.md` is append-only — never rewrite an entry.
