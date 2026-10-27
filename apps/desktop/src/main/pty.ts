@@ -59,10 +59,10 @@ export function submitTerminal(id: string, text: string) {
   setTimeout(() => terms.get(id)?.proc.write('\r'), 150)
 }
 
-export function setConversation(id: string, conversation: string): TerminalInfo | null {
+export function setConversation(id: string, conversation: string | null): TerminalInfo | null {
   const t = terms.get(id)
   if (!t) return null
-  t.info = { ...t.info, conversation }
+  t.info = { ...t.info, conversation, resumed: false }
   return t.info
 }
 

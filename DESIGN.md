@@ -1882,8 +1882,11 @@ that sets `phase` drops an ask that belongs to another phase. Whatever ask is in
   chat of §24.7 for any ask. Execute shows the same card on top of its view.
 - **Run gives feedback, never a second process.** A click switches to the phase's view at once and
   the button reads *Starting…* until the phase writes `.kss/current`, then *running · open*, with ⟲
-  to restart. The main process refuses a second terminal of the same phase in a session; a restart
-  (or a handoff's return) closes the running one first and forgets its conversation. A CLI stays
+  to restart. The main process refuses a second terminal of the same phase in a session. A phase run
+  again (Run, a handoff's return, the review loop) takes its own terminal: `/clear` (`/new` in
+  Codex), then the command — one tab per phase, a fresh context each run; the conversation the clear
+  opens is found by its transcript. ⟲ restart closes the process instead and forgets its
+  conversation. A CLI stays
   open, idle, after its phase ends, so a live terminal of the Next phase is not proof it runs: in
   review ↔ execute it is the previous run's. The Next phase reads *running* only once the board has
   entered it again (`nextRunning`); until then Run replaces the idle process.
@@ -1902,6 +1905,11 @@ tickets, execute integrates them, the next round replies, pushes and waits for t
 kss-execute can only be started by the person (§3.9), so the loop is driven by the app: **Loop
 review** in the header carries each Next line on without asking — execute after a round that wrote
 the loop back, `kss-review NNN-slug --loop` after an execute (`shared/loop.ts`, `loopStep`).
+
+A review the loop started is never started again while its process lives: a turn that ends
+waiting on a background subagent reads as *waiting*, and restarting it killed every round
+mid-way. The loop starts review after an execute, when switched on, or once the process is gone;
+under `--loop` subagents run in the foreground.
 
 Under `--loop` the round asks nothing (the triage is not confirmed; `review_autopilot` decides, with
 `none` read as `fixes`; a fix against a `D-`/`AD-` is still held). After a push it waits in the

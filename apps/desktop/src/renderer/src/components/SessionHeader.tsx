@@ -60,7 +60,7 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
   const nextLive = !!next && nextRunning(b, next.phase, nextIdle)
   const nextStarting = !!next && launching?.phase === next.phase
   const followView: View = next?.phase === 'execute' ? 'execute' : next?.phase === 'qa' ? 'qa' : 'phase'
-  const runNext = (replace = nextIdle) => next && onRun({ kind: 'phase', harness, phase: next.phase, args: next.args, replace })
+  const runNext = (replace = nextIdle, restart = false) => next && onRun({ kind: 'phase', harness, phase: next.phase, args: next.args, replace, restart })
 
   const tab = (v: View, label: string, title: string, key: number, extra?: React.ReactNode) => (
     <button className={view === v ? 'on' : ''} onClick={() => onView(v)} title={`${title} — ⌘${key}`}>
@@ -96,7 +96,7 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
               ) : nextLive ? (
                 <>
                   <button className="primary running" onClick={() => onView(followView)} title="It is running — follow it">● {next.phase} running · open</button>
-                  <button className="icon" title={`Restart ${next.phase}: close the running process and start a fresh one`} onClick={() => confirm(`Restart ${next.phase}? The running process is closed; a fresh one resumes from the feature folder.`) && runNext(true)}>⟲</button>
+                  <button className="icon" title={`Restart ${next.phase}: close the running process and start a fresh one`} onClick={() => confirm(`Restart ${next.phase}? The running process is closed; a fresh one resumes from the feature folder.`) && runNext(true, true)}>⟲</button>
                 </>
               ) : (
                 <button className="primary" title={isResume ? 'The phase has not finished: a fresh process resumes it from the feature folder' : 'A fresh process with the Next command — the same as /clear + the command'} onClick={() => runNext()}>

@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { appArgs, launchOf, parseNext } from '../shared/commands.ts'
 import { finishOf, marks, thenOf } from '../shared/board.ts'
 import type { SavedTab } from '../shared/types.ts'
-import { claudeConversationExists, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
+import { claudeConversationExists, findClaudeConversation, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
 const tab = (key: string, cwd = '/s/a'): SavedTab => ({ key, cwd, kind: 'chat', harness: 'claude-code', phase: null, args: null, title: null, readonly: false, conversation: null, createdAt: '2026-10-14T00:00:00Z' })
 
@@ -96,4 +96,22 @@ test('review stays the next step, with its finish command offered apart', () => 
   assert.deepEqual(parseNext(line), { phase: 'review', args: '061-x' })
   assert.deepEqual(finishOf(line), { phase: 'review', args: '061-x --done' })
   assert.equal(finishOf('/kss-docs-tech 061-x'), null)
+})
+
+test('after a /clear, the new Claude conversation is the newest unclaimed transcript of the cwd', () => {
+  const home = mkdtempSync(join(tmpdir(), 'kss-claude-'))
+  const prev = process.env.CLAUDE_CONFIG_DIR
+  delete process.env.CLAUDE_CONFIG_DIR
+  try {
+    const dir = join(home, '.claude', 'projects', '-repo-wt')
+    mkdirSync(dir, { recursive: true })
+    const since = Date.now()
+    writeFileSync(join(dir, 'other-chat.jsonl'), '{}')
+    writeFileSync(join(dir, 'after-clear.jsonl'), '{}')
+    assert.equal(findClaudeConversation('/repo/wt', since, new Set(['other-chat']), home), 'after-clear')
+    assert.equal(findClaudeConversation('/repo/wt', since, new Set(['other-chat', 'after-clear']), home), null)
+    assert.equal(findClaudeConversation('/repo/wt', since + 60_000, new Set(), home), null)
+  } finally {
+    if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev
+  }
 })

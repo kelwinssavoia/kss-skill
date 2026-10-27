@@ -136,7 +136,12 @@ export function App() {
       }
       try {
         const info = await api.createTerminal({ ...spec, cwd: where })
-        setTerms(t => [...t, info])
+        // A phase run again comes back in its own terminal (after a /clear); one it replaced is gone.
+        const gone = (x: TerminalInfo) => x.id !== info.id && isPhase && !!spec.replace && x.cwd === where && x.kind === 'phase' && x.phase === spec.phase
+        setTerms(t => {
+          t.filter(gone).forEach(x => dispose(x.id))
+          return [...t.filter(x => x.id !== info.id && !gone(x)), info]
+        })
         if (opts?.focus !== false) setActive(a => ({ ...a, [where]: info.id }))
         if (isPhase && spec.harness) {
           await api.setHarness(spec.phase!, spec.harness)
@@ -213,14 +218,14 @@ export function App() {
       const term = b ? phaseTerm(terms.filter(t => t.cwd === path), b.phase) : null
       const live = !!term && exitCode(term.id) === null
       const status = b ? phaseStatus({ board: b, live, exited: !!term && !live, launching: false, answered: answeredSince(path) }) : null
-      const step = loopStep(b, loop, status === 'working' || status === 'starting', live)
+      const step = loopStep(b, loop, { live, working: status === 'working' || status === 'starting' })
       if (!step) continue
       if ('stop' in step) {
         setLoops(l => ({ ...l, [path]: { ...loop, stopped: step.stop } }))
         continue
       }
       // One launch per board state: the same Next is not run twice while the first one starts.
-      const key = [step.run.phase, b!.phase, b!.phaseStartedAt, b!.next, b!.waiting?.since].join('|')
+      const key = [step.run.phase, b!.phase, b!.phaseStartedAt, b!.next].join('|')
       if (looped.current.get(path) === key) continue
       looped.current.set(path, key)
       setLoops(l => ({ ...l, [path]: { ...loop, launches: loop.launches + 1 } }))
