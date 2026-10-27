@@ -41,15 +41,24 @@ type Props = {
   onRun: Run
   harnessFor: (phase: string) => Harness
   launching: boolean
+  /** The phase the app is starting here, before it writes `.kss/current`. */
+  starting: string | null
   visible: boolean
   onError: (e: unknown) => void
 }
 
-export function PhasePanel({ project, session, terms, onRun, harnessFor, launching, visible, onError }: Props) {
+/** Phases followed in a view of their own, not this one. */
+const NOT_HERE = new Set(['execute', 'qa', 'status', 'init'])
+
+export function PhasePanel({ project, session, terms, onRun, harnessFor, launching, starting, visible, onError }: Props) {
   const b = session.board
-  // The phase on screen: the one a live terminal runs here, else the board's.
+  // The phase on screen: the one starting, else the board's (or the one its ask belongs to). A CLI
+  // stays open after its phase ends, so a live terminal alone is no proof its phase runs — it
+  // decides only when the board has no phase of its own to show (none yet, closed, or execute).
   const liveTerm = [...terms].reverse().find(t => t.kind === 'phase' && t.phase !== 'execute' && t.phase !== 'status' && exitCode(t.id) === null)
-  const phase = liveTerm?.phase ?? b?.phase ?? null
+  const boardPhase = b && !b.isClosed && b.phase !== 'execute' ? b.ask?.phase ?? b.phase : null
+  const own = starting && !NOT_HERE.has(starting) ? starting : null
+  const phase = own ?? boardPhase ?? liveTerm?.phase ?? b?.phase ?? null
   const term = phaseTerm(terms, phase)
   const live = !!term && exitCode(term.id) === null
   const [data, setData] = useState<PhaseOverview | null>(null)

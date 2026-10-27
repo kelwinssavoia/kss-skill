@@ -45,3 +45,12 @@ export function phaseStatus({ board: b, live, exited, launching, answered }: Inp
   if (live) return 'working'
   return exited ? 'exited' : 'idle'
 }
+
+/**
+ * Whether the Next phase already runs. A CLI outlives its phase — it stays open, idle, after the
+ * summary — so in review ↔ execute a live terminal of the Next phase is usually the previous run's,
+ * not a new one: it counts only once the board has entered that phase again.
+ */
+export function nextRunning(b: Pick<KssBoard, 'phase' | 'isClosed'> | null, next: string, live: boolean): boolean {
+  return live && !!b && !b.isClosed && b.phase === next
+}

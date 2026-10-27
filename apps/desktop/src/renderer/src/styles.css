@@ -439,6 +439,8 @@ kbd { font: 10px var(--mono); border: 1px solid var(--line); border-bottom-width
 /* header */
 .next { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 4px 4px 4px 8px; }
 .next code { background: none; color: var(--dim); }
+button.loop.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-2); }
+.loop-stopped { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
 .view-tabs { display: flex; gap: 2px; margin: 2px -4px 0; }
 .view-tabs button { background: none; border: none; border-radius: 0; color: var(--dim); padding: 7px 12px 8px; position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .view-tabs button:hover:not(:disabled) { background: none; color: var(--text); }
