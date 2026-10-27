@@ -1,6 +1,6 @@
 # {{NNN}}-{{slug}} · Plan
 
-Cap 20k chars. Shape, not code. Every item traces to an FR or a decision.
+Cap 20k chars. Shape, not code. Every item traces to an FR, a decision or a bug class (BC-NN).
 
 ## Approach
 {{approach}}
@@ -65,6 +65,13 @@ Cap 20k chars. Shape, not code. Every item traces to an FR or a decision.
   - {{case_name}}
   - {{empty_case_name}}
   - {{forbidden_case_name}}
+
+## Failure model
+<!-- `lessons.mjs match` on this plan (DESIGN.md §27): one row per class it returns. -->
+
+| Class | Question | This feature's answer |
+| --- | --- | --- |
+| {{BC-NN}} · {{title}} | {{question}} | {{mechanism, or n/a — why}} |
 
 ## Risks and rollout
 - **Risk:** {{risk}} — mitigation: {{mitigation}}

@@ -46,6 +46,12 @@
 ## Project rules that apply
 - {{rule}} — {{one_line}}
 
+## Failure checks
+<!-- The bug classes this project's PRs already confirmed that this ticket is exposed to
+     (`lessons.mjs match`, DESIGN.md §27), each with the plan's answer. The code must make the
+     answer true, and the Tests above carry a case for it. -->
+- **{{BC-NN}} · {{class_title}}** — {{question}} → {{the plan's answer for this ticket}}
+
 ## Do not
 - Open `03-spec.md` or `04-plan.md` — everything you need is in this ticket.
 - Read whole files over 300 lines; use ranges.

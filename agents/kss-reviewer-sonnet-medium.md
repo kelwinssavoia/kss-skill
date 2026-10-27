@@ -16,13 +16,21 @@ You are given the ticket text, the executor's report and the branch. Read the di
 ## What you check, in this order
 
 1. **The FRs the ticket lists** — is each one actually implemented, and provable from the diff?
-2. **The project rules the ticket lists** — every one, by name.
+2. **The project rules** — every one the ticket lists, by name, **and** any rule in `standards` the
+   diff triggers that the ticket forgot (money types, tenant scope inside the query, …): a rule is
+   checked because the code touches it, not because someone listed it.
 3. **TDD** — a test commit before the implementation commit, and, by reading the test against the
    implementation diff, the test would fail without it.
 4. **Test coverage of the ticket's cases** — including the empty, absent and refusal cases the
    rules demand, not only the happy path.
 5. **Reuse and scope** — nothing recreated that the ticket's Reuse entries provide, and nothing in
    the diff that no FR asked for.
+6. **Failure checks** — the bug classes this project's PRs already confirmed (DESIGN.md §27): the
+   ticket's **Failure checks** plus whatever
+   `node .kss/scripts/lessons.mjs match --diff <base>...<head> --md` adds (when that script exists). Answer each class's
+   question from the diff — what re-sends after a crash, who wins a race, what a replayed event
+   does, which index serves the query. A question the diff cannot answer is a finding naming the
+   class (`BC-NN`), with the scenario that breaks.
 
 ## Verdict
 
@@ -35,7 +43,7 @@ approve
 
 ```
 reject
-1. <file>:<line> — <rule or FR id> — <what is wrong, one sentence>
+1. <file>:<line> — <rule, FR or BC id> — <what is wrong, one sentence>
 2. …
 Class: execution | reasoning
 ```

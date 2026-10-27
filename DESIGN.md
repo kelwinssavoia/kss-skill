@@ -1883,10 +1883,70 @@ that sets `phase` drops an ask that belongs to another phase. Whatever ask is in
 - **Run gives feedback, never a second process.** A click switches to the phase's view at once and
   the button reads *Starting…* until the phase writes `.kss/current`, then *running · open*, with ⟲
   to restart. The main process refuses a second terminal of the same phase in a session; a restart
-  (or a handoff's return) closes the running one first and forgets its conversation.
+  (or a handoff's return) closes the running one first and forgets its conversation. A CLI stays
+  open, idle, after its phase ends, so a live terminal of the Next phase is not proof it runs: in
+  review ↔ execute it is the previous run's. The Next phase reads *running* only once the board has
+  entered it again (`nextRunning`); until then Run replaces the idle process.
 - **Handoffs.** The banner says which phase runs first and why; when it finishes, the app counts
   down five seconds and returns — *Return now* or *Cancel*. Nested handoffs stack.
 - **Notifications.** A session that starts waiting while the app is in the background posts a
   system notification; the Dock badge counts the sessions waiting.
+- **Loop review** (§26.9).
 - **Layout.** Both side panels fold (⌘B, ⌥⌘B); ⌘1–⌘6 switch views; terminal tabs reorder by drag,
   rename on double-click, close on middle-click; ⌘T opens a shell, ⌃Tab cycles tabs.
+
+### 26.9 The review loop
+
+A PR reviewer that re-reviews every push (Codex) turns review into a loop: a round opens fix
+tickets, execute integrates them, the next round replies, pushes and waits for the next pass.
+kss-execute can only be started by the person (§3.9), so the loop is driven by the app: **Loop
+review** in the header carries each Next line on without asking — execute after a round that wrote
+the loop back, `kss-review NNN-slug --loop` after an execute (`shared/loop.ts`, `loopStep`).
+
+Under `--loop` the round asks nothing (the triage is not confirmed; `review_autopilot` decides, with
+`none` read as `fixes`; a fix against a `D-`/`AD-` is still held). After a push it waits in the
+foreground on `review.mjs wait`, which polls the PR every minute: new comments, reviews or a failed
+check run the next round; a clean pass (`Didn't find any major issues`, an approval, a bot's 👍),
+20 minutes without a change, a closed PR, held items only or ten rounds stop it. The reason goes to
+`.kss/current` `review.loop` (`{state, reason, until, at}`), which the app reads to switch the loop
+off and say why. The loop is not remembered across runs of the app, and the review still ends only
+when the person finishes it.
+
+## 27. Lessons — every confirmed bug teaches the next feature
+
+### 27.1 Why
+
+Three PRs of one project (#382, #383, #387) took 47 reviewer findings and 14 rounds. Most were not
+business-rule mistakes but how the code fails: a send lost when it fails after the commit, two
+replicas racing on one row, a replayed event trusted, a query with no index, an amount passed
+through a JS number, a PDF and a CSV disagreeing. No phase asked how the feature fails — the plan
+even removed what no FR asked for — the ticket reviewer checked compliance (FRs, listed rules,
+TDD), and each finding was fixed at its line, so the next round found the same class one call away.
+When a fix ticket did describe the failure mode, the same reviewer caught the next race itself:
+the reviewer finds a class once someone tells it which class to look for.
+
+### 27.2 The catalogue
+
+`.kss/lessons.json`, committed, managed by `scripts/lessons.mjs`. A **bug class** is
+`{id: BC-NN, title, signature, question, triggers, paths, gate, check, cases}`: what the bug looks
+like, the one question that would have caught it, the words and paths that say a change is exposed
+to it, the first gate that should have caught it, an optional automatic check (a regex on added
+lines), and the confirmed cases (`feature, pr, rv, file, summary, phase`). KSS ships ten starter
+classes in `templates/lessons.json`; a project's catalogue grows from its own PRs.
+
+### 27.3 The loop
+
+| Where | What |
+| --- | --- |
+| kss-review, Map + Learn | the explorer names each finding's class (or proposes one) and its siblings in the feature diff; every `fix` is filed with `lessons.mjs add` — disputes, questions and deferrals never are |
+| kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line |
+| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why` |
+| kss-tickets | **Failure checks**: the classes the ticket is exposed to, with the plan's answer, and a test case per class |
+| reviewer (check 6) | answers each class's question from the diff — the ticket's list plus `match --diff`; it also checks every rule of `standards` the diff triggers, listed or not |
+| kss-execute, Finish | the **feature sweep** before the suite: `lessons.mjs check` and one reviewer on the whole feature diff, for what crosses tickets; one round, open items named in the PR body |
+| escalation | a class confirmed three times with no check gets one (`lessons.mjs escalate`); a check that cannot be written is said so in the review summary |
+
+The measure is the review rounds: findings per round of a class that is already in the catalogue
+should fall to zero. A class that keeps coming back after it was catalogued means its question or
+triggers are wrong — fix the class, not only the code.
+

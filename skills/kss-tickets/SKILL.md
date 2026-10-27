@@ -230,6 +230,12 @@ Every ticket carries all of these, self-contained:
   runs the suite once, after integration
 - **Project rules that apply** — one line each, only the rules this ticket actually triggers,
   quoted from `standards`
+- **Failure checks** (DESIGN.md §27; `none` when `.kss/scripts/lessons.mjs` is absent) — the output of
+  `node .kss/scripts/lessons.mjs match --text-file <the ticket draft> --paths <its Write paths> --md`,
+  each class followed by the plan's **Failure model** answer that applies to this ticket. Every
+  class listed gets a case in **Tests** that would fail if the answer were not true (a crash
+  between the write and the send, two passes at once, the event replayed), or `n/a — <why>`.
+  None match → `none`.
 - **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run any test,
   lint, build or tsc command
 - **Report back** — the fixed shape, **≤1.5k chars**. It is exactly the shape the executor agents

@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "classes": [
+    {
+      "id": "BC-01",
+      "title": "Side effect lost after the commit",
+      "signature": "A row is written, then an alert, email, event or webhook is sent outside that write. A transient failure or a crash between the two loses the send for good: the next pass sees the row and skips.",
+      "question": "If the process dies, or the send fails, right after the database commit — what sends it again, and what stops it being sent twice?",
+      "triggers": [
+        "kafka",
+        "publish(",
+        "produce(",
+        "emit(",
+        "sendMail",
+        "notify",
+        "slack",
+        "webhook",
+        "outbox",
+        "/\\balert/"
+      ],
+      "paths": [],
+      "gate": "plan",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-02",
+      "title": "Check-then-write race between instances",
+      "signature": "Two replicas, cron passes or handlers read the same state, both decide, both write. Nothing makes the read and the write atomic, so one overwrites, duplicates or clears the other.",
+      "question": "Two instances run this at the same time on the same rows: what does each one read, which write wins, and is the check atomic with the write?",
+      "triggers": [
+        "@Cron",
+        "@Interval",
+        "setInterval",
+        "scheduler",
+        "replica",
+        "upsert",
+        "updateMany",
+        "P2002",
+        "findFirst",
+        "$transaction",
+        "lock"
+      ],
+      "paths": [],
+      "gate": "plan",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-03",
+      "title": "Replayed or out-of-order event trusted",
+      "signature": "A handler acts on the fields of the event it received. The same event redelivered, a late one, or one older than the stored state, makes it repeat or undo work.",
+      "question": "This event arrives twice, late, or after a newer one: does the handler decide from the stored state, or from the event in hand?",
+      "triggers": [
+        "@EventPattern",
+        "@MessagePattern",
+        "consumer",
+        "redeliver",
+        "idempot",
+        "webhook",
+        "handleEvent",
+        "onMessage"
+      ],
+      "paths": [],
+      "gate": "review",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-04",
+      "title": "Unindexed or unbounded query",
+      "signature": "A new predicate has no index behind it, fetches the whole history and filters in memory, or runs once per item of a loop.",
+      "question": "Which index serves this predicate, how many rows does it touch when the table is 100× larger, and does it run once per item of a loop?",
+      "triggers": [
+        "findMany",
+        "aggregate(",
+        "groupBy",
+        "schema.prisma",
+        "createIndex",
+        "/for \\(const .* of .*\\)[\\s\\S]{0,200}await/"
+      ],
+      "paths": [],
+      "gate": "review",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-05",
+      "title": "Money passed through a float",
+      "signature": "An amount travels from storage to output through a JS number — Number(), parseFloat, arithmetic on number — and loses cents beyond 2^53 or to rounding.",
+      "question": "Can any amount pass through a JS number (Number(), parseFloat, + on number) between storage and output?",
+      "triggers": [
+        "amount",
+        "cents",
+        "balance",
+        "/\\bfees?\\b/",
+        "total",
+        "parseFloat",
+        "toFixed"
+      ],
+      "paths": [],
+      "gate": "review",
+      "check": {
+        "pattern": "\\b(Number|parseFloat)\\((?=[^)]*(amount|cents|balance|fee|total))",
+        "paths": [],
+        "message": "An amount converted to a JS number — keep it bigint or decimal text end to end."
+      },
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-06",
+      "title": "The same fact rendered twice disagrees",
+      "signature": "Two outputs show the same fact — PDF and CSV, a summary and its table, the screen and the export — through two code paths. A fix lands in one and not the other.",
+      "question": "Which other output shows this same fact? Does it go through the same function, and does a test assert that the two agree?",
+      "triggers": [
+        "csv",
+        "pdf",
+        "export",
+        "statement",
+        "summary",
+        "render"
+      ],
+      "paths": [],
+      "gate": "tickets",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-07",
+      "title": "Feature not wired end to end",
+      "signature": "Each layer works in its own tests, but the value the FR names never reaches the person: a producer omits a field, a page keeps old copy, a test injects the value the real path never sets.",
+      "question": "Follow the value from where it is produced to the screen or message the FR names: is every hop populated on the real path, not one a test injects?",
+      "triggers": [
+        "page.tsx",
+        "route",
+        "label",
+        "copy",
+        "actionRef",
+        "i18n"
+      ],
+      "paths": [],
+      "gate": "tickets",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-08",
+      "title": "Tenant scope left to the caller",
+      "signature": "A query reads or writes rows of one tenant but the owner predicate lives in a caller's earlier check. A new caller, or a race, crosses tenants.",
+      "question": "Is the owner's scope inside this very query, or does it rely on a check made earlier by the caller?",
+      "triggers": [
+        "merchantId",
+        "tenant",
+        "merchantScope",
+        "organizationId",
+        "ownerId"
+      ],
+      "paths": [],
+      "gate": "review",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-09",
+      "title": "Calendar date read as an instant",
+      "signature": "A YYYY-MM-DD value is parsed as midnight UTC and shown in a negative-offset zone as the day before, or an instant is cut to a date in the wrong zone.",
+      "question": "Is this value a calendar date or an instant — parsed in which zone, shown in which?",
+      "triggers": [
+        "timezone",
+        "moment(",
+        "dayjs",
+        "new Date(",
+        "toISOString",
+        "YYYY-MM-DD",
+        "Intl.DateTimeFormat"
+      ],
+      "paths": [],
+      "gate": "review",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    },
+    {
+      "id": "BC-10",
+      "title": "Producer deployed before its consumer",
+      "signature": "A new message kind, template or enum value is emitted while an old consumer is still running during a rollout; the old one drops it as unknown and the producer marks it done.",
+      "question": "During a rolling deploy, the old consumer receives the new message: does it fail, drop it, or leave it to retry?",
+      "triggers": [
+        "template",
+        "topic",
+        "enum",
+        ".proto",
+        "eventType",
+        "migration"
+      ],
+      "paths": [],
+      "gate": "plan",
+      "check": null,
+      "origin": "kss",
+      "cases": []
+    }
+  ]
+}
