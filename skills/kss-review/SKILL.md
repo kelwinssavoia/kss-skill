@@ -1,7 +1,7 @@
 ---
 name: kss-review
 description: Work a feature's PR review round — collect comments and CI findings, triage them, fix, dispute, answer or defer, reply on the threads; optionally watch the PR and run rounds automatically. Run it after kss-execute has opened the PR.
-argument-hint: NNN-<slug> [--watch | --done] [--app]
+argument-hint: NNN-<slug> [--watch | --loop | --done] [--app]
 disable-model-invocation: true
 ---
 
@@ -46,7 +46,7 @@ phase may well run in the other one (DESIGN.md §19).
 With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
 `.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
 the terminal), and publish every turn that waits for the person with
-`node .kss/scripts/ask.mjs post` before printing it: the triage table (step 3) is an `approve` whose
+`node .kss/scripts/ask.mjs post` before printing it: the triage table (step 3) is an `approve` (never under `--loop`) whose
 draft is the table written to `notes/review-<round>-triage.md` — an edited table replaces yours; a
 held item, a `question` finding opened for a mini grill and a dispute's reply text are a `question`
 each; `--done`'s `Finish the review anyway?` is a `confirm`. Precondition 2 publishes a `handoff`
@@ -103,11 +103,16 @@ this phase keeps up to date afterwards.
    last round, each with file, line, author and text. Nothing new → print
    `No new findings since <cursor>.` and go to the summary (or re-arm the watcher).
 2. **Map.** Spawn one `explorer` (read-only) to map each finding back to the ticket and the
-   FRs it came from. Return ≤1.5k chars.
+   FRs it came from, and — given `node .kss/scripts/lessons.mjs list --md` — to name its **bug
+   class** (DESIGN.md §27): an existing `BC-NN`, or a new one proposed as title, signature (what
+   the bug looks like, not this instance), the one question that would have caught it, and
+   triggers (words or paths a change exposed to it contains). It also lists the **siblings**:
+   other places in `git diff origin/<base_branch>...HEAD` with the same class, `file:line` each.
+   Return ≤2k chars.
 3. **Triage.** Print the table and take **one turn** to confirm it:
 
    ```
-   | ID | Where | From | Class | Proposal |
+   | ID | Where | From | Class | Bug class | Proposal |
    ```
 
    | Class | Handling |
@@ -120,8 +125,19 @@ this phase keeps up to date afterwards.
 4. **A finding that contradicts a decision is never a silent fix.** Either dispute it citing the
    `D-`/`AD-`, or have the user override it via `kss-review-decisions` and *then* fix it, with
    the spec marked for revision in the README.
-5. **Fix.** Write the fix tickets into `05-tickets/`, numbered after the last existing ticket,
-   grouped by file; they run through `kss-execute NNN-slug --ticket NN …`, where every gate applies
+5. **Learn** (DESIGN.md §27; skip, saying so, when `.kss/scripts/lessons.mjs` is absent). Once the triage is confirmed, every `fix` finding is a confirmed bug:
+   file it with `node .kss/scripts/lessons.mjs add '<json>'` — `{"class":"BC-NN","case":{…}}`
+   for an existing class, or the new class's fields plus its `case`. The case is
+   `{"feature":"NNN-slug","pr":"#<n>","rv":"RV-NN","file":"<path>","summary":"<one line>","phase":"<plan|tickets|review|test — the first gate that should have caught it>"}`.
+   Disputes, questions, deferrals and findings the reviewer was wrong about are **not** filed —
+   only bugs. When `add` answers `"escalate": true` (a class confirmed three times with no
+   automatic check), write the check now if a regex on added lines can see the class —
+   `{"class":"BC-NN","check":{"pattern":"…","paths":[…],"message":"…"}}` — test it with
+   `lessons.mjs check --diff origin/<base_branch>...HEAD` (it must hit this feature's instances),
+   and otherwise say so in the summary. `.kss/lessons.json` is committed with the round.
+6. **Fix.** A fix ticket fixes the **class**, not the line: the finding **and every sibling** the
+   explorer listed, and its **Failure checks** name the class. Write the fix tickets into
+   `05-tickets/`, numbered after the last existing ticket, grouped by file; they run through `kss-execute NNN-slug --ticket NN …`, where every gate applies
    — report shape, commit order (test committed first), reviewer verdict, integration; the tests
    themselves run only in the coordinator's single run after integration.
    **The loop back** (DESIGN.md §3.9): `kss-execute` is started by the user only — its skill cannot
@@ -131,12 +147,13 @@ this phase keeps up to date afterwards.
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then review`
    and print that line as the last line of the turn. The board and kss-desktop show it as the next
    step; when execute ends, its Next returns to `review` by itself.
-   The round ends there; steps 6–7 run in the next round, once the fix tickets are integrated.
-6. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
+   The round ends there; steps 7–8 run in the next round, once the fix tickets are integrated.
+7. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.
-7. **Push** only to the **PR branch**, never to `base_branch`.
-8. **Record the round** in `07-review.md` and go to the summary.
+8. **Push** only to the **PR branch**, never to `base_branch`.
+9. **Record the round** in `07-review.md` — its Bug class column, the siblings and the Lessons
+   line — and go to the summary.
 
 ### `--watch`
 
@@ -144,7 +161,7 @@ this phase keeps up to date afterwards.
    never a polling subagent — on a `gh` command that reports new comment count, CI conclusions and
    the PR state, every **5 minutes** by default (configurable). Say once, in one line, what that
    costs the session here: a harness with a real monitor frees it, a harness without one holds it.
-2. On a change: wake, run one round (steps 1–8), push to the PR branch, reply, and **re-arm**.
+2. On a change: wake, run one round (steps 1–9), push to the PR branch, reply, and **re-arm**.
 3. **Autopilot per `review_autopilot`** (DESIGN.md §15.1). It governs what a round may do
    *without asking*; it never changes the triage itself:
    - `fixes` (the default) — **executed and pushed without asking:** every `fix` that touches no
@@ -162,6 +179,40 @@ this phase keeps up to date afterwards.
    then it stops and reports. The watcher **dies with the session**; re-running `kss-review
    NNN-slug --watch` resumes from the cursor.
 5. The board shows `watching`, and so does the status line where the harness has one.
+
+### `--loop`
+
+kss-desktop's **Loop review** (DESIGN.md §26.9): the app runs review → execute → review … and you
+run the rounds **without asking anything in between**, until the reviewer has nothing left to say.
+A PR reviewer that re-reviews on every push (Codex) is what answers each round.
+
+1. **No triage turn.** The table is printed and recorded but not confirmed — no `approve` ask, no
+   waiting. What a round does without asking is `review_autopilot` exactly as under `--watch`
+   (`none` counts as `fixes` here: the person switched the loop on). A fix contradicting a `D-` or
+   an `AD-` is still **held**, never shipped.
+2. **A round with fix tickets** ends as step 6 says — tickets written and committed, Next set to the
+   loop back to execute — and the turn ends there: the app starts execute, and after it this phase
+   again with `--loop`.
+3. **A round after integrated fixes** runs steps 7–9 — reply, resolve, push — and then **waits**.
+   So does a round with nothing to fix and nothing new.
+4. **Wait** for the reviewer's next pass, in the **foreground** — never a background monitor or a
+   background command: an ended turn reads as a stopped phase, and the app would start you again.
+   Set `.kss/current` `review.loop` to `{"state":"waiting","until":"<push time + 20 min>","at":"<now>"}`,
+   then run, as many times as it answers `pending`,
+   `node .kss/scripts/review.mjs wait --pr <number> --since <push time ISO> --until <same until>`
+   (one call polls the PR every minute for up to 9 minutes, then answers `pending`). Its answer:
+   - `new` — comments, a review or a failed check came after the push: run the next round (step 1
+     of the Procedure) in this same turn, with `review.loop.state` `"running"`.
+   - `clean` — the reviewer said it found nothing: **stop** with reason `clean`.
+   - `timeout` — 20 minutes since the push and nothing changed: **stop** with reason `timeout`.
+   - `closed` — merged or closed: **stop** with reason `closed`, and close the run as the Summary says.
+   - `error` — `gh` failed three times in a row: stop with reason `gh: <error>`.
+5. **Stop** also when the round cap (10) is reached (reason `cap`), or when a round left only held
+   items and nothing to fix (reason `held`, the ids listed). To stop: set `review.loop` to
+   `{"state":"stopped","reason":"<reason>","at":"<now>"}`, then the Summary as after any round —
+   Next stays on `kss-review`; only the person finishes the review.
+6. A `blocked` stop (an unreadable input, `gh` not authenticated) is still an ask: the loop waits on
+   it like any phase does.
 
 ## Outputs
 
@@ -233,6 +284,7 @@ Print exactly:
 Review done · NNN-slug · round <N>
 Findings: <n> — fix <n> · dispute <n> · question <n> · defer <n>
 Fix tickets: <ids | none>
+Lessons: +<n> cases (<BC ids>) · new <BC ids | none> · automate <BC ids | none>
 Threads: <n> resolved · <n> open
 CI: <conclusion>
 Cost: <line rendered from metrics.jsonl>
@@ -247,7 +299,7 @@ The `Next:` line is **never written by hand**: it is the output of
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review`, with `--done` only in a
 `--done` run (DESIGN.md §3.9). After a round it stays on `kss-review` (with the finish command in
 parentheses); after `--done` it is the track's next — `kss-docs-tech` on L, the end of the track
-on S and M. A round that opened fix tickets writes the loop back (step 5) instead. Copy it
+on S and M. A round that opened fix tickets writes the loop back (step 6) instead. Copy it
 verbatim into the summary and into the README header.
 
 Print `Cost: n/a` when `metrics.jsonl` does not exist. While watching, replace the last two lines
@@ -258,6 +310,8 @@ with `Watching PR <url> — next check in <n>m.`
 - The cursor lives in `.kss/current.review.cursor` as `{last_comment_at, last_ci_at}`; a round only
   collects what is newer than it.
 - Every finding, CI failures included, becomes an `RV-NN`.
+- Every confirmed bug (`fix`) is filed in `.kss/lessons.json` under a bug class, and its fix ticket
+  covers every sibling of that class in the feature — never only the line the reviewer pointed at.
 - An explorer maps findings to tickets and FRs — you do not read diffs.
 - The triage table is printed and confirmed in exactly one turn.
 - A finding contradicting a decision is disputed or overridden, never silently fixed.
@@ -268,6 +322,9 @@ with `Watching PR <url> — next check in <n>m.`
 - Push only to the PR branch, never to `base_branch`.
 - `--watch` uses whatever the adapter names, never a polling subagent; it dies with the session and
   resumes from the cursor.
+- `--loop` never asks between rounds; it polls the PR in the foreground with `review.mjs wait`, every
+  minute, and stops on a clean pass, 20 minutes without a change, a closed PR, held items only, or
+  the cap — always recording why in `review.loop`.
 - Autopilot: `fixes` executes uncontested fixes and CI failures and holds the drafted replies;
   `all` also posts those replies; `none` stops at the triage table. **No mode ever ships a fix that
   contradicts a `D-` or an `AD-`**; held items are reported by ID.

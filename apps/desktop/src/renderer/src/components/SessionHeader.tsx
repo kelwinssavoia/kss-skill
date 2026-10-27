@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { finishOf, thenOf } from '../../../shared/board.ts'
 import { optionalOf } from '../../../shared/commands.ts'
-import { NEEDS_YOU, phaseStatus, STATUS_LABEL } from '../../../shared/status.ts'
+import type { ReviewLoop } from '../../../shared/loop.ts'
+import { NEEDS_YOU, nextRunning, phaseStatus, STATUS_LABEL } from '../../../shared/status.ts'
 import type { Harness, ProjectInfo, Session, TerminalInfo } from '../../../shared/types.ts'
 import type { Run, View } from '../App.tsx'
 import { exitCode } from '../terminals.ts'
@@ -22,6 +23,9 @@ type Props = {
   onToggleBoard: (() => void) | null
   sidebarShown: boolean
   onToggleSidebar: () => void
+  /** The review loop of this session, when the person switched it on (or it just stopped). */
+  loop: ReviewLoop | null
+  onLoop: (on: boolean) => void
 }
 
 function HarnessToggle({ value, onChange, project }: { value: Harness; onChange: (h: Harness) => void; project: ProjectInfo }) {
@@ -33,7 +37,7 @@ function HarnessToggle({ value, onChange, project }: { value: Harness; onChange:
   )
 }
 
-export function SessionHeader({ project, session, next, harnessFor, onRun, view, onView, terms, launching, boardShown, onToggleBoard, sidebarShown, onToggleSidebar }: Props) {
+export function SessionHeader({ project, session, next, harnessFor, onRun, view, onView, terms, launching, boardShown, onToggleBoard, sidebarShown, onToggleSidebar, loop, onLoop }: Props) {
   const b = session.board
   const [harness, setHarness] = useState<Harness>(next ? harnessFor(next.phase) : 'claude-code')
   useEffect(() => setHarness(next ? harnessFor(next.phase) : project.harnesses.claude ? 'claude-code' : 'codex'), [next?.phase, session.path])
@@ -51,10 +55,12 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
   const currentLive = !!current && exitCode(current.id) === null
   const status = b ? phaseStatus({ board: b, live: currentLive, exited: !!current && !currentLive, launching: launching?.phase === b.phase, answered: answeredSince(session.path) }) : null
   const nextTerm = next ? phaseTerm(terms, next.phase) : null
-  const nextLive = !!nextTerm && exitCode(nextTerm.id) === null
+  // A live terminal of the Next phase may be its previous run, idle (review ↔ execute): Run replaces it.
+  const nextIdle = !!nextTerm && exitCode(nextTerm.id) === null
+  const nextLive = !!next && nextRunning(b, next.phase, nextIdle)
   const nextStarting = !!next && launching?.phase === next.phase
   const followView: View = next?.phase === 'execute' ? 'execute' : next?.phase === 'qa' ? 'qa' : 'phase'
-  const runNext = (replace = false) => next && onRun({ kind: 'phase', harness, phase: next.phase, args: next.args, replace })
+  const runNext = (replace = nextIdle) => next && onRun({ kind: 'phase', harness, phase: next.phase, args: next.args, replace })
 
   const tab = (v: View, label: string, title: string, key: number, extra?: React.ReactNode) => (
     <button className={view === v ? 'on' : ''} onClick={() => onView(v)} title={`${title} — ⌘${key}`}>
@@ -97,6 +103,17 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
                   ▶ {isResume ? 'Resume' : 'Run'} {next.phase}
                 </button>
               )}
+              {(next.phase === 'review' || then === 'review' || (loop && !loop.stopped)) && (
+                <button
+                  className={loop && !loop.stopped ? 'on loop' : 'loop'}
+                  title={loop && !loop.stopped
+                    ? 'Stop the loop — the phase running now finishes its turn'
+                    : 'Review → execute → review without asking, until the reviewer finds nothing new or 20 minutes pass without a new review'}
+                  onClick={() => onLoop(!(loop && !loop.stopped))}
+                >
+                  ⟳ {loop && !loop.stopped ? `Looping${b?.review?.loop?.state === 'waiting' ? ' · waiting for the reviewer' : ''}` : 'Loop review'}
+                </button>
+              )}
               {then && <span className="dim" title={`When ${next.phase} ends, the Next line returns to ${then}`}>then {then}</span>}
               {finish && (
                 <button
@@ -112,6 +129,11 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
                 </button>
               )}
             </div>
+          )}
+          {loop?.stopped && (
+            <span className="loop-stopped dim" title="The review loop ended">
+              Loop stopped — {loop.stopped} <button className="icon" onClick={() => onLoop(false)} title="Dismiss">×</button>
+            </span>
           )}
           <div className="tools">
             <button className="ghost" disabled={!project.harnesses.claude} onClick={() => onRun({ kind: 'chat', harness: 'claude-code' })} title="A plain Claude Code chat in this worktree">+ Claude</button>

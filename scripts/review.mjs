@@ -2,6 +2,12 @@
 // review.mjs — which reviewer a finished ticket gets.
 //
 //   node .kss/scripts/review.mjs pick '<json>'    {depth?, harness?, domain_risk?} → the reviewer to spawn
+//   node .kss/scripts/review.mjs wait --pr <n|url> --since <ISO> [--until <ISO>] [--every 60] [--slice 540]
+//       kss-review --loop: poll the PR every `--every` seconds for what came after `--since` (the
+//       push), and print one JSON line once there is an answer — `new` (comments, a review, a failed
+//       check: run a round), `clean` (the reviewer says it found nothing), `closed` (merged or
+//       closed), `timeout` (`--until` passed with nothing). A call returns `pending` after `--slice`
+//       seconds so it fits one foreground command; call it again with the same `--until`.
 //
 // `kss-execute` reviews every finished ticket. The depth is `full` unless the coordinator was told
 // `light` — by Jev's `review_depth` classification, gated at `jev.reasoning.confidence`. This script
@@ -14,6 +20,7 @@
 // broken config never buys a cheaper review than the default. Exit 0 carries the JSON answer,
 // exit 1 is a usage error.
 
+import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULTS, loadLocalConfig } from './jev.mjs'
@@ -127,6 +134,111 @@ export function pickReviewer(input, cfg) {
   return result
 }
 
+// ---------------------------------------------------------------- wait (kss-review --loop)
+
+/** What a reviewer writes when its pass found nothing — Codex's `Didn't find any major issues`, and kin. */
+export const CLEAN = [
+  /didn[’']?t find any (major |new )?(issues|problems|bugs)/i,
+  /no (major |new )?(issues|problems|bugs) (were )?found/i,
+  /found no (major |new )?(issues|problems|bugs)/i,
+  /nothing (new )?to (report|flag)/i,
+]
+
+const FAILED = new Set(['FAILURE', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'])
+
+const login = (a) => (a && (a.login ?? a.name)) || null
+const after = (at, since) => !!at && Date.parse(at) > Date.parse(since)
+const cut = (t, n = 200) => { const x = String(t ?? '').replace(/\s+/g, ' ').trim(); return x.length > n ? `${x.slice(0, n - 1)}…` : x }
+
+/**
+ * Pure: one snapshot of the PR → what happened after `since`, leaving out the person's own replies
+ * (`me`, the account kss-review replies with). A finding — an inline comment, a review or comment
+ * that is not a clean pass, a failed check — outweighs a clean pass in the same snapshot.
+ */
+export function classify(snap, { since, me }) {
+  if (snap.state === 'MERGED' || snap.state === 'CLOSED') return { outcome: 'closed', events: [] }
+  const theirs = (who) => who && who !== me
+  const events = []
+  let clean = false
+  for (const c of snap.comments ?? []) {
+    if (!after(c.createdAt, since) || !theirs(login(c.author))) continue
+    if (CLEAN.some((r) => r.test(c.body ?? ''))) clean = true
+    else events.push({ kind: 'comment', author: login(c.author), at: c.createdAt, text: cut(c.body) })
+  }
+  for (const r of snap.reviews ?? []) {
+    if (!after(r.submittedAt, since) || !theirs(login(r.author))) continue
+    if (r.state === 'APPROVED' || CLEAN.some((x) => x.test(r.body ?? ''))) clean = true
+    // A review with no body only carries its inline comments, counted below.
+    else if ((r.body ?? '').trim()) events.push({ kind: 'review', author: login(r.author), at: r.submittedAt, text: cut(r.body) })
+  }
+  for (const c of snap.inline ?? []) {
+    if (!after(c.created_at, since) || !theirs(login(c.user))) continue
+    events.push({ kind: 'inline', author: login(c.user), at: c.created_at, text: cut(`${c.path ?? ''}${c.line ? `:${c.line}` : ''} ${c.body ?? ''}`) })
+  }
+  for (const k of snap.checks ?? []) {
+    if (FAILED.has(k.conclusion) && after(k.completedAt, since)) events.push({ kind: 'check', author: null, at: k.completedAt, text: cut(`${k.name ?? k.context ?? 'check'} ${k.conclusion}`) })
+  }
+  // A thumbs-up from a bot on the PR is how some reviewers say "looked, nothing found".
+  for (const x of snap.reactions ?? []) {
+    if (x.content === '+1' && after(x.created_at, since) && /\[bot\]$/.test(login(x.user) ?? '')) clean = true
+  }
+  if (events.length) return { outcome: 'new', events }
+  return { outcome: clean ? 'clean' : null, events: [] }
+}
+
+function gh(args, cwd) {
+  const r = spawnSync('gh', args, { cwd, encoding: 'utf8' })
+  if (r.status !== 0) throw new Error((r.stderr || r.error?.message || `gh ${args[0]} failed`).trim())
+  return r.stdout
+}
+
+const pages = (text) => JSON.parse(`[${text.trim().replace(/\]\s*\[/g, '],[')}]`).flat()
+
+function snapshot(pr, cwd) {
+  const view = JSON.parse(gh(['pr', 'view', pr, '--json', 'number,state,comments,reviews,statusCheckRollup'], cwd))
+  const n = view.number
+  return {
+    state: view.state,
+    comments: view.comments,
+    reviews: view.reviews,
+    checks: view.statusCheckRollup,
+    inline: pages(gh(['api', '--paginate', `repos/{owner}/{repo}/pulls/${n}/comments?per_page=100`], cwd)),
+    reactions: pages(gh(['api', '--paginate', `repos/{owner}/{repo}/issues/${n}/reactions?per_page=100`], cwd)),
+  }
+}
+
+const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+function wait(flags, cwd) {
+  const { pr, since } = flags
+  if (!pr || !since || !Number.isFinite(Date.parse(since))) out({ error: 'wait needs --pr and --since <ISO>' }, 1)
+  const until = flags.until ?? new Date(Date.now() + 20 * 60_000).toISOString()
+  const every = Math.max(10, Number(flags.every ?? 60)) * 1000
+  const stopAt = Date.now() + Math.max(30, Number(flags.slice ?? 540)) * 1000
+  let me = null
+  try {
+    me = gh(['api', 'user', '--jq', '.login'], cwd).trim()
+  } catch {
+    /* unknown: no reply is left out, at worst a round finds nothing new */
+  }
+  let checks = 0
+  let failures = 0
+  for (;;) {
+    checks++
+    try {
+      const r = classify(snapshot(pr, cwd), { since, me })
+      failures = 0
+      if (r.outcome) out({ ...r, pr, since, until, checks, at: new Date().toISOString() })
+    } catch (e) {
+      if (++failures >= 3) out({ outcome: 'error', error: e.message, pr, since, until, checks }, 2)
+    }
+    const now = Date.now()
+    if (now >= Date.parse(until)) out({ outcome: 'timeout', events: [], pr, since, until, checks, at: new Date(now).toISOString() })
+    if (now + every > stopAt) out({ outcome: 'pending', events: [], pr, since, until, checks, at: new Date(now).toISOString() })
+    pause(Math.min(every, Math.max(0, Date.parse(until) - now)))
+  }
+}
+
 // ---------------------------------------------------------------- CLI
 
 function out(obj, code = 0) {
@@ -135,6 +247,7 @@ function out(obj, code = 0) {
 }
 
 function usage() {
+  process.stderr.write('usage: review.mjs wait --pr <n|url> --since <ISO> [--until <ISO>] [--every 60] [--slice 540] [--cwd <dir>]\n')
   process.stderr.write("usage: review.mjs pick '{\"depth\":\"full|light\",\"harness\":\"claude-code|codex\",\"domain_risk\":[…]}' [--cwd <dir>]\n")
   process.exit(1)
 }
@@ -145,6 +258,11 @@ function main() {
   const cwd = i !== -1 && argv[i + 1] ? argv[i + 1] : process.cwd()
   const rest = i === -1 ? argv : argv.filter((a, k) => !(k === i || k === i + 1))
   const [cmd, json] = rest
+  if (cmd === 'wait') {
+    const flags = {}
+    for (let k = 1; k < rest.length; k++) if (rest[k].startsWith('--')) flags[rest[k].slice(2)] = rest[++k]
+    return wait(flags, cwd)
+  }
   if (cmd !== 'pick') usage()
 
   let input = {}

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { parseNext } from '../../shared/commands.ts'
+import { loopStep, type ReviewLoop } from '../../shared/loop.ts'
+import { phaseStatus } from '../../shared/status.ts'
 import type { Harness, Prefs, ProjectInfo, Session, TerminalInfo, TerminalSpec } from '../../shared/types.ts'
 import { api } from './api.ts'
+import { answeredSince, phaseTerm } from './components/Attention.tsx'
 import { Board } from './components/Board.tsx'
 import { ExecutePanel } from './components/ExecutePanel.tsx'
 import { Handoff, type Flow } from './components/Handoff.tsx'
@@ -46,6 +49,8 @@ export function App() {
   const [reportPhase, setReportPhase] = useState<Record<string, string | null>>({})
   const [launching, setLaunching] = useState<Record<string, Launch>>({})
   const [flows, setFlows] = useState<Record<string, Flow[]>>(() => load('flows', {}))
+  // Review loops are not remembered across runs of the app: one left on must not start phases by itself.
+  const [loops, setLoops] = useState<Record<string, ReviewLoop>>({})
   const [layout, setLayout] = useState<{ sidebar: boolean; board: boolean }>(() => load('layout', { sidebar: true, board: true }))
   // The report each session had when first seen; a newer one means a phase just finished.
   const seenReports = useRef(new Map<string, number>())
@@ -197,6 +202,40 @@ export function App() {
     return () => clearTimeout(t)
   }, [flows, returnNow])
 
+  // The review loop (DESIGN.md §26): each time the board moves, carry its Next line on — execute after
+  // a round that opened fix tickets, the next round after an execute — without asking, until the
+  // review itself says the reviewer is done, or the person switches it off.
+  const looped = useRef(new Map<string, string>())
+  useEffect(() => {
+    for (const [path, loop] of Object.entries(loops)) {
+      if (loop.stopped || launching[path]) continue
+      const b = sessions.find(s => s.path === path)?.board ?? null
+      const term = b ? phaseTerm(terms.filter(t => t.cwd === path), b.phase) : null
+      const live = !!term && exitCode(term.id) === null
+      const status = b ? phaseStatus({ board: b, live, exited: !!term && !live, launching: false, answered: answeredSince(path) }) : null
+      const step = loopStep(b, loop, status === 'working' || status === 'starting')
+      if (!step) continue
+      if ('stop' in step) {
+        setLoops(l => ({ ...l, [path]: { ...loop, stopped: step.stop } }))
+        continue
+      }
+      // One launch per board state: the same Next is not run twice while the first one starts.
+      const key = [step.run.phase, b!.phase, b!.phaseStartedAt, b!.next, b!.waiting?.since].join('|')
+      if (looped.current.get(path) === key) continue
+      looped.current.set(path, key)
+      setLoops(l => ({ ...l, [path]: { ...loop, launches: loop.launches + 1 } }))
+      void run({ kind: 'phase', harness: harnessFor(step.run.phase), phase: step.run.phase, args: step.run.args, replace: true }, path, { focus: false })
+    }
+  }, [sessions, terms, loops, launching, run, harnessFor])
+
+  const setLoop = useCallback((path: string, on: boolean) => {
+    looped.current.delete(path)
+    setLoops(l => {
+      const { [path]: _, ...rest } = l
+      return on ? { ...rest, [path]: { startedAt: Date.now(), launches: 0, stopped: null } } : rest
+    })
+  }, [])
+
   // An edge case tried in the feature's simulator, sent to an agent that checks it against the code.
   const onScenario = useCallback(
     (sc: Scenario) => {
@@ -297,6 +336,8 @@ export function App() {
             onToggleBoard={session.board ? () => setLayout(l => ({ ...l, board: !l.board })) : null}
             sidebarShown={layout.sidebar}
             onToggleSidebar={() => setLayout(l => ({ ...l, sidebar: !l.sidebar }))}
+            loop={loops[session.path] ?? null}
+            onLoop={on => setLoop(session.path, on)}
           />
         )}
         {session && stack.length > 0 && <Handoff flow={stack[stack.length - 1]!} onNow={() => returnNow(session.path)} onCancel={() => cancelFlow(session.path)} />}
@@ -311,7 +352,7 @@ export function App() {
           empty={session ? <EmptyTerminals session={session} project={project} onRun={run} harnessFor={harnessFor} /> : null}
           shown={view === 'terminals'}
         />
-        {session && <PhasePanel project={project} session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} launching={isLaunching(session.board?.phase ?? launching[session.path]?.phase ?? null)} visible={view === 'phase'} onError={fail} />}
+        {session && <PhasePanel project={project} session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} launching={isLaunching(session.board?.phase ?? launching[session.path]?.phase ?? null)} starting={launching[session.path]?.phase ?? null} visible={view === 'phase'} onError={fail} />}
         {session && <ExecutePanel session={session} terms={sessionTerms} visible={view === 'execute'} onInspect={setInspecting} onRun={run} harnessFor={harnessFor} onError={fail} />}
         {session && <QaPanel session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} visible={view === 'qa'} />}
         {session && <ReportPanel session={session} phase={view === 'feature' ? 'feature' : reportPhase[session.path] ?? null} visible={view === 'feature' || view === 'report'} mode={view === 'feature' ? 'feature' : 'report'} onScenario={onScenario} />}

@@ -3,7 +3,7 @@
 
 import type { KssBoard } from '../../../../mods/kss-ui/types/index.d.ts'
 
-export type { KssAsk, KssAskLogEntry, KssBoard, KssTicket, KssPhase, KssLogEntry, KssProgress, KssWaiting } from '../../../../mods/kss-ui/types/index.d.ts'
+export type { KssAsk, KssAskLogEntry, KssBoard, KssTicket, KssPhase, KssLogEntry, KssProgress, KssReviewLoop, KssWaiting } from '../../../../mods/kss-ui/types/index.d.ts'
 
 export type Harness = 'claude-code' | 'codex'
 

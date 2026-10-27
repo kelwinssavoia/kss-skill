@@ -206,7 +206,24 @@ this phase keeps up to date afterwards.
 9. **Record git stats** for each integrated ticket: append a `kind: "git"` line to
    `<features_root>/NNN-slug/metrics.jsonl` with `git: { files, added, deleted, commits }` from
    `git diff --shortstat` and `git rev-list --count` on the merged range.
-10. **Finish.** When every ticket is `integrated`, **you run the whole suite yourself, exactly
+10. **Finish.** When every ticket is `integrated`, **sweep the feature first** (DESIGN.md §27;
+    skipped, and logged as such, when `.kss/scripts/lessons.mjs` is absent) —
+    the reviewers saw one ticket each; what crosses tickets (two renderers of one fact, a producer
+    and the screen it feeds, a race between two tickets' code) is only visible in the whole diff:
+    - `node .kss/scripts/lessons.mjs check --diff origin/<base_branch>...HEAD` runs the project's
+      automatic checks; every hit is a finding.
+    - Spawn **one** `reviewer` (depth `full`) on the whole feature diff
+      (`git diff origin/<base_branch>...HEAD`) with the classes
+      `node .kss/scripts/lessons.mjs match --diff origin/<base_branch>...HEAD --md` returns, the
+      plan's **Failure model** and the FR list — not one ticket's Requirements: it checks only
+      check 6 (Failure checks) and the cross-ticket wiring, and returns the usual verdict.
+    - Findings go back to the ticket that owns each file, exactly as suite failures do below (same
+      worktree or a fresh one, the finding pasted in, the reviewer again, integrate). **One sweep
+      round per run**: a finding still open after it is listed in `06-execution.md` and the PR body
+      as `Sweep: open — <BC-NN> <file>:<line>`, never silently dropped. Log the sweep
+      (`sweep · n findings · classes …`).
+
+    Then **you run the whole suite yourself, exactly
     once** — no agent runs tests at any other moment (60 subagents once ran 250 test rounds in a
     single feature and saturated the machine). The run is **the project's own full-suite
     command** — the one `standards` or the package manifest names — plus its lint, build and

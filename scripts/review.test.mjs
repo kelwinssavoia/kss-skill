@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { DEFAULTS, deepMerge } from './jev.mjs'
-import { REVIEWER_AGENTS, pickReviewer } from './review.mjs'
+import { REVIEWER_AGENTS, classify, pickReviewer } from './review.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, 'review.mjs')
@@ -197,4 +197,48 @@ test('every reviewer agent ships: file, frontmatter pair, read-only tools, the s
     assert.equal(body(t), body(base), `${name} carries the kss-reviewer brief verbatim`)
     assert.ok(plugin.agents.includes(`./agents/${name}.md`), `plugin.json lists ${name}`)
   }
+})
+
+// ---------------------------------------------------------------- wait (kss-review --loop)
+
+const SINCE = '2026-10-27T12:00:00Z'
+const ME = 'kelwin'
+const bot = { login: 'chatgpt-codex-connector[bot]' }
+
+test('classify: a reviewer that found nothing ends the loop clean', () => {
+  const snap = { state: 'OPEN', comments: [{ author: bot, createdAt: '2026-10-27T12:04:00Z', body: "Codex Review: Didn't find any major issues. Keep them coming!" }] }
+  assert.deepEqual(classify(snap, { since: SINCE, me: ME }), { outcome: 'clean', events: [] })
+  assert.equal(classify({ state: 'OPEN', reviews: [{ author: { login: 'ana' }, submittedAt: '2026-10-27T12:05:00Z', state: 'APPROVED', body: '' }] }, { since: SINCE, me: ME }).outcome, 'clean')
+  assert.equal(classify({ state: 'OPEN', reactions: [{ content: '+1', user: bot, created_at: '2026-10-27T12:05:00Z' }] }, { since: SINCE, me: ME }).outcome, 'clean')
+})
+
+test('classify: new inline comments, reviews and failed checks are a round to run — and outweigh a clean pass', () => {
+  const snap = {
+    state: 'OPEN',
+    reviews: [{ author: bot, submittedAt: '2026-10-27T12:06:00Z', state: 'COMMENTED', body: '' }],
+    inline: [{ user: bot, created_at: '2026-10-27T12:06:00Z', path: 'src/a.ts', line: 12, body: 'P1 Badge: tenant filter missing' }],
+    checks: [{ name: 'ci', conclusion: 'FAILURE', completedAt: '2026-10-27T12:07:00Z' }],
+    comments: [{ author: bot, createdAt: '2026-10-27T12:06:00Z', body: "Didn't find any major issues" }],
+  }
+  const r = classify(snap, { since: SINCE, me: ME })
+  assert.equal(r.outcome, 'new')
+  assert.deepEqual(r.events.map((e) => e.kind), ['inline', 'check'])
+  assert.match(r.events[0].text, /^src\/a\.ts:12 P1/)
+})
+
+test('classify: what came before the push, and the person’s own replies, are not news', () => {
+  const snap = {
+    state: 'OPEN',
+    comments: [{ author: { login: ME }, createdAt: '2026-10-27T12:03:00Z', body: 'Fixed in abc123' }],
+    inline: [{ user: bot, created_at: '2026-10-27T11:50:00Z', body: 'old finding' }],
+    reactions: [{ content: '+1', user: { login: 'ana' }, created_at: '2026-10-27T12:05:00Z' }],
+  }
+  assert.deepEqual(classify(snap, { since: SINCE, me: ME }), { outcome: null, events: [] })
+  assert.equal(classify({ state: 'MERGED' }, { since: SINCE, me: ME }).outcome, 'closed')
+})
+
+test('wait: refuses to run without --pr and --since', () => {
+  const r = spawnSync(process.execPath, [SCRIPT, 'wait', '--pr', '12'], { encoding: 'utf8' })
+  assert.equal(r.status, 1)
+  assert.match(r.stdout, /wait needs --pr and --since/)
 })

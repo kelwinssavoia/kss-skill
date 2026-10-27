@@ -118,7 +118,18 @@ this phase keeps up to date afterwards.
      "reuse before create" checklist and every `create` row is measured against it.
    - **Test plan** — per seam: the spec files, the case names, and the empty and forbidden cases
      the rules demand.
-   - **Risks and rollout**.
+   - **Failure model** (DESIGN.md §27; without `.kss/scripts/lessons.mjs`, answer the starter
+     classes of `.kss/templates/lessons.json`, or say `Run kss-init again for lessons`) — how this feature fails, decided now rather than found
+     by the PR reviewer one finding at a time. Run
+     `node .kss/scripts/lessons.mjs match --text-file <the draft so far> --paths <File map paths> --md`
+     and answer **each class it returns** for this feature in one or two lines: the mechanism
+     (transaction, outbox, delivery marker retried each pass, conditional update, index name,
+     bigint end to end, one shared renderer…), or `n/a — <why this feature is not exposed>`. A
+     class confirmed in this project before (`confirmed n×`) is never answered `n/a` without the
+     reason naming the code that makes it impossible. An answer that needs a product or
+     architecture choice is asked as in step 4. The tickets copy these answers as Failure checks.
+   - **Risks and rollout** — including the order services deploy in when one emits something
+     another must understand.
 
 5. **New dependencies — one turn each, never skipped.** For every proposed dependency print:
 
@@ -234,7 +245,8 @@ final context size, not what it consumed.
   money questions.** Maximum five explorers in parallel; group the questions when there are more.
 - **Every `create` in the File map is justified against Reuse**, naming what was considered.
 - **Every new dependency gets its own confirmation turn.** Never batched, never assumed.
-- Every section of the plan traces to an FR or a decision; an item citing neither is removed.
+- Every section of the plan traces to an FR, a decision or a bug class (`BC-NN`, the Failure
+  model); an item citing none of them is removed.
 - Contracts are specified on **both** sides plus the audit spec — one-sided shapes are how fields
   vanish silently on the wire.
 - Write **only** `04-plan.md`, its `notes/` files, the Plan block of `README.md`, the `D-`/`DF-`

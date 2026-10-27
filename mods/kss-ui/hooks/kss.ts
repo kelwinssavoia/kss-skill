@@ -2,7 +2,7 @@
 // `.kss/config.md` and the feature README. Nothing here touches `$`, so the tests drive it directly.
 // The tracks mirror scripts/next.mjs (DESIGN.md §3.9), the one place that owns them.
 
-import type { KssAsk, KssAskLogEntry, KssBoard, KssGrill, KssGrillCategory, KssGrillOption, KssGrillQuestion, KssLogEntry, KssPending, KssPhase, KssProgress, KssQuota, KssQuotaWindow, KssTicket } from '../types'
+import type { KssAsk, KssAskLogEntry, KssBoard, KssGrill, KssGrillCategory, KssGrillOption, KssGrillQuestion, KssLogEntry, KssPending, KssPhase, KssProgress, KssQuota, KssQuotaWindow, KssReviewLoop, KssTicket } from '../types'
 
 export const ORDER = [
   'clarify', 'investigate', 'review-decisions', 'grill', 'spec', 'plan', 'tickets', 'execute',
@@ -270,6 +270,14 @@ function askLog(v: unknown): KssAskLogEntry[] {
   })
 }
 
+const LOOP_STATES = ['running', 'waiting', 'stopped'] as const
+
+function reviewLoop(v: unknown): KssReviewLoop | null {
+  const l = obj(v)
+  const state = l && LOOP_STATES.find(s => s === l.state)
+  return state ? { state, reason: str(l!.reason), until: str(l!.until), at: str(l!.at) } : null
+}
+
 export type KssExtra = { graph?: string | null; log?: string | null }
 
 export function buildBoard(current: Json | null, readme: KssReadme, tokens: number | null, extra: KssExtra = {}): KssBoard | null {
@@ -301,7 +309,7 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     last: execution && str(execution.last),
     explorers: explorers ? { running: num(explorers.running) ?? 0, returned: num(explorers.returned) ?? 0 } : null,
     grill: phase === 'grill' ? grill(current) : null,
-    review: review ? { round: num(review.round), watching: str(review.watching) } : null,
+    review: review ? { round: num(review.round), watching: str(review.watching), loop: reviewLoop(review.loop) } : null,
     turns: session && num(session.turns),
     ctx: session && num(session.ctx),
     tokens,

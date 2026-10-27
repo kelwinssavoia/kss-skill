@@ -78,6 +78,12 @@ export type KssAsk = {
 /** Set by the Stop hook when the main agent ends its turn, cleared when the person answers. */
 export type KssWaiting = { since: string; last: string | null }
 
+/**
+ * kss-review --loop (DESIGN.md §26): `waiting` while it polls the PR for the reviewer's next pass,
+ * `stopped` once it ended — `reason` says why (`clean`, `timeout`, `closed`, `cap`, `held`).
+ */
+export type KssReviewLoop = { state: 'running' | 'waiting' | 'stopped'; reason: string | null; until: string | null; at: string | null }
+
 export type KssProgress = { step: number | null; total: number | null; label: string }
 
 export type KssAskLogEntry = { id: string; phase: string | null; title: string | null; answer: string | null; at: string | null }
@@ -99,7 +105,7 @@ export type KssBoard = {
   last: string | null
   explorers: { running: number; returned: number } | null
   grill: KssGrill | null
-  review: { round: number | null; watching: string | null } | null
+  review: { round: number | null; watching: string | null; loop: KssReviewLoop | null } | null
   turns: number | null
   ctx: number | null
   tokens: number | null
