@@ -18,8 +18,9 @@ import { executeOverview } from './execute.ts'
 import { inspectTicket } from './inspector.ts'
 import { loadPrefs, savePrefs, withBypass, withHarness, withRecent } from './prefs.ts'
 import { createSession, detectProject, featureOfBranch, projectWorktrees, removeSession } from './project.ts'
+import { appArgs, phasePrompt } from '../shared/commands.ts'
 import { createTerminal, killAll, killTerminal, liveTerminals, resizeTerminal, setConversation, submitTerminal, terminalsIn, writeTerminal } from './pty.ts'
-import { claudeConversationExists, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
+import { claudeConversationExists, findClaudeConversation, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
 const POLL_MS = 1500
 
@@ -36,6 +37,8 @@ const ICON = join(import.meta.dirname, '../../build/icon.png')
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json')
 const tabsFile = () => join(app.getPath('userData'), 'tabs.json')
 const CODEX_WATCH_MS = 15 * 60_000
+/** How long a CLI gets to process `/clear` before the phase command is typed. */
+const CLEAR_MS = 1500
 
 const isCli = (spec: TerminalSpec) => spec.kind === 'chat' || spec.kind === 'phase'
 
@@ -49,11 +52,16 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
   if (spec.kind === 'phase' && spec.phase && !spec.resume) {
     const running = terminalsIn(spec.cwd).filter(t => t.kind === 'phase' && t.phase === spec.phase)
     if (running.length && !spec.replace) throw new Error(`${spec.phase} is already running in this session — open its view, or restart it`)
-    // The replaced process's conversation is superseded: it is not resumed with the session.
+    // Run again: the phase's own terminal takes it, after a /clear — unless it is a restart, or the
+    // person switched harness.
+    const reuse = spec.restart ? undefined : [...running].reverse().find(t => t.harness === (spec.harness ?? 'claude-code'))
+    // A replaced process's conversation is superseded: it is not resumed with the session.
     for (const t of running) {
+      if (t === reuse) continue
       killTerminal(t.id)
       if (t.tab) saveTabs(tabsFile(), withoutTab(loadTabs(tabsFile()), t.tab))
     }
+    if (reuse) return rerun(reuse, spec)
   }
   // The bypass flag comes from the prefs here, so every chat and phase follows the switch.
   spec = { ...spec, bypass: loadPrefs(prefsFile()).bypass }
@@ -81,17 +89,44 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
     }
     saveTabs(tabsFile(), withTab(loadTabs(tabsFile()), tab))
   }
-  if (harness === 'codex' && !info.conversation) watchCodex(info, started)
+  if (harness === 'codex' && !info.conversation) watchConversation(info, started)
   return info
 }
 
-function watchCodex(info: TerminalInfo, since: number) {
+/**
+ * A phase run again in its own terminal: `/clear` (`/new` in Codex) for a fresh context, then the
+ * phase command. The conversation the clear opens is found as Codex's always are.
+ */
+function rerun(t: TerminalInfo, spec: TerminalSpec): TerminalInfo {
+  const h = t.harness ?? 'claude-code'
+  const started = Date.now()
+  submitTerminal(t.id, h === 'codex' ? '/new' : '/clear')
+  const prompt = phasePrompt(h, spec.phase!, appArgs(spec.phase!, spec.args ?? ''))
+  setTimeout(() => {
+    try {
+      submitTerminal(t.id, prompt)
+    } catch {
+      /* exited meanwhile: its exit shows in the tab */
+    }
+  }, CLEAR_MS)
+  const info = setConversation(t.id, null) ?? t
+  if (t.tab) {
+    const store = loadTabs(tabsFile())
+    const saved = Object.values(store).flat().find(x => x.key === t.tab)
+    if (saved) saveTabs(tabsFile(), withTab(store, { ...saved, args: spec.args ?? null, conversation: null }))
+  }
+  watchConversation(info, started)
+  return info
+}
+
+function watchConversation(info: TerminalInfo, since: number) {
+  const find = info.harness === 'codex' ? findCodexConversation : findClaudeConversation
   const timer = setInterval(() => {
     const live = liveTerminals().find(t => t.id === info.id)
     if (!live || Date.now() - since > CODEX_WATCH_MS) return clearInterval(timer)
     const store = loadTabs(tabsFile())
     const claimed = new Set([...Object.values(store).flat().map(t => t.conversation), ...liveTerminals().map(t => t.conversation)].filter((x): x is string => !!x))
-    const id = findCodexConversation(info.cwd, since, claimed)
+    const id = find(info.cwd, since, claimed)
     if (!id) return
     clearInterval(timer)
     if (info.tab) saveTabs(tabsFile(), withConversation(store, info.tab, id))

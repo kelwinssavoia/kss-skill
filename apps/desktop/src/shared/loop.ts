@@ -26,11 +26,18 @@ export type LoopStep = { run: { phase: string; args: string } } | { stop: string
 
 type Board = Pick<KssBoard, 'phase' | 'next' | 'isClosed' | 'isPhaseFinished' | 'ask' | 'review'>
 
+/** The review's process: alive at all, and working a turn right now. */
+export type ReviewProcess = { live: boolean; working: boolean }
+
 /**
- * What the loop does with the board as it stands: run the Next phase, stop, or wait. `busy` is true
- * while a review process is still working its round (or polling the PR).
+ * What the loop does with the board as it stands: run the Next phase, stop, or wait.
+ *
+ * A review the loop started keeps its process while it lives. Its turn may end with nothing for the
+ * person — waiting on a subagent it sent to the background, or on the PR — and that reads as
+ * waiting; starting it again would kill it mid-round (and the next one, and the next). The loop
+ * starts review only after an execute, when the switch was just turned on, or once the process is gone.
  */
-export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | 'launches'>, busy: boolean): LoopStep {
+export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | 'launches'>, review: ReviewProcess): LoopStep {
   if (!b) return null
   if (b.isClosed) return { stop: 'the review was finished' }
   const mark = b.review?.loop
@@ -43,8 +50,8 @@ export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | '
   if (loop.launches >= LOOP_MAX_LAUNCHES) return { stop: WHY.cap! }
   if (next.phase === 'execute') return b.phase !== 'execute' && thenOf(b.next) === 'review' ? { run: next } : null
   if (next.phase !== 'review') return { stop: `the track moved on to ${next.phase}` }
-  // After an execute the review is due; in review itself, only once its process stopped working.
-  if (b.phase !== 'execute' && busy) return null
+  // After an execute the review is due; in review itself, only when nothing of it runs.
+  if (b.phase !== 'execute' && (review.working || (review.live && loop.launches > 0))) return null
   return { run: { phase: 'review', args: withLoop(next.args) } }
 }
 

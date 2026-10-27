@@ -54,8 +54,13 @@ export type TerminalSpec = {
   prompt?: string
   /** For a chat: read-only — Claude Code in plan mode, Codex in its read-only sandbox; never bypass. */
   readonly?: boolean
-  /** Start even though this phase already runs here: the running one is closed first (a handoff's return). */
+  /**
+   * Start even though this phase already runs here (Run again, a handoff's return, the review loop):
+   * its terminal takes the command after a `/clear` — one tab per phase, a fresh context each run.
+   */
   replace?: boolean
+  /** With `replace`: close the running process and start a new one instead (⟲ restart). */
+  restart?: boolean
   /** A title shown instead of the derived one. */
   title?: string
   /** Resume this conversation (`claude --resume <id>`, `codex resume <id>`) instead of starting one. */

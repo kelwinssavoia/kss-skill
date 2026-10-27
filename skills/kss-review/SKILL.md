@@ -213,6 +213,10 @@ A PR reviewer that re-reviews on every push (Codex) is what answers each round.
    Next stays on `kss-review`; only the person finishes the review.
 6. A `blocked` stop (an unreadable input, `gh` not authenticated) is still an ask: the loop waits on
    it like any phase does.
+7. **Never end a turn while work is out.** Spawn every subagent (the mapping explorer included) in
+   the foreground and wait for it in the same turn — never in the background. A turn that ends
+   reads to the app as a stopped review; the app waits on it, but nothing moves the round on until
+   someone answers.
 
 ## Outputs
 
