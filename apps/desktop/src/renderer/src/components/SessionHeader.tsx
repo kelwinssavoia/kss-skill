@@ -153,6 +153,7 @@ export function SessionHeader({ project, session, next, harnessFor, onRun, view,
           {tab('feature', 'Feature', 'The feature as it stands: product, rules, code, decisions, simulators', 4)}
           {session.report && tab('report', 'Reports', 'What each phase did and every decision, explained', 5)}
           {tab('qa', 'QA', 'Blind acceptance test: plan, environment, scenarios, live browser', 6)}
+          {tab('sessions', 'Sessions', 'Every Claude and Codex conversation this feature used, as a timeline — reopen any of them', 7)}
         </nav>
       )}
     </header>
