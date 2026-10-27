@@ -41,7 +41,9 @@ export function Attention({ session, board, terms, onResume, onAskAbout, onError
   const [, tick] = useState(0)
   useEffect(() => setText(''), [board.waiting?.since])
 
-  if (board.ask && board.ask.kind !== 'handoff') return <AskCard session={session} ask={board.ask} live={live} onResume={onResume} onAskAbout={onAskAbout} onError={onError} />
+  // A phase the app closed while it waited (idle) still has its conversation: answering reopens it.
+  const reachable = live || !!term?.conversation
+  if (board.ask && board.ask.kind !== 'handoff') return <AskCard session={session} ask={board.ask} live={reachable} onResume={onResume} onAskAbout={onAskAbout} onError={onError} />
 
   const status = phaseStatus({ board, live, exited: !!term && !live, launching: false, answered: answeredSince(session) })
   if (status !== 'waiting' || !board.waiting) return null

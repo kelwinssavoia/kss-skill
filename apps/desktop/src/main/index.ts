@@ -6,8 +6,10 @@ import { join } from 'node:path'
 
 import { app, BrowserWindow, dialog, ipcMain, Notification, protocol, shell } from 'electron'
 
-import type { AskAnswer, Harness, KssAsk, ProjectInfo, SavedTab, Session, TerminalInfo, TerminalSpec } from '../shared/types.ts'
+import type { AskAnswer, EndReason, Harness, KssAsk, ProjectInfo, SavedTab, Session, TerminalInfo, TerminalSpec } from '../shared/types.ts'
 import { answerLine, clearAsk, readDraft, writeAnswer } from './ask.ts'
+import { closeReason, lastWriteOf } from './closer.ts'
+import { conversationsOf, loadEndings, saveEndings, withEnded, withOpened } from './history.ts'
 import { phaseOverview } from './phase.ts'
 import { LiveView } from './live.ts'
 import { reportOf, reportUrl, SCHEME, servable } from './report.ts'
@@ -19,7 +21,7 @@ import { inspectTicket } from './inspector.ts'
 import { loadPrefs, savePrefs, withBypass, withHarness, withRecent } from './prefs.ts'
 import { createSession, detectProject, featureOfBranch, projectWorktrees, removeSession } from './project.ts'
 import { appArgs, phasePrompt } from '../shared/commands.ts'
-import { createTerminal, killAll, killTerminal, liveTerminals, resizeTerminal, setConversation, submitTerminal, terminalsIn, writeTerminal } from './pty.ts'
+import { activityOf, createTerminal, killAll, killTerminal, liveTerminals, patchInfo, resizeTerminal, setConversation, submitTerminal, terminalsIn, writeTerminal } from './pty.ts'
 import { claudeConversationExists, findClaudeConversation, findCodexConversation, loadTabs, saveTabs, withConversation, withoutSession, withoutTab, withTab } from './tabs.ts'
 
 const POLL_MS = 1500
@@ -36,9 +38,29 @@ let timer: NodeJS.Timeout | null = null
 const ICON = join(import.meta.dirname, '../../build/icon.png')
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json')
 const tabsFile = () => join(app.getPath('userData'), 'tabs.json')
+const endingsFile = () => join(app.getPath('userData'), 'conversations.json')
 const CODEX_WATCH_MS = 15 * 60_000
 /** How long a CLI gets to process `/clear` before the phase command is typed. */
 const CLEAR_MS = 1500
+/** How long a resumed CLI gets to come up before an answer is typed into it. */
+const RESUME_MS = 5000
+
+const recordOpened = (t: TerminalInfo, args: string | null) =>
+  t.conversation && saveEndings(endingsFile(), withOpened(loadEndings(endingsFile()), { ...t, conversation: t.conversation, args }, new Date().toISOString()))
+const recordEnded = (conversation: string | null, end: EndReason) => saveEndings(endingsFile(), withEnded(loadEndings(endingsFile()), conversation, end, new Date().toISOString()))
+
+/**
+ * Closes a terminal the app decided to close, saying why: its conversation is recorded as ended,
+ * dropped from the tabs a reopened session resumes (the Sessions view reopens it), and the tab
+ * learns why before the exit arrives.
+ */
+function endTerminal(t: TerminalInfo, end: EndReason) {
+  recordEnded(t.conversation, end)
+  if (t.tab) saveTabs(tabsFile(), withoutTab(loadTabs(tabsFile()), t.tab))
+  const info = patchInfo(t.id, { closed: end })
+  if (info) send('term:info', info)
+  killTerminal(t.id)
+}
 
 const isCli = (spec: TerminalSpec) => spec.kind === 'chat' || spec.kind === 'phase'
 
@@ -56,11 +78,7 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
     // person switched harness.
     const reuse = spec.restart ? undefined : [...running].reverse().find(t => t.harness === (spec.harness ?? 'claude-code'))
     // A replaced process's conversation is superseded: it is not resumed with the session.
-    for (const t of running) {
-      if (t === reuse) continue
-      killTerminal(t.id)
-      if (t.tab) saveTabs(tabsFile(), withoutTab(loadTabs(tabsFile()), t.tab))
-    }
+    for (const t of running) if (t !== reuse) endTerminal(t, 'restarted')
     if (reuse) return rerun(reuse, spec)
   }
   // The bypass flag comes from the prefs here, so every chat and phase follows the switch.
@@ -72,9 +90,17 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
     if (harness === 'claude-code' && !spec.resume) spec.sessionId = randomUUID()
   }
   const started = Date.now()
-  const info = createTerminal(spec, { data: (id, d) => send('term:data', id, d), exit: (id, code) => send('term:exit', id, code) })
+  const info = createTerminal(spec, {
+    data: (id, d) => send('term:data', id, d),
+    exit: (id, code, last) => {
+      recordEnded(last.conversation, 'exited')
+      send('term:exit', id, code)
+    },
+  })
   if (!isCli(spec)) return info
-  if (!spec.resume) {
+  recordOpened(info, spec.args ?? null)
+  // A new conversation, or one reopened from the Sessions view, is a tab the session resumes.
+  if (!spec.resume || !Object.values(loadTabs(tabsFile())).flat().some(t => t.key === spec.tab)) {
     const tab: SavedTab = {
       key: spec.tab!,
       cwd: spec.cwd,
@@ -84,7 +110,7 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
       args: spec.args ?? null,
       title: spec.title ?? null,
       readonly: !!spec.readonly,
-      conversation: info.conversation,
+      conversation: info.conversation ?? spec.resume ?? null,
       createdAt: new Date(started).toISOString(),
     }
     saveTabs(tabsFile(), withTab(loadTabs(tabsFile()), tab))
@@ -100,6 +126,8 @@ function openTerminal(spec: TerminalSpec): TerminalInfo {
 function rerun(t: TerminalInfo, spec: TerminalSpec): TerminalInfo {
   const h = t.harness ?? 'claude-code'
   const started = Date.now()
+  // The conversation before the clear stays listed in the Sessions view, ended by the clear.
+  recordEnded(t.conversation, 'cleared')
   submitTerminal(t.id, h === 'codex' ? '/new' : '/clear')
   const prompt = phasePrompt(h, spec.phase!, appArgs(spec.phase!, spec.args ?? ''))
   setTimeout(() => {
@@ -131,8 +159,24 @@ function watchConversation(info: TerminalInfo, since: number) {
     clearInterval(timer)
     if (info.tab) saveTabs(tabsFile(), withConversation(store, info.tab, id))
     const next = setConversation(info.id, id)
-    if (next) send('term:info', next)
+    if (next) {
+      recordOpened(next, null)
+      send('term:info', next)
+    }
   }, 2000)
+}
+
+/**
+ * A phase the app closed while it waited on the person: its newest conversation is reopened, so an
+ * answer reaches the conversation that asked. Resolves once the CLI had time to come up.
+ */
+async function reopenPhase(session: string, phase: string | null): Promise<TerminalInfo | null> {
+  const last = [...conversationsOf(session, loadEndings(endingsFile()), liveTerminals())].reverse().find(c => c.kind === 'phase' && (!phase || c.phase === phase))
+  if (!last) return null
+  const info = openTerminal({ cwd: session, kind: 'phase', harness: last.harness, phase: last.phase ?? undefined, args: last.args ?? undefined, resume: last.id })
+  send('term:opened', info)
+  await new Promise(r => setTimeout(r, RESUME_MS))
+  return info
 }
 
 /** The session's saved conversations, resumed in new terminals unless one is already open. */
@@ -201,10 +245,23 @@ function notifyWaiting(list: Session[]) {
   if (process.platform === 'darwin') app.dock?.setBadge(count ? String(count) : '')
 }
 
+/** Closes what finished or sat idle (closer.ts); the person reopens it from its tab or the Sessions view. */
+function closeIdle(list: Session[]) {
+  const now = Date.now()
+  for (const t of liveTerminals()) {
+    const a = activityOf(t.id)
+    if (!a || t.closed) continue
+    const board = list.find(s => s.path === t.cwd)?.board ?? null
+    const why = closeReason(t, a, lastWriteOf(t), board, now)
+    if (why) endTerminal(t, why)
+  }
+}
+
 async function poll() {
   try {
     const list = await sessions()
     notifyWaiting(list)
+    closeIdle(list)
     const json = JSON.stringify(list)
     if (json !== lastSessions) {
       lastSessions = json
@@ -271,12 +328,18 @@ function handlers() {
     const term = [...liveTerminals()].reverse().find(t => t.cwd === session && t.kind === 'phase' && t.phase === phase) ?? null
     return phaseOverview(phase, s.featureDir, term, s.board?.phaseStartedAt ?? null)
   })
-  ipcMain.handle('ask:answer', (_e, session: string, ask: KssAsk, answer: AskAnswer) => {
-    const term = phaseTerminal(session, ask.phase)
+  ipcMain.handle('ask:answer', async (_e, session: string, ask: KssAsk, answer: AskAnswer) => {
+    const term = phaseTerminal(session, ask.phase) ?? (await reopenPhase(session, ask.phase))
     if (!term) throw new Error(`${ask.phase ?? 'the phase'} is not running in this session — resume it, then answer`)
     if (!ask.legacy) writeAnswer(session, ask, answer)
     submitTerminal(term.id, answerLine(ask, answer))
   })
+  ipcMain.handle('phase:reply', async (_e, session: string, phase: string, text: string) => {
+    const term = phaseTerminal(session, phase) ?? (await reopenPhase(session, phase))
+    if (!term) throw new Error(`${phase} has no conversation to reopen in this session`)
+    submitTerminal(term.id, text)
+  })
+  ipcMain.handle('history:list', (_e, session: string) => conversationsOf(session, loadEndings(endingsFile()), liveTerminals()))
   ipcMain.handle('ask:draft', (_e, session: string, path: string) => readDraft(session, path))
   ipcMain.handle('ask:clear', (_e, session: string) => clearAsk(session))
   ipcMain.handle('ticket:inspect', (_e, session: string, feature: string, id: string) => inspectTicket(session, featureDirOf(session, feature), feature, id))
@@ -297,6 +360,8 @@ function handlers() {
   ipcMain.on('term:resize', (_e, id: string, cols: number, rows: number) => resizeTerminal(id, cols, rows))
   // Closing a tab is the user's choice to drop its conversation from the session; quitting the app is not.
   ipcMain.handle('term:close', (_e, id: string, tab: string | null) => {
+    const t = liveTerminals().find(x => x.id === id)
+    if (t) recordEnded(t.conversation, 'closed')
     killTerminal(id)
     if (tab) saveTabs(tabsFile(), withoutTab(loadTabs(tabsFile()), tab))
   })

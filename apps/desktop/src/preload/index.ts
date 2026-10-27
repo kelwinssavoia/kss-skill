@@ -2,7 +2,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
-import type { AskAnswer, ExecOverview, Harness, KssAsk, PhaseOverview, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
+import type { AskAnswer, ConversationRow, ExecOverview, Harness, KssAsk, PhaseOverview, Prefs, ProjectInfo, QaFrame, QaInfo, Session, TerminalInfo, TerminalSpec, TicketInspection } from '../shared/types.ts'
 
 const on = <A extends unknown[]>(channel: string, fn: (...args: A) => void) => {
   const h = (_e: unknown, ...args: unknown[]) => fn(...(args as A))
@@ -32,6 +32,9 @@ const api = {
   close: (id: string, tab: string | null): Promise<void> => ipcRenderer.invoke('term:close', id, tab),
   submit: (id: string, text: string): Promise<void> => ipcRenderer.invoke('term:submit', id, text),
   restoreTabs: (session: string): Promise<TerminalInfo[]> => ipcRenderer.invoke('tabs:restore', session),
+  history: (session: string): Promise<ConversationRow[]> => ipcRenderer.invoke('history:list', session),
+  replyToPhase: (session: string, phase: string, text: string): Promise<void> => ipcRenderer.invoke('phase:reply', session, phase, text),
+  onTermOpened: (fn: (t: TerminalInfo) => void) => on('term:opened', fn),
   onTermInfo: (fn: (t: TerminalInfo) => void) => on('term:info', fn),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('shell:reveal', path),
   reportUrl: (file: string, version: number, phase: string | null): Promise<string | null> => ipcRenderer.invoke('report:url', file, version, phase),

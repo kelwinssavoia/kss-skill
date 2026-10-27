@@ -15,18 +15,20 @@ import { PhasePanel } from './components/PhasePanel.tsx'
 import { QaPanel } from './components/QaPanel.tsx'
 import { ReportPanel, scenarioPrompt, type Scenario } from './components/ReportPanel.tsx'
 import { SessionHeader } from './components/SessionHeader.tsx'
+import { SessionsPanel } from './components/SessionsPanel.tsx'
 import { Sidebar } from './components/Sidebar.tsx'
 import { TerminalTabs } from './components/TerminalTabs.tsx'
 import { Welcome } from './components/Welcome.tsx'
 import { load, save } from './store.ts'
 import { dispose, exitCode, onAnyExit } from './terminals.ts'
 
-export type View = 'terminals' | 'phase' | 'execute' | 'feature' | 'report' | 'qa'
+export type View = 'terminals' | 'phase' | 'execute' | 'feature' | 'report' | 'qa' | 'sessions'
 
-export const VIEWS: View[] = ['terminals', 'phase', 'execute', 'feature', 'report', 'qa']
+export const VIEWS: View[] = ['terminals', 'phase', 'execute', 'feature', 'report', 'qa', 'sessions']
 
 /** `focus: false` opens the terminal without making it the session's active tab. */
-export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string, opts?: { focus?: boolean }) => Promise<void>
+/** `focus: false` opens the terminal without making it the session's active tab; `replaces` drops that tab. */
+export type Run = (spec: Omit<TerminalSpec, 'cwd'>, cwd?: string, opts?: { focus?: boolean; replaces?: string }) => Promise<void>
 
 /** A phase the app just started, until it writes `.kss/current` itself. */
 type Launch = { phase: string; at: number }
@@ -66,7 +68,9 @@ export function App() {
     void api.project().then(async p => p && (setProject(p), setSessions(await api.sessions())))
     const offInfo = api.onTermInfo(info => setTerms(t => t.map(x => (x.id === info.id ? info : x))))
     const offSessions = api.onSessions(setSessions)
-    return () => (offInfo(), offSessions())
+    // A phase the app reopened by itself, to hand it an answer.
+    const offOpened = api.onTermOpened(info => setTerms(t => [...t.filter(x => x.id !== info.id), info]))
+    return () => (offInfo(), offSessions(), offOpened())
   }, [])
 
   // A session's saved conversations come back the first time it is shown in this run of the app.
@@ -136,8 +140,10 @@ export function App() {
       }
       try {
         const info = await api.createTerminal({ ...spec, cwd: where })
-        // A phase run again comes back in its own terminal (after a /clear); one it replaced is gone.
-        const gone = (x: TerminalInfo) => x.id !== info.id && isPhase && !!spec.replace && x.cwd === where && x.kind === 'phase' && x.phase === spec.phase
+        // A phase run again comes back in its own terminal (after a /clear); one it replaced, and
+        // its closed tabs, are gone — their conversations stay in the Sessions view.
+        const samePhase = (x: TerminalInfo) => isPhase && x.cwd === where && x.kind === 'phase' && x.phase === spec.phase && (!!spec.replace || exitCode(x.id) !== null)
+        const gone = (x: TerminalInfo) => x.id !== info.id && (x.id === opts?.replaces || samePhase(x))
         setTerms(t => {
           t.filter(gone).forEach(x => dispose(x.id))
           return [...t.filter(x => x.id !== info.id && !gone(x)), info]
@@ -233,6 +239,23 @@ export function App() {
     }
   }, [sessions, terms, loops, launching, run, harnessFor])
 
+  /** A closed chat or phase, reopened in its conversation; from its tab, or from the Sessions view. */
+  const reactivate = useCallback(
+    async (c: { id: string; kind: 'phase' | 'chat'; harness: Harness; phase: string | null; args?: string | null; title?: string | null; tab?: string | null; replaces?: string }, cwd: string) => {
+      const live = terms.find(t => t.cwd === cwd && t.conversation === c.id && exitCode(t.id) === null)
+      setViews(v => ({ ...v, [cwd]: 'terminals' }))
+      if (live) return setActive(a => ({ ...a, [cwd]: live.id }))
+      await run(
+        { kind: c.kind, harness: c.harness, phase: c.phase ?? undefined, args: c.args ?? undefined, title: c.kind === 'chat' ? c.title?.replace(/ ⚡$/, '') ?? undefined : undefined, resume: c.id, tab: c.tab ?? undefined },
+        cwd,
+        { replaces: c.replaces },
+      )
+      // A resumed phase is followed in its terminal, not the phase view.
+      setViews(v => ({ ...v, [cwd]: 'terminals' }))
+    },
+    [terms, run],
+  )
+
   const setLoop = useCallback((path: string, on: boolean) => {
     looped.current.delete(path)
     setLoops(l => {
@@ -254,14 +277,14 @@ export function App() {
   const view: View = (selected && views[selected]) || 'terminals'
   const setView = useCallback((v: View) => selected && setViews(x => ({ ...x, [selected]: v })), [selected])
 
-  // ⌘B the sidebar, ⌥⌘B the board, ⌘1…⌘6 the views.
+  // ⌘B the sidebar, ⌥⌘B the board, ⌘1…⌘7 the views.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if (!e.metaKey && !e.ctrlKey) return
       if (e.key.toLowerCase() === 'b') {
         e.preventDefault()
         setLayout(l => (e.altKey ? { ...l, board: !l.board } : { ...l, sidebar: !l.sidebar }))
-      } else if (/^[1-6]$/.test(e.key) && !e.altKey && !e.shiftKey) {
+      } else if (/^[1-7]$/.test(e.key) && !e.altKey && !e.shiftKey) {
         e.preventDefault()
         setView(VIEWS[Number(e.key) - 1]!)
       }
@@ -354,12 +377,14 @@ export function App() {
           onActivate={id => selected && setActive(a => ({ ...a, [selected]: id }))}
           onClose={close}
           onNewShell={() => run({ kind: 'shell' })}
+          onReactivate={t => session && reactivate({ id: t.conversation!, kind: t.kind === 'phase' ? 'phase' : 'chat', harness: t.harness ?? 'claude-code', phase: t.phase, title: t.title, tab: t.tab, replaces: t.id }, session.path)}
           empty={session ? <EmptyTerminals session={session} project={project} onRun={run} harnessFor={harnessFor} /> : null}
           shown={view === 'terminals'}
         />
         {session && <PhasePanel project={project} session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} launching={isLaunching(session.board?.phase ?? launching[session.path]?.phase ?? null)} starting={launching[session.path]?.phase ?? null} visible={view === 'phase'} onError={fail} />}
         {session && <ExecutePanel session={session} terms={sessionTerms} visible={view === 'execute'} onInspect={setInspecting} onRun={run} harnessFor={harnessFor} onError={fail} />}
         {session && <QaPanel session={session} terms={sessionTerms} onRun={run} harnessFor={harnessFor} visible={view === 'qa'} />}
+        {session && <SessionsPanel session={session} terms={sessionTerms} visible={view === 'sessions'} onOpen={c => reactivate(c, session.path)} />}
         {session && <ReportPanel session={session} phase={view === 'feature' ? 'feature' : reportPhase[session.path] ?? null} visible={view === 'feature' || view === 'report'} mode={view === 'feature' ? 'feature' : 'report'} onScenario={onScenario} />}
       </main>
       {showBoard && session?.board && <Board board={session.board} onInspect={setInspecting} onClose={() => setLayout(l => ({ ...l, board: false }))} />}

@@ -1697,6 +1697,30 @@ Messages the coordinator sends a running agent are shown as such, never as the a
 harness reminders are dropped. Every git read the app makes takes no optional locks, since it
 polls worktrees that agents are committing in.
 
+
+### 24.9 Closing what is done, and the conversations it leaves
+
+A Claude Code or Codex process holds hundreds of MB, and a session collects them: every phase,
+every chat. The app closes a CLI by itself (`main/closer.ts`, checked on every poll):
+
+- **finished** — a phase terminal whose phase the board shows finished (its Next moved on, or the
+  run closed), once nobody typed and its transcript was not written for 20 s;
+- **idle** — any chat or phase nobody typed into and whose transcript (or its subagents') was not
+  written for 5 minutes, provided its screen is still: a spinner means a tool runs or a subagent is
+  awaited.
+
+A closed tab says why and offers **↺ Reactivate** (`--resume` with its conversation id, same tab).
+An ask answered for a phase the app closed reopens its newest conversation first. A closed
+conversation is dropped from the tabs a reopened session resumes; it is not lost.
+
+**Sessions** (⌘7) lists every conversation the worktree ran, oldest first, as a timeline — read
+from the harnesses' own transcripts (`~/.claude/projects/<slug>/*.jsonl`, Codex rollouts whose
+`session_meta.cwd` is the worktree), so it includes what ran outside the app. A `/clear` opens a
+new transcript, so each round the review loop cleared stays listed with its own id. Each row: the
+phase and arguments from the command it started with (or a chat's first message), start, last
+write, and how it ended — `phase finished`, `closed idle`, `cleared`, `restarted`, `closed by you`,
+from `conversations.json` beside `prefs.json`. **Open** focuses it when it runs, or resumes it.
+
 ## 25. The explained report
 
 Every phase ends by explaining itself to a human: what it did and every decision it took or
