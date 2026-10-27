@@ -206,6 +206,33 @@
       "check": null,
       "origin": "kss",
       "cases": []
+    },
+    {
+      "id": "BC-14",
+      "title": "New state without its lifecycle",
+      "signature": "A fix or feature adds persisted state (a status, a marker or reservation row, a column) and handles only the transitions it was written for; every retry, failure, manual action and cleanup that also reaches that row is found later, one review round at a time.",
+      "question": "For each state this row can be in, which events can reach it — every writer, retry, terminal failure, manual retry, cleanup — and what invariant holds after each?",
+      "triggers": [
+        "status",
+        "state",
+        "reservation",
+        "reserved",
+        "released",
+        "marker",
+        "retry",
+        "FAILED",
+        "PENDING",
+        "enum",
+        "migration"
+      ],
+      "paths": [
+        "**/*.prisma",
+        "**/migrations/**"
+      ],
+      "gate": "plan",
+      "check": null,
+      "origin": "kss",
+      "cases": []
     }
   ]
 }

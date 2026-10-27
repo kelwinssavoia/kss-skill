@@ -13,6 +13,8 @@ PR {{pr_url}} · autopilot `{{review_autopilot}}` · cursor {{cursor}}
 
 **Siblings fixed with them:** {{RV-NN → file:line, …\|none}}
 
+**Mechanisms:** {{RV-NN → the state or flow it breaks, named as in earlier rounds, …}}
+
 **Lessons:** +{{n}} cases ({{BC-NN, …}}) · new classes {{BC-NN\|none}} · automate {{BC-NN\|none}}
 
 **Open after round {{N}}:** {{ids}}

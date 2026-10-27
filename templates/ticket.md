@@ -52,6 +52,16 @@
      answer true, and the Tests above carry a case for it. -->
 - **{{BC-NN}} · {{class_title}}** — {{question}} → {{the plan's answer for this ticket}}
 
+## Lifecycle
+<!-- Only when this ticket adds persisted state — a column, a status value, a table, a marker or
+     reservation row (BC-14); otherwise delete this section. Every state × every event that can
+     reach it: each writer, retry, failure, manual action and cleanup. A test per row. -->
+**Invariant:** {{what holds in every state, e.g. reserved credit + pulls = the batch's need}}
+
+| State | Event | Result | Test |
+| --- | --- | --- | --- |
+| {{state}} | {{event}} | {{new state and effects, or "impossible — why"}} | {{case name}} |
+
 ## Do not
 - Open `03-spec.md` or `04-plan.md` — everything you need is in this ticket.
 - Read whole files over 300 lines; use ranges.

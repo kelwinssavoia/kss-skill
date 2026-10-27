@@ -1953,6 +1953,16 @@ check run the next round; a clean pass (`Didn't find any major issues`, an appro
 off and say why. The loop is not remembered across runs of the app, and the review still ends only
 when the person finishes it.
 
+The loop also stops when it stops converging — reason `design: <mechanism>`. PR #387 (upcharge)
+ran seven rounds of P1s on one state machine, a Coverage-debit credit reservation: each fix added
+a state (reserved, released, replaced, supplemental) that answered the reported transition, and the
+reviewer found the next unhandled one in the code just pushed, while two decisions were overridden
+along the way. So the Map names each finding's **mechanism** — the persisted state or flow it
+breaks — the same way every round, and a round stops before writing tickets when a fix needed a
+`D-`/`AD-` override or its fixes share a mechanism with fixes in each of the two rounds before. It
+writes `notes/review-<n>-lifecycle.md` instead — states × events, what each pair does today, the
+invariant, the unhandled cells — and the person picks one lifecycle ticket or a new plan.
+
 ## 27. Lessons — every confirmed bug teaches the next feature
 
 ### 27.1 Why
@@ -1980,8 +1990,9 @@ classes in `templates/lessons.json`; a project's catalogue grows from its own PR
 | Where | What |
 | --- | --- |
 | kss-review, Map + Learn | the explorer names each finding's class (or proposes one) and its siblings in the feature diff; every `fix` is filed with `lessons.mjs add` — disputes, questions and deferrals never are |
-| kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line |
-| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why` |
+| kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line; a fix that adds persisted state carries its **Lifecycle** (states × events, the invariant, a test per row — BC-14) |
+| kss-review, Learn | a project without `lessons.mjs` gets it copied from the plugin, not skipped |
+| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why`; each new persisted state gets its lifecycle table |
 | kss-tickets | **Failure checks**: the classes the ticket is exposed to, with the plan's answer, and a test case per class |
 | reviewer (check 6) | answers each class's question from the diff — the ticket's list plus `match --diff`; it also checks every rule of `standards` the diff triggers, listed or not |
 | kss-execute, Finish | the **feature sweep** before the suite: `lessons.mjs check` and one reviewer on the whole feature diff, for what crosses tickets; one round, open items named in the PR body |
