@@ -19,7 +19,7 @@ export const IDLE_MS = 5 * 60_000
 const STILL_MS = 15_000
 const FINISHED_STILL_MS = 5_000
 
-type Board = Pick<KssBoard, 'phase' | 'isPhaseFinished' | 'isClosed'>
+type Board = Pick<KssBoard, 'phase' | 'isPhaseFinished' | 'isClosed'> & Partial<Pick<KssBoard, 'background'>>
 
 /**
  * Pure: why to close this terminal now, or null. `lastWrite` is the newest write to its transcript
@@ -28,6 +28,9 @@ type Board = Pick<KssBoard, 'phase' | 'isPhaseFinished' | 'isClosed'>
  */
 export function closeReason(t: Pick<TerminalInfo, 'kind' | 'phase'>, a: Activity, lastWrite: number, board: Board | null, now: number): Extract<EndReason, 'finished' | 'idle'> | null {
   if (t.kind !== 'phase' && t.kind !== 'chat') return null
+  // Its turn ended with a subagent or a command out in the background, which may write nothing for
+  // minutes (a test suite): it is not idle, and its phase is not done until that work comes back.
+  if (t.kind === 'phase' && board?.background && t.phase === board.phase) return null
   const quiet = now - Math.max(a.startedAt, a.lastInput, lastWrite)
   const still = now - a.lastOutput
   const done = t.kind === 'phase' && !!board && t.phase === board.phase && (board.isPhaseFinished || board.isClosed)

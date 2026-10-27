@@ -565,3 +565,4 @@ button.loop.on { background: var(--accent-soft); color: var(--accent); border-co
 .tl-prompt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); background: none; }
 .tl-id { font: 10px var(--mono); }
 @media (max-width: 720px) { .tl-row { grid-template-columns: 1fr; } }
+.background-note { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; border: 1px solid var(--line, #333); border-radius: 6px; font-size: 12px; color: var(--dim); }

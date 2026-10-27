@@ -77,6 +77,8 @@ export type KssAsk = {
 
 /** Set by the Stop hook when the main agent ends its turn, cleared when the person answers. */
 export type KssWaiting = { since: string; last: string | null }
+/** The main agent ended its turn with subagents or commands still out in the background: it wakes by itself. */
+export type KssBackground = { count: number; since: string; last: string | null }
 
 /**
  * kss-review --loop (DESIGN.md §26): `waiting` while it polls the PR for the reviewer's next pass,
@@ -114,6 +116,7 @@ export type KssBoard = {
   /** The ask on screen, when it belongs to the running phase (an older one is stale). */
   ask: KssAsk | null
   waiting: KssWaiting | null
+  background: KssBackground | null
   progress: KssProgress | null
   askLog: KssAskLogEntry[]
 }
