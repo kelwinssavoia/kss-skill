@@ -128,6 +128,10 @@ this phase keeps up to date afterwards.
      class confirmed in this project before (`confirmed n×`) is never answered `n/a` without the
      reason naming the code that makes it impossible. An answer that needs a product or
      architecture choice is asked as in step 4. The tickets copy these answers as Failure checks.
+     Every **new persisted state** in the File map (a column, a status value, a table, a marker
+     or reservation row) gets its lifecycle here: the states × events table — each writer, retry,
+     failure, manual action and cleanup that can reach it — and the invariant that holds in all
+     of them (BC-14). The tickets that write that state copy it as their Lifecycle.
    - **Risks and rollout** — including the order services deploy in when one emits something
      another must understand.
 

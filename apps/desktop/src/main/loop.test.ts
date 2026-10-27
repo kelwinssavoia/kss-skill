@@ -33,6 +33,8 @@ test('the loop stops on the review’s own stop mark, the end of the review, or 
   const stopped = (at: string, reason = 'clean') => board({ review: { round: 3, watching: null, loop: { state: 'stopped', reason, until: null, at } } })
   assert.deepEqual(loopStep(stopped('2026-10-27T12:30:00Z'), loop, idle), { stop: 'the reviewer found nothing new' })
   assert.deepEqual(loopStep(stopped('2026-10-27T12:30:00Z', 'timeout'), loop, idle), { stop: '20 minutes without a new review' })
+  assert.deepEqual(loopStep(stopped('2026-10-27T12:30:00Z', 'design: credit reservation'), loop, idle), { stop: 'the fixes stopped converging — the design needs a look (credit reservation)' })
+  assert.deepEqual(loopStep(stopped('2026-10-27T12:30:00Z', 'gh: rate limited'), loop, idle), { stop: 'gh: rate limited' })
   // A mark left by an earlier loop does not stop the one just switched on.
   assert.deepEqual(loopStep(stopped('2026-10-27T11:00:00Z'), loop, idle), { run: { phase: 'review', args: '073-x --loop' } })
   assert.deepEqual(loopStep(board({ isClosed: true }), loop, idle), { stop: 'the review was finished' })

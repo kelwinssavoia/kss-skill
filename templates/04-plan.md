@@ -73,6 +73,12 @@ Cap 20k chars. Shape, not code. Every item traces to an FR, a decision or a bug 
 | --- | --- | --- |
 | {{BC-NN}} · {{title}} | {{question}} | {{mechanism, or n/a — why}} |
 
+**Lifecycle of {{new persisted state}}** — invariant: {{what holds in every state}}
+
+| State | Event | Result |
+| --- | --- | --- |
+| {{state}} | {{writer, retry, failure, manual action or cleanup}} | {{new state and effects}} |
+
 ## Risks and rollout
 - **Risk:** {{risk}} — mitigation: {{mitigation}}
 - **Rollout:** {{rollout}}

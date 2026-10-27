@@ -20,6 +20,16 @@ const WHY: Record<string, string> = {
   closed: 'the PR was merged or closed',
   cap: 'ten rounds reached',
   held: 'a finding needs your decision',
+  design: 'the fixes stopped converging — the design needs a look',
+}
+
+/** `design: credit reservation` → the reason's sentence, with what follows the colon. */
+function whyOf(reason: string | null): string {
+  if (!reason) return 'the review stopped the loop'
+  const [key, ...rest] = reason.split(':')
+  const why = WHY[key!.trim()]
+  const detail = rest.join(':').trim()
+  return why ? (detail ? `${why} (${detail})` : why) : reason
 }
 
 export type LoopStep = { run: { phase: string; args: string } } | { stop: string } | null
@@ -42,7 +52,7 @@ export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | '
   if (b.isClosed) return { stop: 'the review was finished' }
   const mark = b.review?.loop
   if (b.phase === 'review' && mark?.state === 'stopped' && Date.parse(mark.at ?? '') >= loop.startedAt - 1000)
-    return { stop: (mark.reason && WHY[mark.reason]) ?? mark.reason ?? 'the review stopped the loop' }
+    return { stop: whyOf(mark.reason) }
   // A question, a held finding, a blocked run: the person answers in place, then the phase goes on.
   if (b.ask) return null
   const next = parseNext(b.next)
