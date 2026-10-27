@@ -10,6 +10,12 @@ const activity = (quietMs: number, stillMs = quietMs) => ({ startedAt: ago(IDLE_
 const phase = { kind: 'phase' as const, phase: 'review' }
 const board = (o: object = {}) => ({ phase: 'review', isPhaseFinished: false, isClosed: false, ...o })
 
+test('closeReason: a phase with background work out is never closed', () => {
+  const bg = { background: { count: 1, since: new Date(ago(IDLE_MS * 2)).toISOString(), last: null } }
+  assert.equal(closeReason(phase, activity(IDLE_MS * 2), 0, board({ ...bg, isPhaseFinished: true }), NOW), null)
+  assert.equal(closeReason(phase, activity(IDLE_MS * 2), 0, board(bg), NOW), null)
+})
+
 test('a phase whose Next moved on closes once it went quiet; a running one does not', () => {
   assert.equal(closeReason(phase, activity(FINISHED_QUIET_MS + 1000), 0, board({ isPhaseFinished: true }), NOW), 'finished')
   assert.equal(closeReason(phase, activity(FINISHED_QUIET_MS + 1000), ago(2000), board({ isPhaseFinished: true }), NOW), null)

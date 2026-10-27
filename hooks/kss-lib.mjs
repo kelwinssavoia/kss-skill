@@ -500,3 +500,44 @@ export function tailLastText(path, max = 700, tailBytes = 256 * 1024) {
     }
   }
 }
+
+/**
+ * Background work the main agent left out when its turn ended: subagents and shell commands it
+ * launched in the background whose `<task-notification>` has not come back. Claude Code wakes the
+ * agent when they finish, so such a Stop is not the phase waiting on the person (DESIGN.md §26).
+ * Matched on the raw transcript (JSON-escaped text); Codex has no background tasks — always 0.
+ */
+export function pendingBackground(text) {
+  if (typeof text !== 'string' || !text) return 0
+  const out = new Set()
+  for (const m of text.matchAll(/Async agent launched successfully[\s\S]{0,600}?agentId: ([A-Za-z0-9]+)/g)) out.add(m[1])
+  for (const m of text.matchAll(/running in background with ID: ([A-Za-z0-9]+)/g)) out.add(m[1])
+  for (const m of text.matchAll(/<task-id>([A-Za-z0-9]+)<\/task-id>[\s\S]{0,2000}?<status>([a-z_]+)<\/status>/g)) {
+    if (m[2] !== 'running' && m[2] !== 'in_progress') out.delete(m[1])
+  }
+  return out.size
+}
+
+/** `pendingBackground` of a transcript file; a huge one is read from its last 32 MB. */
+export function pendingBackgroundOf(path, maxBytes = 32 * 1024 * 1024) {
+  let fd
+  try {
+    if (!path || !existsSync(path)) return 0
+    fd = openSync(path, 'r')
+    const size = fstatSync(fd).size
+    const len = Math.min(size, maxBytes)
+    const buf = Buffer.alloc(len)
+    readSync(fd, buf, 0, len, size - len)
+    return pendingBackground(buf.toString('utf8'))
+  } catch {
+    return 0
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}

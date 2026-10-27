@@ -202,6 +202,7 @@ statusline falls back.
 | `ask_log` | `ask.mjs answer` | the last 30 answered asks, `{id, phase, title, answer, at}` |
 | `progress` | every longer phase, in app mode | `{step, total, label}` — where the phase is now; cleared with the summary |
 | `session.waiting` | the `Stop` hook; dropped by the `UserPromptSubmit` hook | `{since, last}` — the main session ended its turn and waits on the person; `last` is its last words |
+| `session.background` | the `Stop` hook, in place of `waiting` | `{count, since, last}` — the turn ended with subagents or commands still out in the background (§26.4) |
 | `explorers` | `kss-investigate`, `kss-plan`, `kss-grill` | always the object `{running, returned}` — the size of the fan-out and how many are back, for the statusline. Never a bare number; absent when nothing is out |
 
 Every key is optional; a reader treats a missing key as unknown and prints `—`. Writers merge
@@ -1863,6 +1864,14 @@ A skill can forget to publish. The `Stop` hook (`progress-stop.mjs`) therefore m
 session ends its turn, and the `UserPromptSubmit` hook (`progress-prompt.mjs`) drops the mark when
 the person answers. Any stop, published or not, shows in the app as "waiting on you", with what the
 agent said.
+
+A stop is not a wait when the turn ended with work still out: a subagent launched in the
+background, or a background shell command, whose `<task-notification>` has not come back — Claude
+Code wakes the agent itself when it does (an execute ending its turn while an agent writes the phase
+report, then committing and pushing). The hook counts those from the transcript (`pendingBackground`
+in `kss-lib.mjs`) and writes `session.background: {count, since, last}` instead of `waiting`. The app
+shows a quiet note ("waiting on a background agent"), not the ask card, and never closes that phase's
+CLI as finished or idle (§24.9) while it stands.
 
 ### 26.5 Progress
 

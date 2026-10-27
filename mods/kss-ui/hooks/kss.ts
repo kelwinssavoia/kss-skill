@@ -317,9 +317,16 @@ export function buildBoard(current: Json | null, readme: KssReadme, tokens: numb
     log: parseLog(extra.log ?? null),
     ask: isClosed ? null : askOf(current, phase),
     waiting: !isClosed && session && obj(session.waiting) && str(obj(session.waiting)!.since) ? { since: str(obj(session.waiting)!.since)!, last: str(obj(session.waiting)!.last) } : null,
+    background: backgroundOf(isClosed ? null : session),
     progress: isClosed ? null : progressOf(current.progress),
     askLog: askLog(current.ask_log),
   }
+}
+
+function backgroundOf(session: Record<string, unknown> | null | undefined): KssBoard['background'] {
+  const b = session ? obj(session.background) : null
+  const count = b ? num(b.count) : null
+  return b && count && str(b.since) ? { count, since: str(b.since)!, last: str(b.last) } : null
 }
 
 /** `/kss-tickets 048-x` (or `/kss:kss-tickets 048-x`) as a command run → the phase it starts. */
@@ -347,6 +354,7 @@ export function withPending(b: KssBoard | null, pending: KssPending | null): Kss
     explorers: null,
     ask: null,
     waiting: null,
+    background: null,
     progress: null,
   }
 }
