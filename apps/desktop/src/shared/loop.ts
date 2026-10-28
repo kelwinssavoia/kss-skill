@@ -28,9 +28,10 @@ type Board = Pick<KssBoard, 'phase' | 'next' | 'isClosed' | 'isPhaseFinished' | 
 
 /**
  * What the loop does with the board as it stands: run the Next phase, stop, or wait. `busy` is true
- * while a review process is still working its round (or polling the PR).
+ * while a review process is still working its round (or polling the PR); `live`, while its process
+ * is open at all.
  */
-export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | 'launches'>, busy: boolean): LoopStep {
+export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | 'launches'>, busy: boolean, live = false): LoopStep {
   if (!b) return null
   if (b.isClosed) return { stop: 'the review was finished' }
   const mark = b.review?.loop
@@ -45,6 +46,9 @@ export function loopStep(b: Board | null, loop: Pick<ReviewLoop, 'startedAt' | '
   if (next.phase !== 'review') return { stop: `the track moved on to ${next.phase}` }
   // After an execute the review is due; in review itself, only once its process stopped working.
   if (b.phase !== 'execute' && busy) return null
+  // A round this loop runs that ended a turn — waiting on its subagents, or between two polls — is
+  // still that round: replacing its process would throw the round away.
+  if (b.phase === 'review' && live && (mark?.state === 'running' || mark?.state === 'waiting') && !(Date.parse(mark.at ?? '') < loop.startedAt - 1000)) return null
   return { run: { phase: 'review', args: withLoop(next.args) } }
 }
 

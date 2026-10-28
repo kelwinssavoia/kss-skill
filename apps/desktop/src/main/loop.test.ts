@@ -27,6 +27,14 @@ test('a review still working its round, or waiting on the person, is left alone'
   assert.deepEqual(loopStep(board(), loop, false), { run: { phase: 'review', args: '073-x --loop' } })
 })
 
+test('a live round of this loop that ended a turn is not replaced; one left by an earlier loop, or a closed process, is', () => {
+  const mark = (state: string, at: string) => board({ waiting: { since: at }, review: { round: 20, watching: null, loop: { state, reason: null, until: null, at } } })
+  assert.equal(loopStep(mark('running', '2026-10-27T12:05:00Z'), loop, false, true), null)
+  assert.equal(loopStep(mark('waiting', '2026-10-27T12:05:00Z'), loop, false, true), null)
+  assert.deepEqual(loopStep(mark('running', '2026-10-27T12:05:00Z'), loop, false, false), { run: { phase: 'review', args: '073-x --loop' } })
+  assert.deepEqual(loopStep(mark('running', '2026-10-27T11:00:00Z'), loop, false, true), { run: { phase: 'review', args: '073-x --loop' } })
+})
+
 test('the loop stops on the review’s own stop mark, the end of the review, or the round cap', () => {
   const stopped = (at: string, reason = 'clean') => board({ review: { round: 3, watching: null, loop: { state: 'stopped', reason, until: null, at } } })
   assert.deepEqual(loopStep(stopped('2026-10-27T12:30:00Z'), loop, false), { stop: 'the reviewer found nothing new' })

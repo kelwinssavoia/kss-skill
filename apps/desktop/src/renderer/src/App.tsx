@@ -213,7 +213,7 @@ export function App() {
       const term = b ? phaseTerm(terms.filter(t => t.cwd === path), b.phase) : null
       const live = !!term && exitCode(term.id) === null
       const status = b ? phaseStatus({ board: b, live, exited: !!term && !live, launching: false, answered: answeredSince(path) }) : null
-      const step = loopStep(b, loop, status === 'working' || status === 'starting')
+      const step = loopStep(b, loop, status === 'working' || status === 'starting', live)
       if (!step) continue
       if ('stop' in step) {
         setLoops(l => ({ ...l, [path]: { ...loop, stopped: step.stop } }))
