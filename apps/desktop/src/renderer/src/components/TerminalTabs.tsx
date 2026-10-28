@@ -38,11 +38,18 @@ type Props = {
   onActivate: (id: string) => void
   onClose: (id: string) => void
   onNewShell: () => void
+  /** Reopens a closed chat or phase in its conversation (`--resume`). */
+  onReactivate: (t: TerminalInfo) => void
   empty: ReactNode
   shown: boolean
 }
 
-export function TerminalTabs({ session, terms, board, active, onActivate, onClose, onNewShell, empty, shown }: Props) {
+const CLOSED_WHY: Record<string, string> = {
+  finished: 'Its phase finished — closed to free memory.',
+  idle: 'Idle for 5 minutes — closed to free memory.',
+}
+
+export function TerminalTabs({ session, terms, board, active, onActivate, onClose, onNewShell, onReactivate, empty, shown }: Props) {
   const [, tick] = useState(0)
   useEffect(() => onAnyExit(() => tick(n => n + 1)), [])
   const [orders, setOrders] = useState<Record<string, string[]>>(() => load('tabOrder', {}))
@@ -105,7 +112,7 @@ export function TerminalTabs({ session, terms, board, active, onActivate, onClos
                 onDoubleClick={() => setRenaming(k)}
                 title={`${t.conversation ? `conversation ${t.conversation}\n` : ''}Double-click to rename · drag to reorder · middle-click to close`}
               >
-                <span className={`dot ${waits ? 'waiting' : code === null ? 'live' : 'dead'}`} />
+                <span className={`dot ${waits ? 'waiting' : code === null ? 'live' : 'dead'}`} title={t.closed ? `closed: ${t.closed}` : undefined} />
                 {renaming === k ? (
                   <input
                     className="tab-rename"
@@ -127,6 +134,13 @@ export function TerminalTabs({ session, terms, board, active, onActivate, onClos
           })}
           <button className="icon tab-new" onClick={onNewShell} title="New terminal — ⌘T">+</button>
         </nav>
+      )}
+      {current && current.conversation && current.kind !== 'shell' && current.kind !== 'qa' && exitCode(current.id) !== null && (
+        <div className="closed-bar">
+          <span>{(current.closed && CLOSED_WHY[current.closed]) ?? 'The process ended.'} Its conversation is kept.</span>
+          <span className="spacer" />
+          <button className="primary" onClick={() => onReactivate(current)} title={`Resume conversation ${current.conversation}`}>↺ Reactivate</button>
+        </div>
       )}
       <div className="panes">
         {terms.map(t => <Pane key={t.id} id={t.id} visible={shown && t.id === current?.id} />)}

@@ -41,7 +41,22 @@ export function Attention({ session, board, terms, onResume, onAskAbout, onError
   const [, tick] = useState(0)
   useEffect(() => setText(''), [board.waiting?.since])
 
-  if (board.ask && board.ask.kind !== 'handoff') return <AskCard session={session} ask={board.ask} live={live} onResume={onResume} onAskAbout={onAskAbout} onError={onError} />
+  // A phase the app closed while it waited (idle) still has its conversation: answering reopens it.
+  const reachable = live || !!term?.conversation
+  if (board.ask && board.ask.kind !== 'handoff') return <AskCard session={session} ask={board.ask} live={reachable} onResume={onResume} onAskAbout={onAskAbout} onError={onError} />
+
+  // Its turn ended with work still out in the background: it carries on by itself when that returns.
+  if (board.background && live)
+    return (
+      <div className="background-note">
+        <span className="dot live" />
+        <span>
+          {board.phase} is waiting on {board.background.count === 1 ? 'a background agent' : `${board.background.count} background tasks`} — it carries on by itself when {board.background.count === 1 ? 'it returns' : 'they return'}
+        </span>
+        <span className="spacer" />
+        {onShowTerminal && <button className="ghost" onClick={onShowTerminal}>Show terminal</button>}
+      </div>
+    )
 
   const status = phaseStatus({ board, live, exited: !!term && !live, launching: false, answered: answeredSince(session) })
   if (status !== 'waiting' || !board.waiting) return null

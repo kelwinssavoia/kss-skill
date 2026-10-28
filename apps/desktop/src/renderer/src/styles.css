@@ -545,3 +545,24 @@ button.loop.on { background: var(--accent-soft); color: var(--accent); border-co
 .md-table th, .md-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
 .md-table th { background: var(--bg-3); }
 .md-link { color: var(--accent); }
+
+/* closed terminal + sessions timeline (DESIGN.md §24.9) */
+.closed-bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--dim); background: var(--bg-2); border-bottom: 1px solid var(--line); }
+.sessions-view { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 40px; }
+.sv-head { margin-bottom: 12px; font-size: 12px; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 1px solid var(--line); }
+.tl-day { font: 600 11px var(--mono); color: var(--dim); margin: 14px 0 6px -14px; padding-left: 14px; text-transform: uppercase; letter-spacing: .04em; }
+.tl-row { position: relative; display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: start; padding: 8px 10px; margin: 0 0 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); }
+.tl-row.live { border-color: var(--accent-2); }
+.tl-dot { position: absolute; left: -19px; top: 14px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg-3); border: 1px solid var(--line); }
+.tl-row.live .tl-dot { background: var(--accent); border-color: var(--accent); }
+.tl-when { display: flex; flex-direction: column; font: 11px var(--mono); }
+.tl-what { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tl-title { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.tl-end { font: 10px var(--mono); padding: 0 6px; border-radius: 3px; background: var(--bg-3); color: var(--dim); }
+.tl-end.live { color: var(--accent); background: var(--accent-soft); }
+.tl-end.finished { color: var(--ok); }
+.tl-prompt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); background: none; }
+.tl-id { font: 10px var(--mono); }
+@media (max-width: 720px) { .tl-row { grid-template-columns: 1fr; } }
+.background-note { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; border: 1px solid var(--line, #333); border-radius: 6px; font-size: 12px; color: var(--dim); }

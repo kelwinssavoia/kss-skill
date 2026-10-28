@@ -54,8 +54,13 @@ export type TerminalSpec = {
   prompt?: string
   /** For a chat: read-only — Claude Code in plan mode, Codex in its read-only sandbox; never bypass. */
   readonly?: boolean
-  /** Start even though this phase already runs here: the running one is closed first (a handoff's return). */
+  /**
+   * Start even though this phase already runs here (Run again, a handoff's return, the review loop):
+   * its terminal takes the command after a `/clear` — one tab per phase, a fresh context each run.
+   */
   replace?: boolean
+  /** With `replace`: close the running process and start a new one instead (⟲ restart). */
+  restart?: boolean
   /** A title shown instead of the derived one. */
   title?: string
   /** Resume this conversation (`claude --resume <id>`, `codex resume <id>`) instead of starting one. */
@@ -80,6 +85,28 @@ export type TerminalInfo = {
   tab: string | null
   /** True when this terminal is a resumed conversation. */
   resumed: boolean
+  /** Why the app closed it, once it did: its phase finished, or it sat idle. */
+  closed?: EndReason | null
+}
+
+/** Why a conversation's process ended (DESIGN.md §24.9). */
+export type EndReason = 'finished' | 'idle' | 'cleared' | 'restarted' | 'closed' | 'exited'
+
+/** One conversation this session used, from the harness's transcripts and what the app saw end it. */
+export type ConversationRow = {
+  id: string
+  harness: Harness
+  kind: 'phase' | 'chat'
+  phase: string | null
+  args: string | null
+  /** The first thing it was asked, cut short — the phase command, or a chat's first message. */
+  prompt: string | null
+  title: string | null
+  startedAt: string
+  lastAt: string
+  /** The terminal running it now, if one is. */
+  liveTerminal: string | null
+  end: EndReason | null
 }
 
 /** A chat or phase tab remembered per session, so its conversation comes back when the session reopens. */

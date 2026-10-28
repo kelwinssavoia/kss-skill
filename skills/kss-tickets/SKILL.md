@@ -236,6 +236,9 @@ Every ticket carries all of these, self-contained:
   class listed gets a case in **Tests** that would fail if the answer were not true (a crash
   between the write and the send, two passes at once, the event replayed), or `n/a — <why>`.
   None match → `none`.
+- **Lifecycle** — only when the ticket adds persisted state (a column, a status value, a table, a
+  marker or reservation row): the states × events table, the invariant and a test per row, from
+  the plan's Failure model. Omit the section otherwise.
 - **Do not** — open `03-spec.md` or `04-plan.md`; read whole files over 300 lines; run any test,
   lint, build or tsc command
 - **Report back** — the fixed shape, **≤1.5k chars**. It is exactly the shape the executor agents

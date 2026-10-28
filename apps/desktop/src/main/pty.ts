@@ -8,9 +8,12 @@ import type { TerminalInfo, TerminalSpec } from '../shared/types.ts'
 import { launchOf } from '../shared/commands.ts'
 import { loginEnv, shellOf, which } from './env.ts'
 
-type Sink = { data: (id: string, data: string) => void; exit: (id: string, code: number) => void }
+type Sink = { data: (id: string, data: string) => void; exit: (id: string, code: number, info: TerminalInfo) => void }
 
-const terms = new Map<string, { proc: pty.IPty; info: TerminalInfo }>()
+/** When a terminal started, was last typed into, and last printed anything: what idleness is read from. */
+export type Activity = { startedAt: number; lastInput: number; lastOutput: number }
+
+const terms = new Map<string, { proc: pty.IPty; info: TerminalInfo; activity: Activity }>()
 
 export function createTerminal(spec: TerminalSpec, sink: Sink): TerminalInfo {
   const env = loginEnv()
@@ -37,16 +40,37 @@ export function createTerminal(spec: TerminalSpec, sink: Sink): TerminalInfo {
     tab: spec.tab ?? null,
     resumed: !!spec.resume,
   }
-  terms.set(id, { proc, info })
-  proc.onData(d => sink.data(id, d))
+  const now = Date.now()
+  const activity: Activity = { startedAt: now, lastInput: now, lastOutput: now }
+  terms.set(id, { proc, info, activity })
+  proc.onData(d => {
+    activity.lastOutput = Date.now()
+    sink.data(id, d)
+  })
   proc.onExit(({ exitCode }) => {
+    const last = terms.get(id)?.info ?? info
     terms.delete(id)
-    sink.exit(id, exitCode)
+    sink.exit(id, exitCode, last)
   })
   return info
 }
 
-export const writeTerminal = (id: string, data: string) => terms.get(id)?.proc.write(data)
+export function writeTerminal(id: string, data: string) {
+  const t = terms.get(id)
+  if (!t) return
+  t.activity.lastInput = Date.now()
+  t.proc.write(data)
+}
+
+export const activityOf = (id: string): Activity | null => terms.get(id)?.activity ?? null
+
+/** Changes what the app knows about a terminal (why it is being closed, its conversation). */
+export function patchInfo(id: string, patch: Partial<TerminalInfo>): TerminalInfo | null {
+  const t = terms.get(id)
+  if (!t) return null
+  t.info = { ...t.info, ...patch }
+  return t.info
+}
 
 /**
  * Types a message into a CLI and sends it. The Enter goes on its own a moment later: text and a
@@ -55,14 +79,15 @@ export const writeTerminal = (id: string, data: string) => terms.get(id)?.proc.w
 export function submitTerminal(id: string, text: string) {
   const t = terms.get(id)
   if (!t) throw new Error('that terminal has exited')
+  t.activity.lastInput = Date.now()
   t.proc.write(text.replace(/\s*\n\s*/g, ' ').trim())
   setTimeout(() => terms.get(id)?.proc.write('\r'), 150)
 }
 
-export function setConversation(id: string, conversation: string): TerminalInfo | null {
+export function setConversation(id: string, conversation: string | null): TerminalInfo | null {
   const t = terms.get(id)
   if (!t) return null
-  t.info = { ...t.info, conversation }
+  t.info = { ...t.info, conversation, resumed: false }
   return t.info
 }
 

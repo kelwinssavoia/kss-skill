@@ -2,7 +2,7 @@
 // reopened later brings its conversations back (DESIGN.md §24.3). Kept in the app's own data,
 // beside prefs.json — never in the repository.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -44,6 +44,33 @@ export const withConversation = (s: TabStore, key: string, conversation: string)
 /** A conversation can be resumed only once the harness has written it: Claude Code's transcript file. */
 export function claudeConversationExists(cwd: string, id: string, home = homedir()): boolean {
   return existsSync(join(process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'), 'projects', claudeSlug(cwd), `${id}.jsonl`))
+}
+
+/**
+ * The Claude Code conversation a `/clear` started in a terminal that already ran one: `/clear`
+ * opens a new transcript with an id of its own, so it is found the way Codex's are — the newest
+ * transcript of this cwd created after the clear and claimed by no other tab.
+ */
+export function findClaudeConversation(cwd: string, since: number, claimed: Set<string>, home = homedir()): string | null {
+  const dir = join(process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude'), 'projects', claudeSlug(cwd))
+  let names: string[] = []
+  try {
+    names = readdirSync(dir).filter(n => n.endsWith('.jsonl'))
+  } catch {
+    return null
+  }
+  const found: { id: string; at: number }[] = []
+  for (const n of names) {
+    const id = n.slice(0, -6)
+    if (claimed.has(id)) continue
+    try {
+      const at = statSync(join(dir, n)).birthtimeMs
+      if (at >= since - 2000) found.push({ id, at })
+    } catch {
+      /* gone */
+    }
+  }
+  return found.sort((a, b) => b.at - a.at)[0]?.id ?? null
 }
 
 /**

@@ -202,6 +202,7 @@ statusline falls back.
 | `ask_log` | `ask.mjs answer` | the last 30 answered asks, `{id, phase, title, answer, at}` |
 | `progress` | every longer phase, in app mode | `{step, total, label}` — where the phase is now; cleared with the summary |
 | `session.waiting` | the `Stop` hook; dropped by the `UserPromptSubmit` hook | `{since, last}` — the main session ended its turn and waits on the person; `last` is its last words |
+| `session.background` | the `Stop` hook, in place of `waiting` | `{count, since, last}` — the turn ended with subagents or commands still out in the background (§26.4) |
 | `explorers` | `kss-investigate`, `kss-plan`, `kss-grill` | always the object `{running, returned}` — the size of the fan-out and how many are back, for the statusline. Never a bare number; absent when nothing is out |
 
 Every key is optional; a reader treats a missing key as unknown and prints `—`. Writers merge
@@ -1697,6 +1698,30 @@ Messages the coordinator sends a running agent are shown as such, never as the a
 harness reminders are dropped. Every git read the app makes takes no optional locks, since it
 polls worktrees that agents are committing in.
 
+
+### 24.9 Closing what is done, and the conversations it leaves
+
+A Claude Code or Codex process holds hundreds of MB, and a session collects them: every phase,
+every chat. The app closes a CLI by itself (`main/closer.ts`, checked on every poll):
+
+- **finished** — a phase terminal whose phase the board shows finished (its Next moved on, or the
+  run closed), once nobody typed and its transcript was not written for 20 s;
+- **idle** — any chat or phase nobody typed into and whose transcript (or its subagents') was not
+  written for 5 minutes, provided its screen is still: a spinner means a tool runs or a subagent is
+  awaited.
+
+A closed tab says why and offers **↺ Reactivate** (`--resume` with its conversation id, same tab).
+An ask answered for a phase the app closed reopens its newest conversation first. A closed
+conversation is dropped from the tabs a reopened session resumes; it is not lost.
+
+**Sessions** (⌘7) lists every conversation the worktree ran, oldest first, as a timeline — read
+from the harnesses' own transcripts (`~/.claude/projects/<slug>/*.jsonl`, Codex rollouts whose
+`session_meta.cwd` is the worktree), so it includes what ran outside the app. A `/clear` opens a
+new transcript, so each round the review loop cleared stays listed with its own id. Each row: the
+phase and arguments from the command it started with (or a chat's first message), start, last
+write, and how it ended — `phase finished`, `closed idle`, `cleared`, `restarted`, `closed by you`,
+from `conversations.json` beside `prefs.json`. **Open** focuses it when it runs, or resumes it.
+
 ## 25. The explained report
 
 Every phase ends by explaining itself to a human: what it did and every decision it took or
@@ -1840,6 +1865,14 @@ session ends its turn, and the `UserPromptSubmit` hook (`progress-prompt.mjs`) d
 the person answers. Any stop, published or not, shows in the app as "waiting on you", with what the
 agent said.
 
+A stop is not a wait when the turn ended with work still out: a subagent launched in the
+background, or a background shell command, whose `<task-notification>` has not come back — Claude
+Code wakes the agent itself when it does (an execute ending its turn while an agent writes the phase
+report, then committing and pushing). The hook counts those from the transcript (`pendingBackground`
+in `kss-lib.mjs`) and writes `session.background: {count, since, last}` instead of `waiting`. The app
+shows a quiet note ("waiting on a background agent"), not the ask card, and never closes that phase's
+CLI as finished or idle (§24.9) while it stands.
+
 ### 26.5 Progress
 
 The longer phases (investigate, spec, plan, tickets, execute, review) set
@@ -1882,8 +1915,11 @@ that sets `phase` drops an ask that belongs to another phase. Whatever ask is in
   chat of §24.7 for any ask. Execute shows the same card on top of its view.
 - **Run gives feedback, never a second process.** A click switches to the phase's view at once and
   the button reads *Starting…* until the phase writes `.kss/current`, then *running · open*, with ⟲
-  to restart. The main process refuses a second terminal of the same phase in a session; a restart
-  (or a handoff's return) closes the running one first and forgets its conversation. A CLI stays
+  to restart. The main process refuses a second terminal of the same phase in a session. A phase run
+  again (Run, a handoff's return, the review loop) takes its own terminal: `/clear` (`/new` in
+  Codex), then the command — one tab per phase, a fresh context each run; the conversation the clear
+  opens is found by its transcript. ⟲ restart closes the process instead and forgets its
+  conversation. A CLI stays
   open, idle, after its phase ends, so a live terminal of the Next phase is not proof it runs: in
   review ↔ execute it is the previous run's. The Next phase reads *running* only once the board has
   entered it again (`nextRunning`); until then Run replaces the idle process.
@@ -1903,6 +1939,11 @@ kss-execute can only be started by the person (§3.9), so the loop is driven by 
 review** in the header carries each Next line on without asking — execute after a round that wrote
 the loop back, `kss-review NNN-slug --loop` after an execute (`shared/loop.ts`, `loopStep`).
 
+A review the loop started is never started again while its process lives: a turn that ends
+waiting on a background subagent reads as *waiting*, and restarting it killed every round
+mid-way. The loop starts review after an execute, when switched on, or once the process is gone;
+under `--loop` subagents run in the foreground.
+
 Under `--loop` the round asks nothing (the triage is not confirmed; `review_autopilot` decides, with
 `none` read as `fixes`; a fix against a `D-`/`AD-` is still held). After a push it waits in the
 foreground on `review.mjs wait`, which polls the PR every minute: new comments, reviews or a failed
@@ -1911,6 +1952,16 @@ check run the next round; a clean pass (`Didn't find any major issues`, an appro
 `.kss/current` `review.loop` (`{state, reason, until, at}`), which the app reads to switch the loop
 off and say why. The loop is not remembered across runs of the app, and the review still ends only
 when the person finishes it.
+
+The loop also stops when it stops converging — reason `design: <mechanism>`. PR #387 (upcharge)
+ran seven rounds of P1s on one state machine, a Coverage-debit credit reservation: each fix added
+a state (reserved, released, replaced, supplemental) that answered the reported transition, and the
+reviewer found the next unhandled one in the code just pushed, while two decisions were overridden
+along the way. So the Map names each finding's **mechanism** — the persisted state or flow it
+breaks — the same way every round, and a round stops before writing tickets when a fix needed a
+`D-`/`AD-` override or its fixes share a mechanism with fixes in each of the two rounds before. It
+writes `notes/review-<n>-lifecycle.md` instead — states × events, what each pair does today, the
+invariant, the unhandled cells — and the person picks one lifecycle ticket or a new plan.
 
 ## 27. Lessons — every confirmed bug teaches the next feature
 
@@ -1939,8 +1990,9 @@ classes in `templates/lessons.json`; a project's catalogue grows from its own PR
 | Where | What |
 | --- | --- |
 | kss-review, Map + Learn | the explorer names each finding's class (or proposes one) and its siblings in the feature diff; every `fix` is filed with `lessons.mjs add` — disputes, questions and deferrals never are |
-| kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line |
-| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why` |
+| kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line; a fix that adds persisted state carries its **Lifecycle** (states × events, the invariant, a test per row — BC-14) |
+| kss-review, Learn | a project without `lessons.mjs` gets it copied from the plugin, not skipped |
+| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why`; each new persisted state gets its lifecycle table |
 | kss-tickets | **Failure checks**: the classes the ticket is exposed to, with the plan's answer, and a test case per class |
 | reviewer (check 6) | answers each class's question from the diff — the ticket's list plus `match --diff`; it also checks every rule of `standards` the diff triggers, listed or not |
 | kss-execute, Finish | the **feature sweep** before the suite: `lessons.mjs check` and one reviewer on the whole feature diff, for what crosses tickets; one round, open items named in the PR body |

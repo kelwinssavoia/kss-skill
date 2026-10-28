@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext, tailLastText, rootFromCommonDir, mainWorktreeRoot } from './kss-lib.mjs'
+import { detectTranscriptFormat, summariseRollout, summariseTranscript, summarise, tailContext, tailLastText, pendingBackground, rootFromCommonDir, mainWorktreeRoot } from './kss-lib.mjs'
 
 const jsonl = (lines) => lines.map((l) => JSON.stringify(l)).join('\n') + '\n'
 
@@ -195,4 +195,14 @@ test('tailLastText: the newest assistant text, either format, cut from the front
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('pendingBackground: launched in the background and not yet notified back', () => {
+  const launch = (id) => `{"type":"user","message":{"content":[{"type":"tool_result","content":"Async agent launched successfully. (internal)\\nagentId: ${id} (internal ID)"}]}}`
+  const shell = (id) => `{"content":"Command running in background with ID: ${id}. Output is being written to: /tmp/x"}`
+  const done = (id, status = 'completed') => `{"content":"<task-notification>\\n<task-id>${id}</task-id>\\n<tool-use-id>toolu_1</tool-use-id>\\n<status>${status}</status>\\n<summary>Agent finished</summary>"}`
+  assert.equal(pendingBackground(''), 0)
+  assert.equal(pendingBackground([launch('a1'), shell('b2')].join('\n')), 2)
+  assert.equal(pendingBackground([launch('a1'), shell('b2'), done('a1'), done('b2', 'killed')].join('\n')), 0)
+  assert.equal(pendingBackground([launch('a1'), done('a1'), launch('a3')].join('\n')), 1)
 })
