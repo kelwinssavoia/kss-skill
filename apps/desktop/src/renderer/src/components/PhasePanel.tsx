@@ -94,7 +94,10 @@ export function PhasePanel({ project, session, terms, onRun, harnessFor, launchi
     }
   }, [visible, session.path, phase])
 
-  useEffect(() => feedEnd.current?.scrollIntoView({ block: 'nearest' }), [data?.activity?.entries.length])
+  // A block body: Chromium's scrollIntoView returns a Promise, and React calls what an effect returns.
+  useEffect(() => {
+    feedEnd.current?.scrollIntoView({ block: 'nearest' })
+  }, [data?.activity?.entries.length])
 
   if (!visible) return null
   if (!phase || !b) return <div className="empty"><h2>No phase running</h2><p>Run the Next phase from the header — its progress, questions and drafts show here.</p></div>
