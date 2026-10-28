@@ -167,6 +167,8 @@ export type Prefs = {
   harnessByPhase: Record<string, Record<string, Harness>>
   /** Chats and phases start with the harness's bypass-permissions flag. */
   bypass: boolean
+  /** The projects open in windows when the app last ran — each comes back in its own window. */
+  windows: string[]
 }
 
 export type QaStep = 'plan' | 'up' | 'run' | 'judge' | 'report' | 'down' | 'status'

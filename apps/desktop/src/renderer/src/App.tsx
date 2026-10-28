@@ -340,7 +340,7 @@ export function App() {
         onSelect={setSelected}
         onNew={() => setCreating(true)}
         onRemove={remove}
-        onSwitch={() => open(api.pickProject())}
+        onSwitch={() => void api.openInNewWindow()}
         terminals={terms}
         launching={launching}
         bypass={prefs?.bypass ?? true}

@@ -1722,6 +1722,21 @@ phase and arguments from the command it started with (or a chat's first message)
 write, and how it ended — `phase finished`, `closed idle`, `cleared`, `restarted`, `closed by you`,
 from `conversations.json` beside `prefs.json`. **Open** focuses it when it runs, or resumes it.
 
+### 24.10 Windows — one project each
+
+Each window holds one project, as a VS Code window holds one folder, so two projects run their
+phases side by side. **File ▸ New Window** (⌘⇧N, or ⧉ in the sidebar) opens an empty window on the
+welcome screen; **Open Project in New Window…** (⌘⇧O, or a click on the project name) and **Open
+Recent** open one directly. A project already open elsewhere is focused there instead: two windows on
+one project would run its phases twice. The windows share macOS's tab group, so Window ▸ Merge All
+Windows makes them tabs.
+
+The terminals belong to the app, not to a window: their output goes to every window, and each
+writes only the terminals it shows. The poll lists each window's sessions and sends them to that
+window alone; notifications and the Dock badge count every window. Closing a window stops the
+terminals of its project (their conversations stay saved and come back with it); quitting keeps the
+open projects in `prefs.json` `windows`, and the next launch reopens each in its window.
+
 ## 25. The explained report
 
 Every phase ends by explaining itself to a human: what it did and every decision it took or

@@ -1,5 +1,6 @@
 import { NEEDS_YOU, phaseStatus, STATUS_LABEL, type PhaseStatus } from '../../../shared/status.ts'
 import type { ProjectInfo, Session, TerminalInfo } from '../../../shared/types.ts'
+import { api } from '../api.ts'
 import { exitCode } from '../terminals.ts'
 import { answeredSince } from './Attention.tsx'
 import { Phases } from './Phases.tsx'
@@ -65,10 +66,11 @@ export function Sidebar({ project, sessions, selected, terminals, launching, onS
     <aside className="sidebar">
       <div className="sidebar-top">
         <div className="sidebar-title">
-          <button className="project-name" onClick={onSwitch} title={`${project.root}\nClick to open another project`}>
+          <button className="project-name" onClick={onSwitch} title={`${project.root}\nClick to open another project in a new window — ⌘⇧O`}>
             {project.name}
           </button>
           <span className="spacer" />
+          <button className="icon" onClick={() => void api.newWindow()} title="New window, for another project in parallel — ⌘⇧N">⧉</button>
           <button className="icon" onClick={onToggle} title="Hide the sidebar — ⌘B">⟨</button>
         </div>
         <div className="chips">
