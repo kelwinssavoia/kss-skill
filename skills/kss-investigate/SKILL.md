@@ -216,7 +216,7 @@ this phase keeps up to date afterwards.
 - **M only**, from the decision check: `02-decisions.md` (`D-`/`DF-` entries), the `reviewed` /
   `overridden` statuses in `auto-decisions.md`, and the **Decisions** block of `README.md`.
 - The README header `**Next:**` — the output of `node .kss/scripts/next.mjs … --after investigate`
-  (with `--escalate grill` when the user chose the grill).
+  (with `--escalate grill` when the user chose the grill), without its leading `Next: `.
 - `.kss/current` (DESIGN.md §3.3) — on spawn:
 
   ```bash

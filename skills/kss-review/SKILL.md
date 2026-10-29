@@ -155,7 +155,7 @@ this phase keeps up to date afterwards.
    **The loop back** (DESIGN.md §3.9): `kss-execute` is started by the user only — its skill cannot
    be invoked by a model, so never try, and never reproduce its work by other means. Write the fix
    tickets, add them to `05-tickets/graph.md`, commit them (`docs(NNN): review round <n> fix tickets`), then
-   set the README header's `**Next:**` to the output of
+   set the README header's `**Next:**` to the output (without its leading `Next: `) of
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then review`
    and print that line as the last line of the turn. The board and kss-desktop show it as the next
    step; when execute ends, its Next returns to `review` by itself.

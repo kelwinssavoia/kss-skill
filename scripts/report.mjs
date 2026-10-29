@@ -743,7 +743,7 @@ function readmeExtras(dir) {
   try {
     const t = readFileSync(join(dir, 'README.md'), 'utf8')
     const line = /^\*\*Next:\*\*[ \t]*(.*)$/m.exec(t)?.[1] ?? ''
-    const next = (/^`([^`]+)`/.exec(line.trim())?.[1] ?? line.replace(/<!--.*$/, '')).trim() || null
+    const next = (/^`([^`]+)`/.exec(line.trim())?.[1] ?? line.replace(/<!--.*$/, '')).trim().replace(/^Next:\s*/, '') || null
     const branch = /^\*\*Branch:\*\*\s*(.+)$/m.exec(t)?.[1]?.trim() ?? null
     return { next, branch }
   } catch {
