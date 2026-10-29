@@ -115,6 +115,9 @@ test('CLI --back, then --after execute returns', () => {
   assert.equal(back.stdout.trim(), 'Next: /kss-execute 061-x --ticket 15 --ticket 16 (then: /kss-review 061-x)')
   readme(back.stdout.trim().replace(/^Next: /, ''))
   assert.equal(run('--after', 'execute').stdout.trim(), 'Next: /kss-review 061-x')
+  // A phase that pasted the whole output, prefix included, still leaves a loop back to return from.
+  readme(`\`${back.stdout.trim()}\``)
+  assert.equal(run('--after', 'execute').stdout.trim(), 'Next: /kss-review 061-x')
   rmSync(dir, { recursive: true })
 })
 
