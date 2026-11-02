@@ -2000,6 +2000,15 @@ to it, the first gate that should have caught it, an optional automatic check (a
 lines), and the confirmed cases (`feature, pr, rv, file, summary, phase`). KSS ships ten starter
 classes in `templates/lessons.json`; a project's catalogue grows from its own PRs.
 
+A **family** (`families`: `{id: F-NN, title, question, always}`) groups classes by mechanism, and
+each class names its `family`. Catalogued one finding at a time, classes fragment — thirty classes,
+most confirmed once (a two-digit year, an int32 offset) — and a plan answering thirty one-off
+questions answers none of them well. A match prints the family's question first and its classes
+under it; an `always` family (lifecycle F-01, rollout F-03) is printed in every match, because the
+words that would trigger it are often not in the draft: a feature that *gates* an email ("don't send
+when …") says nothing about Kafka, crashes or concurrent instances, and was exactly the feature that
+took ten rounds.
+
 ### 27.3 The loop
 
 | Where | What |
@@ -2007,10 +2016,11 @@ classes in `templates/lessons.json`; a project's catalogue grows from its own PR
 | kss-review, Map + Learn | the explorer names each finding's class (or proposes one) and its siblings in the feature diff; every `fix` is filed with `lessons.mjs add` — disputes, questions and deferrals never are |
 | kss-review, Fix | a fix ticket covers the class — the finding and every sibling — not the line; a fix that adds persisted state carries its **Lifecycle** (states × events, the invariant, a test per row — BC-14) |
 | kss-review, Learn | a project without `lessons.mjs` gets it copied from the plugin, not skipped |
-| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each class it returns is answered with a mechanism or `n/a — why`; each new persisted state gets its lifecycle table |
+| kss-plan | **Failure model**: `lessons.mjs match` on the draft; each family and class it returns is answered with a mechanism or `n/a — why`; each new persisted state — and each existing state a send is gated on — gets its lifecycle table; each side effect a delivery row; each producer → consumer pair its enforced deploy order |
 | kss-tickets | **Failure checks**: the classes the ticket is exposed to, with the plan's answer, and a test case per class |
 | reviewer (check 6) | answers each class's question from the diff — the ticket's list plus `match --diff`; it also checks every rule of `standards` the diff triggers, listed or not |
-| kss-execute, Finish | the **feature sweep** before the suite: `lessons.mjs check` and one reviewer on the whole feature diff, for what crosses tickets; one round, open items named in the PR body |
+| kss-execute, Finish | the **feature sweep** before the suite: `lessons.mjs check`, the project's `pre_pr_checks`, and one reviewer on the whole feature diff reviewing as the PR reviewer will (every finding in one pass, the always-families' tables checked cell by cell); one round, open items named in the PR body |
+| kss-review, Converge | in every mode: two rounds of fixes on one mechanism, a fix that needs a decision overridden, or a fix that adds persisted state the plan did not have → no more patch tickets; a lifecycle note with the whole states × events table, then one lifecycle ticket or `kss-plan` again |
 | escalation | a class confirmed three times with no check gets one (`lessons.mjs escalate`); a check that cannot be written is said so in the review summary |
 
 The measure is the review rounds: findings per round of a class that is already in the catalogue

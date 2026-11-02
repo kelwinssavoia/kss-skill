@@ -110,7 +110,7 @@ this phase keeps up to date afterwards.
    other places in `git diff origin/<base_branch>...HEAD` with the same class, `file:line` each,
    and the **mechanism** each finding lives in — the persisted state or flow it breaks, named the
    same way every round (`Coverage-debit credit reservation`, `hold alert delivery`), so rounds can
-   be compared. Return ≤2k chars.
+   be compared, and the class's **family** (`F-NN`) when the catalogue has families. Return ≤2k chars.
 3. **Triage.** Print the table and take **one turn** to confirm it:
 
    ```
@@ -141,7 +141,26 @@ this phase keeps up to date afterwards.
    `{"class":"BC-NN","check":{"pattern":"…","paths":[…],"message":"…"}}` — test it with
    `lessons.mjs check --diff origin/<base_branch>...HEAD` (it must hit this feature's instances),
    and otherwise say so in the summary. `.kss/lessons.json` is committed with the round.
-6. **Fix.** A fix ticket fixes the **class**, not the line: the finding **and every sibling** the
+6. **Converge or re-plan** — in every mode, not only `--loop`. Before writing this round's fix
+   tickets, check the three signs that the review is redesigning the feature one hole at a time:
+   - a finding this round needs a `D-`/`AD-` overridden to fix (step 4);
+   - this round's `fix` findings share a **mechanism** (step 2) with `fix` findings of the round
+     before — two rounds in a row of new holes in the same state machine;
+   - a fix has to add **persisted state** — a column, a status value, a marker, a sentinel, a
+     migration — that the plan's **Models and data** does not have.
+
+   When one holds, write no fix tickets for that mechanism. Write
+   `notes/review-<n>-lifecycle.md` instead: the mechanism's states × events table (every writer,
+   retry, failure, crash point between commit and send, partial fan-out, manual action, cleanup
+   and concurrent instance that reaches it), what each pair does today with `file:line`, the
+   invariant it must keep, and which cells are unhandled — the reported findings **and the ones
+   nobody reported yet**. Then, outside `--loop`, take one turn: `Lifecycle ticket` (one fix
+   ticket built from the whole table, every cell with its test) or `kss-plan again` (the design
+   moved: re-plan, re-ticket). Under `--loop` stop with reason `design` (below). Findings on other
+   mechanisms in the same round go on to step 7 as usual. One complete table beats ten rounds of
+   one race each: PR #396 (Upcharge) took ten rounds and twenty-one findings on one notification
+   lifecycle, each fix adding the state the next finding broke.
+7. **Fix.** A fix ticket fixes the **class**, not the line: the finding **and every sibling** the
    explorer listed, and its **Failure checks** name the class. A fix that **adds persisted state**
    — a column, a status value, a table, a reservation or marker row — carries a **Lifecycle**
    section (`.kss/templates/ticket.md`): every state that row can be in × every event that can
@@ -159,12 +178,12 @@ this phase keeps up to date afterwards.
    `node .kss/scripts/next.mjs <features_root>/NNN-slug --back execute --ticket NN [--ticket NN …] --then review`
    and print that line as the last line of the turn. The board and kss-desktop show it as the next
    step; when execute ends, its Next returns to `review` by itself.
-   The round ends there; steps 7–8 run in the next round, once the fix tickets are integrated.
-7. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
+   The round ends there; steps 8–10 run in the next round, once the fix tickets are integrated.
+8. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.
-8. **Push** only to the **PR branch**, never to `base_branch`.
-9. **Record the round** in `07-review.md` — its Bug class column, the siblings, the mechanisms
+9. **Push** only to the **PR branch**, never to `base_branch`.
+10. **Record the round** in `07-review.md` — its Bug class column, the siblings, the mechanisms
    and the Lessons line — and go to the summary.
 
 ### `--watch`
@@ -173,7 +192,7 @@ this phase keeps up to date afterwards.
    never a polling subagent — on a `gh` command that reports new comment count, CI conclusions and
    the PR state, every **5 minutes** by default (configurable). Say once, in one line, what that
    costs the session here: a harness with a real monitor frees it, a harness without one holds it.
-2. On a change: wake, run one round (steps 1–9), push to the PR branch, reply, and **re-arm**.
+2. On a change: wake, run one round (steps 1–10), push to the PR branch, reply, and **re-arm**.
 3. **Autopilot per `review_autopilot`** (DESIGN.md §15.1). It governs what a round may do
    *without asking*; it never changes the triage itself:
    - `fixes` (the default) — **executed and pushed without asking:** every `fix` that touches no
@@ -202,10 +221,10 @@ A PR reviewer that re-reviews on every push (Codex) is what answers each round.
    waiting. What a round does without asking is `review_autopilot` exactly as under `--watch`
    (`none` counts as `fixes` here: the person switched the loop on). A fix contradicting a `D-` or
    an `AD-` is still **held**, never shipped.
-2. **A round with fix tickets** ends as step 6 says — tickets written and committed, Next set to the
+2. **A round with fix tickets** ends as step 7 says — tickets written and committed, Next set to the
    loop back to execute — and the turn ends there: the app starts execute, and after it this phase
    again with `--loop`.
-3. **A round after integrated fixes** runs steps 7–9 — reply, resolve, push — and then **waits**.
+3. **A round after integrated fixes** runs steps 8–10 — reply, resolve, push — and then **waits**.
    So does a round with nothing to fix and nothing new.
 4. **Wait** for the reviewer's next pass, in the **foreground** — never a background monitor or a
    background command: an ended turn reads as a stopped phase, and the app would start you again.
@@ -224,20 +243,11 @@ A PR reviewer that re-reviews on every push (Codex) is what answers each round.
    (reason `design`, below). To stop: set `review.loop` to
    `{"state":"stopped","reason":"<reason>","at":"<now>"}`, then the Summary as after any round —
    Next stays on `kss-review`; only the person finishes the review.
-6. **`design` — the loop is redesigning the feature.** Stop, before writing this round's fix
-   tickets, when either holds:
-   - a finding this round needed a `D-`/`AD-` overridden to fix (step 4) — the design changed, and
-     fix tickets on top of a changed design are guesses; or
-   - this round's `fix` findings share a **mechanism** (step 2) with `fix` findings in each of the
-     two rounds before — three rounds in a row of new holes in the same state machine.
-
-   Instead of tickets, write `notes/review-<n>-lifecycle.md`: the mechanism's states × events
-   table (every writer, retry, failure, manual action and cleanup that reaches it), what each pair
-   does today with `file:line`, the invariant it must keep, and which cells are unhandled — the
-   reported findings and the ones nobody reported yet. Record the round, stop with reason
-   `design: <mechanism>`, and the Summary recommends one of: a single lifecycle fix ticket
-   built from that table (`kss-review NNN-slug` without `--loop`, which asks), or `kss-plan` again
-   when the override moved the design. Next stays on `kss-review`.
+6. **`design` — the loop is redesigning the feature.** When Procedure step 6 (Converge or
+   re-plan) finds one of its signs, write its lifecycle note, record the round, stop with reason
+   `design: <mechanism>`, and the Summary recommends one of: a single lifecycle fix ticket built
+   from that table (`kss-review NNN-slug` without `--loop`, which asks), or `kss-plan` again when
+   the override or the new state moved the design. Next stays on `kss-review`.
 7. A `blocked` stop (an unreadable input, `gh` not authenticated) is still an ask: the loop waits on
    it like any phase does.
 8. **Never end a turn while work is out.** Spawn every subagent (the mapping explorer included) in
@@ -331,7 +341,7 @@ The `Next:` line is **never written by hand**: it is the output of
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --after review`, with `--done` only in a
 `--done` run (DESIGN.md §3.9). After a round it stays on `kss-review` (with the finish command in
 parentheses); after `--done` it is the track's next — `kss-docs-tech` on L, the end of the track
-on S and M. A round that opened fix tickets writes the loop back (step 6) instead. Copy it
+on S and M. A round that opened fix tickets writes the loop back (step 7) instead. Copy it
 verbatim into the summary and into the README header.
 
 Print `Cost: n/a` when `metrics.jsonl` does not exist. While watching, replace the last two lines
