@@ -212,11 +212,20 @@ this phase keeps up to date afterwards.
     and the screen it feeds, a race between two tickets' code) is only visible in the whole diff:
     - `node .kss/scripts/lessons.mjs check --diff origin/<base_branch>...HEAD` runs the project's
       automatic checks; every hit is a finding.
+    - Every command in `.kss/config.md`'s `pre_pr_checks` (the project's own rule checks — commit
+      order, wire numbers, design-system use — that its CI also runs) runs **once**, by you, on the
+      feature branch; every line it reports is a finding. These are read-only checks, never the
+      test suite, lint or build, which stay where the suite step below puts them.
     - Spawn **one** `reviewer` (depth `full`) on the whole feature diff
       (`git diff origin/<base_branch>...HEAD`) with the classes
       `node .kss/scripts/lessons.mjs match --diff origin/<base_branch>...HEAD --md` returns, the
       plan's **Failure model** and the FR list — not one ticket's Requirements: it checks only
-      check 6 (Failure checks) and the cross-ticket wiring, and returns the usual verdict.
+      check 6 (Failure checks) and the cross-ticket wiring, and returns the usual verdict. It
+      reviews **the way the PR reviewer will**, so the PR reviewer finds nothing it did not:
+      every P0–P2 finding in one pass, grouped by mechanism; for each `always` family the match
+      returns (lifecycle, rollout) it checks the plan's table against the diff cell by cell — a
+      writer, retry, crash point or concurrent instance the diff has and the table lacks is a
+      finding, and so is a producer whose deploy job does not wait for its consumer.
     - Findings go back to the ticket that owns each file, exactly as suite failures do below (same
       worktree or a fresh one, the finding pasted in, the reviewer again, integrate). **One sweep
       round per run**: a finding still open after it is listed in `06-execution.md` and the PR body

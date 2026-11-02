@@ -2,12 +2,12 @@
 // a ticket or a diff to the classes it is exposed to, automatic checks and escalation.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, copyFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, copyFileSync, existsSync, writeFileSync as require_write } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { addEntry, escalations, globRe, matchClasses, parseDiff, runChecks } from './lessons.mjs'
+import { addEntry, escalations, globRe, listMd, matchClasses, matchFamilies, matchMd, parseDiff, runChecks } from './lessons.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SCRIPT = join(HERE, 'lessons.mjs')
@@ -87,7 +87,7 @@ test('CLI: reads the starter until the first case, then writes .kss/lessons.json
     mkdirSync(join(cwd, '.kss', 'templates'), { recursive: true })
     copyFileSync(join(HERE, '..', 'templates', 'lessons.json'), join(cwd, '.kss', 'templates', 'lessons.json'))
     const run = (...a) => spawnSync(process.execPath, [SCRIPT, ...a, '--cwd', cwd], { encoding: 'utf8' })
-    assert.match(run('list', '--md').stdout, /\| BC-01 \| Side effect lost after the commit \| 0 \|/)
+    assert.match(run('list', '--md').stdout, /\| BC-01 \| Side effect lost after the commit \| F-01 \| 0 \|/)
     const r = run('add', JSON.stringify({ class: 'BC-01', case: { feature: '073-x', rv: 'RV-03', summary: 'hold email lost' } }))
     assert.equal(r.status, 0, r.stdout)
     assert.equal(JSON.parse(r.stdout).cases, 1)
@@ -97,4 +97,54 @@ test('CLI: reads the starter until the first case, then writes .kss/lessons.json
   } finally {
     rmSync(cwd, { recursive: true, force: true })
   }
+})
+
+// ---------------------------------------------------------------- families
+
+const FAMILIES = [
+  { id: 'F-01', title: 'Side effect and state lifecycle', question: 'States × events: what does each cell do?', always: true },
+  { id: 'F-02', title: 'Concurrency and snapshots', question: 'Is every decision taken from the read it writes with?' },
+]
+const famCat = () => {
+  let cat = { version: 1, families: FAMILIES, classes: [] }
+  cat = addEntry(cat, { ...NEW, family: 'F-01' }).cat
+  cat = addEntry(cat, { title: 'Check-then-write race', signature: 's', question: 'Two instances?', triggers: ['@Cron'], family: 'F-02' }).cat
+  cat = addEntry(cat, { title: 'Float money', signature: 's', question: 'Number()?', triggers: ['amount'] }).cat
+  return cat
+}
+
+test('families: load keeps them; a new class files under a known family only', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lessons-fam-'))
+  mkdirSync(join(dir, '.kss'))
+  const p = join(dir, '.kss', 'lessons.json')
+  require_write(p, JSON.stringify({ version: 1, families: FAMILIES, classes: [] }))
+  const r = spawnSync(process.execPath, [SCRIPT, 'list', '--cwd', dir], { encoding: 'utf8' })
+  assert.deepEqual(JSON.parse(r.stdout).families.map((f) => f.id), ['F-01', 'F-02'])
+  rmSync(dir, { recursive: true, force: true })
+  assert.equal(famCat().classes[0].family, 'F-01')
+  assert.throws(() => addEntry(famCat(), { ...NEW, family: 'F-09' }), /no family F-09/)
+})
+
+test('families: an existing class can be moved into a family without a case', () => {
+  const r = addEntry(famCat(), { class: 'BC-03', family: 'F-02' })
+  assert.equal(r.cat.classes[2].family, 'F-02')
+  assert.equal(r.added, false)
+})
+
+test('families: a match groups classes under their family and always brings the always families', () => {
+  const cat = famCat()
+  const groups = matchFamilies(cat, matchClasses(cat, { text: 'a @Cron job sums the amount' }))
+  assert.deepEqual(groups.map((g) => g.id), ['F-01', 'F-02', null])
+  assert.deepEqual(groups[0].classes, [])
+  assert.deepEqual(groups[1].classes.map((c) => c.id), ['BC-02'])
+  assert.deepEqual(groups[2].classes.map((c) => c.id), ['BC-03'])
+  const md = matchMd(matchClasses(cat, { text: '@Cron' }), cat)
+  assert.match(md, /\*\*F-01 · Side effect and state lifecycle\*\* \(always\) — States × events/)
+  assert.match(md, /\*\*F-02 · Concurrency and snapshots\*\* — Is every decision[\s\S]*\n {2}- \*\*BC-02/)
+})
+
+test('families: without families the markdown is the flat list it always was', () => {
+  const cat = { version: 1, classes: famCat().classes.map(({ family, ...c }) => c) }
+  assert.match(matchMd(matchClasses(cat, { text: '@Cron' }), cat), /^- \*\*BC-02/)
+  assert.match(listMd(famCat()), /\| BC-02 \| Check-then-write race \| F-02 \|/)
 })

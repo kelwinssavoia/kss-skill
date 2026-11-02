@@ -19,6 +19,7 @@ execution: {{execution}}
 full_suite: {{full_suite}}
 tracker: {{tracker}}
 review_autopilot: {{review_autopilot}}
+pre_pr_checks: []
 docs_root: {{docs_root}}
 docs_index: {{docs_index}}
 docs_language: {{docs_language}}
@@ -39,5 +40,6 @@ docs_language: {{docs_language}}
 | `full_suite` | Always `local`: the coordinator runs the suite once after integration (`ci` is no longer honoured) |
 | `tracker` | `none`, or a tracker to mirror tickets into |
 | `review_autopilot` | `fixes` \| `all` \| `none` |
+| `pre_pr_checks` | Commands the coordinator runs once before opening the PR (read-only rule checks, never tests), e.g. `node tools/rules-check.mjs` |
 | `docs_root` / `docs_index` | Where `kss-docs-*` writes |
 | `docs_language` | Language of the *content* of generated documents; empty = follow the conversation. Names, headings and identifiers stay English |

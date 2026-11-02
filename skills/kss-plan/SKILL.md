@@ -122,7 +122,8 @@ this phase keeps up to date afterwards.
      classes of `.kss/templates/lessons.json`, or say `Run kss-init again for lessons`) — how this feature fails, decided now rather than found
      by the PR reviewer one finding at a time. Run
      `node .kss/scripts/lessons.mjs match --text-file <the draft so far> --paths <File map paths> --md`
-     and answer **each class it returns** for this feature in one or two lines: the mechanism
+     and answer **each family and each class it returns** for this feature in one or two lines —
+     a family's question first, since its classes are instances of it: the mechanism
      (transaction, outbox, delivery marker retried each pass, conditional update, index name,
      bigint end to end, one shared renderer…), or `n/a — <why this feature is not exposed>`. A
      class confirmed in this project before (`confirmed n×`) is never answered `n/a` without the
@@ -132,8 +133,24 @@ this phase keeps up to date afterwards.
      or reservation row) gets its lifecycle here: the states × events table — each writer, retry,
      failure, manual action and cleanup that can reach it — and the invariant that holds in all
      of them (BC-14). The tickets that write that state copy it as their Lifecycle.
+     **So does existing state the feature only gates or reads to decide.** A feature that adds a
+     condition to when an email, alert, event or webhook fires ("don't send when X") changes that
+     send's lifecycle even when it adds no column: draw the table for the state the send derives
+     from, with the new condition's reads in it. Every **side effect** the feature adds, moves or
+     gates gets a **delivery row** as well: the persisted state it derives from · what sends it
+     again after a crash or a failed send · the dedupe key · what happens when that state changes
+     between the decision and the send (decide and send from one locked or conditional read) ·
+     partial fan-out (several recipients, one send fails) · the matching *end* notice, when there
+     is one, and how it knows the start was delivered. An unfilled cell is a finding the PR
+     reviewer will make one round at a time — and a feature sized "no schema change" whose table
+     needs a marker is not that size: say so and resize it here.
    - **Risks and rollout** — including the order services deploy in when one emits something
-     another must understand.
+     another must understand. Per new enum value, wire field, message type, route or query value
+     one service sends and another must accept: producer → consumer, and the concrete change that
+     enforces it (the deploy workflow's job dependency, which goes in the File map), or how the
+     producer tolerates an old consumer. "Deploy together" is not an order — the pipeline runs
+     jobs in parallel unless told otherwise. A new runtime dependency names how the shipped bundle
+     resolves it (bundled or external, CommonJS or ESM) on the image's runtime version.
 
 5. **New dependencies — one turn each, never skipped.** For every proposed dependency print:
 
