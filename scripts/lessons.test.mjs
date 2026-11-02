@@ -87,7 +87,7 @@ test('CLI: reads the starter until the first case, then writes .kss/lessons.json
     mkdirSync(join(cwd, '.kss', 'templates'), { recursive: true })
     copyFileSync(join(HERE, '..', 'templates', 'lessons.json'), join(cwd, '.kss', 'templates', 'lessons.json'))
     const run = (...a) => spawnSync(process.execPath, [SCRIPT, ...a, '--cwd', cwd], { encoding: 'utf8' })
-    assert.match(run('list', '--md').stdout, /\| BC-01 \| Side effect lost after the commit \| 0 \|/)
+    assert.match(run('list', '--md').stdout, /\| BC-01 \| Side effect lost after the commit \| F-01 \| 0 \|/)
     const r = run('add', JSON.stringify({ class: 'BC-01', case: { feature: '073-x', rv: 'RV-03', summary: 'hold email lost' } }))
     assert.equal(r.status, 0, r.stdout)
     assert.equal(JSON.parse(r.stdout).cases, 1)

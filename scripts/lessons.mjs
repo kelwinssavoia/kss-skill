@@ -13,11 +13,19 @@
 //       the classes a plan, a ticket or a diff is exposed to, most-confirmed first
 //   node .kss/scripts/lessons.mjs add '<json>'
 //       {"class":"BC-03","case":{…}} files a case under a class ("check" automates it); without "class", a new class:
-//       {"title","signature","question","triggers":[…],"paths"?:[…],"gate"?,"check"?,"case"?}
+//       {"title","signature","question","triggers":[…],"paths"?:[…],"gate"?,"check"?,"case"?,"family"?}
+//       {"class":"BC-03","family":"F-02"} moves a class into a family
 //   node .kss/scripts/lessons.mjs check --diff <range>
 //       run every class's automatic check (`check.pattern`) on the lines the diff adds
 //   node .kss/scripts/lessons.mjs escalate [--min 3]
 //       classes confirmed at least --min times that still have no automatic check
+//
+// Families: `families` in the catalogue — `{"id":"F-NN","title","question","always"?}` — group the
+// classes (`family` on each) so a plan answers a handful of mechanism questions instead of thirty
+// one-off ones. A match prints each family that has a matching class, with its question first and
+// its classes under it; an `always` family is printed in every match, hit or not — the questions
+// every plan answers (a side effect's lifecycle, the deploy order) whether or not a word in the
+// draft happened to trigger them. Families are edited by hand; classes join one with `add`.
 //
 // The catalogue is `.kss/lessons.json`, committed: it is the project's memory, shared by every
 // worktree and teammate. Until the first case is filed it reads `.kss/templates/lessons.json`, the
@@ -65,9 +73,9 @@ export function load(cwd) {
   for (const p of [catalogPath(cwd), join(cwd, '.kss', 'templates', 'lessons.json')]) {
     if (!existsSync(p)) continue
     const j = JSON.parse(readFileSync(p, 'utf8'))
-    return { version: 1, classes: Array.isArray(j.classes) ? j.classes : [] }
+    return { version: 1, families: Array.isArray(j.families) ? j.families : [], classes: Array.isArray(j.classes) ? j.classes : [] }
   }
-  return { version: 1, classes: [] }
+  return { version: 1, families: [], classes: [] }
 }
 
 function save(cwd, cat) {
@@ -98,7 +106,9 @@ export function addEntry(cat, entry) {
     const c = classes.find((x) => x.id === entry.class)
     if (!c) throw new Error(`no class ${entry.class} — list shows the ids`)
     const check = checkOf(entry.check)
-    if (!kase && !check) throw new Error('filing under an existing class needs a "case" (or a "check" to automate it)')
+    const family = familyOf(cat, entry.family)
+    if (!kase && !check && !family) throw new Error('filing under an existing class needs a "case" (or a "check" to automate it, or a "family" to move it)')
+    if (family) c.family = family
     // Escalation: the class gets its automatic check, replacing an older one.
     if (check) c.check = check
     const dup = !kase || c.cases.some((x) => x.rv && x.rv === kase.rv && x.feature === kase.feature && x.pr === kase.pr)
@@ -114,6 +124,7 @@ export function addEntry(cat, entry) {
   for (const t of triggers) triggerRe(t)
   if (entry.gate !== undefined && !GATES.includes(entry.gate)) throw new Error(`gate must be one of ${GATES.join(', ')}`)
   const check = checkOf(entry.check)
+  const family = familyOf(cat, entry.family)
   const c = {
     id: nextId(classes),
     title: entry.title.trim(),
@@ -124,10 +135,17 @@ export function addEntry(cat, entry) {
     gate: entry.gate ?? 'review',
     check,
     origin: typeof entry.origin === 'string' ? entry.origin : 'project',
+    ...(family ? { family } : {}),
     cases: kase ? [kase] : [],
   }
   classes.push(c)
   return { cat: { ...cat, classes }, id: c.id, added: true }
+}
+
+function familyOf(cat, id) {
+  if (id === undefined || id === null) return null
+  if (!(cat.families ?? []).some((f) => f.id === id)) throw new Error(`no family ${id} — the catalogue's "families" lists the ids`)
+  return id
 }
 
 function checkOf(v) {
@@ -149,9 +167,25 @@ export function matchClasses(cat, { text = '', paths = [] }, max = 8) {
     const onPath = (c.paths ?? []).some((g) => paths.some((p) => globRe(g).test(p)))
     if (!hits.length && !onPath) continue
     const cases = (c.cases ?? []).length
-    scored.push({ id: c.id, title: c.title, question: c.question, cases, hits, onPath, score: hits.length + (onPath ? 3 : 0) + 2 * cases })
+    scored.push({ id: c.id, title: c.title, question: c.question, family: c.family ?? null, cases, hits, onPath, score: hits.length + (onPath ? 3 : 0) + 2 * cases })
   }
   return scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, max)
+}
+
+/**
+ * Pure: matched classes grouped by family, in catalogue order — every family with a match, every
+ * `always` family even without one — then the classes no family holds, under `id: null`.
+ */
+export function matchFamilies(cat, found) {
+  const groups = []
+  for (const f of cat.families ?? []) {
+    const classes = found.filter((c) => c.family === f.id)
+    if (classes.length || f.always) groups.push({ id: f.id, title: f.title, question: f.question, always: !!f.always, classes })
+  }
+  const known = new Set((cat.families ?? []).map((f) => f.id))
+  const loose = found.filter((c) => !c.family || !known.has(c.family))
+  if (loose.length) groups.push({ id: null, title: null, question: null, always: false, classes: loose })
+  return groups
 }
 
 /** Pure: unified diff → the files it touches and the lines it adds, `{file, line, text}`. */
@@ -199,13 +233,31 @@ export function escalations(cat, min = 3) {
 
 export function listMd(cat) {
   if (!cat.classes.length) return 'No bug classes yet.\n'
-  const rows = cat.classes.map((c) => `| ${c.id} | ${c.title} | ${(c.cases ?? []).length} | ${c.gate ?? '—'} | ${c.check ? 'yes' : '—'} |`)
-  return ['| ID | Class | Confirmed | Should be caught at | Auto check |', '| --- | --- | --- | --- | --- |', ...rows].join('\n') + '\n'
+  const fams = (cat.families ?? []).map((f) => `- **${f.id} · ${f.title}**${f.always ? ' (always)' : ''} — ${f.question}`)
+  const fam = (c) => (fams.length ? ` ${c.family ?? '—'} |` : '')
+  const rows = cat.classes.map((c) => `| ${c.id} | ${c.title} |${fam(c)} ${(c.cases ?? []).length} | ${c.gate ?? '—'} | ${c.check ? 'yes' : '—'} |`)
+  const head = fams.length
+    ? ['| ID | Class | Family | Confirmed | Should be caught at | Auto check |', '| --- | --- | --- | --- | --- | --- |']
+    : ['| ID | Class | Confirmed | Should be caught at | Auto check |', '| --- | --- | --- | --- | --- |']
+  return [...(fams.length ? ['Families:', '', ...fams, ''] : []), ...head, ...rows].join('\n') + '\n'
 }
 
-export function matchMd(found) {
-  if (!found.length) return 'No bug class of this project applies.\n'
-  return found.map((f) => `- **${f.id} · ${f.title}**${f.cases ? ` (confirmed ${f.cases}×)` : ''} — ${f.question}`).join('\n') + '\n'
+const classLine = (f, indent = '') => `${indent}- **${f.id} · ${f.title}**${f.cases ? ` (confirmed ${f.cases}×)` : ''} — ${f.question}`
+
+/** Markdown for a match: flat without families; grouped, family question first, with them. */
+export function matchMd(found, cat) {
+  if (!cat || !(cat.families ?? []).length) {
+    if (!found.length) return 'No bug class of this project applies.\n'
+    return found.map((f) => classLine(f)).join('\n') + '\n'
+  }
+  const groups = matchFamilies(cat, found)
+  if (!groups.length) return 'No bug class of this project applies.\n'
+  const lines = []
+  for (const g of groups) {
+    if (g.id) lines.push(`- **${g.id} · ${g.title}**${g.always ? ' (always)' : ''} — ${g.question}`)
+    for (const c of g.classes) lines.push(classLine(c, g.id ? '  ' : ''))
+  }
+  return lines.join('\n') + '\n'
 }
 
 // ---------------------------------------------------------------- CLI
@@ -258,7 +310,7 @@ function main() {
       text += '\n' + d.added.map((a) => a.text).join('\n')
     }
     const found = matchClasses(cat, { text, paths }, Number(flags.max ?? 8))
-    return out(flags.md ? matchMd(found) : found)
+    return out(flags.md ? matchMd(found, cat) : found)
   }
   if (cmd === 'add') {
     if (json === undefined) usage()

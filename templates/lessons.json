@@ -1,5 +1,39 @@
 {
   "version": 1,
+  "families": [
+    {
+      "id": "F-01",
+      "title": "Side effect and state lifecycle",
+      "always": true,
+      "question": "For every persisted state this change writes, reads to decide, or gates a send on (new or existing): the states × events table — each writer, retry, crash between commit and send, partial fan-out, manual action, cleanup and concurrent instance — what each cell does, the one invariant that holds in all of them, and the test that covers each cell."
+    },
+    {
+      "id": "F-02",
+      "title": "Concurrency and snapshots",
+      "question": "Two instances, or a write landing between two reads: is every decision taken from the same locked or conditional read it writes with, and does every field of a row come from one snapshot?"
+    },
+    {
+      "id": "F-03",
+      "title": "Rollout, wire and the shipped artifact",
+      "always": true,
+      "question": "During the rolling deploy old and new run side by side: what does each old consumer do with the new message, field or kind; which deploy job waits for which; is every number inside its narrowest wire type and every removed wire number reserved; has the built artifact been started on the image's runtime?"
+    },
+    {
+      "id": "F-04",
+      "title": "Input edges, time and async UI",
+      "question": "For every input and every async response: the extremes (0, the wire type's max, years 0001-0099, empty, absent), a stale response arriving after a newer request, a timer measured against the wait it guards, the order the receiving component expects, calendar date vs instant — which test covers each?"
+    },
+    {
+      "id": "F-05",
+      "title": "Data scale and money",
+      "question": "How many rows does each query touch at 100x the data and which index serves it; can any amount pass through a JS number?"
+    },
+    {
+      "id": "F-06",
+      "title": "Wiring, tenant scope and test truth",
+      "question": "Follow each value from its producer to the screen or message the FR names, with the owner's scope inside each query: is every hop real, does one function render each fact, does a default hide an absence, and does each negative test assert only the call it claims about?"
+    }
+  ],
   "classes": [
     {
       "id": "BC-01",
@@ -22,6 +56,7 @@
       "gate": "plan",
       "check": null,
       "origin": "kss",
+      "family": "F-01",
       "cases": []
     },
     {
@@ -46,6 +81,7 @@
       "gate": "plan",
       "check": null,
       "origin": "kss",
+      "family": "F-02",
       "cases": []
     },
     {
@@ -67,6 +103,7 @@
       "gate": "review",
       "check": null,
       "origin": "kss",
+      "family": "F-01",
       "cases": []
     },
     {
@@ -86,6 +123,7 @@
       "gate": "review",
       "check": null,
       "origin": "kss",
+      "family": "F-05",
       "cases": []
     },
     {
@@ -110,6 +148,7 @@
         "message": "An amount converted to a JS number — keep it bigint or decimal text end to end."
       },
       "origin": "kss",
+      "family": "F-05",
       "cases": []
     },
     {
@@ -129,6 +168,7 @@
       "gate": "tickets",
       "check": null,
       "origin": "kss",
+      "family": "F-06",
       "cases": []
     },
     {
@@ -148,6 +188,7 @@
       "gate": "tickets",
       "check": null,
       "origin": "kss",
+      "family": "F-06",
       "cases": []
     },
     {
@@ -166,6 +207,7 @@
       "gate": "review",
       "check": null,
       "origin": "kss",
+      "family": "F-06",
       "cases": []
     },
     {
@@ -186,6 +228,7 @@
       "gate": "review",
       "check": null,
       "origin": "kss",
+      "family": "F-04",
       "cases": []
     },
     {
@@ -205,6 +248,7 @@
       "gate": "plan",
       "check": null,
       "origin": "kss",
+      "family": "F-03",
       "cases": []
     },
     {
@@ -232,6 +276,7 @@
       "gate": "plan",
       "check": null,
       "origin": "kss",
+      "family": "F-01",
       "cases": []
     }
   ]
