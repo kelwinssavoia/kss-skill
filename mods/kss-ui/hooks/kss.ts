@@ -66,7 +66,8 @@ function nextLine(t: string): string | null {
   const line = /^\*\*Next:\*\*[ \t]*(.*)$/m.exec(t)?.[1]
   if (!line) return null
   const ticked = /^`([^`]+)`/.exec(line.trim())?.[1]
-  const v = (ticked ?? line.replace(/<!--.*$/, '')).trim()
+  // A phase that pasted next.mjs's whole output, prefix included, wrote `Next: /kss-…` in it.
+  const v = (ticked ?? line.replace(/<!--.*$/, '')).trim().replace(/^Next:\s*/, '')
   return v || null
 }
 

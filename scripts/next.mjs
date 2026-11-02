@@ -69,7 +69,7 @@ export function readHeader(dir) {
     if (state) out.state = state[1]
     if (title) out.feature = title[1]
     const line = /^\*\*Next:\*\*[ \t]*(.*)$/m.exec(text)?.[1]
-    if (line) out.next = ((/^`([^`]+)`/.exec(line.trim())?.[1]) ?? line.replace(/<!--.*$/, '')).trim() || null
+    if (line) out.next = ((/^`([^`]+)`/.exec(line.trim())?.[1]) ?? line.replace(/<!--.*$/, '')).trim().replace(/^Next:\s*/, '') || null
   } catch {
     /* fall through with nulls */
   }

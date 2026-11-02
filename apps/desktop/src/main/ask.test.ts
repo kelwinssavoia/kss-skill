@@ -57,6 +57,12 @@ test('the board carries the ask of the running phase only, the waiting mark and 
   assert.equal(askOf({ ...current, phase: 'spec' }, 'spec')?.phase, 'plan')
 })
 
+test('a Next line pasted with next.mjs\'s own prefix still names the next phase', () => {
+  const r = parseReadme('# 074-x\n\n**State:** investigate · **Size:** L\n**Next:** `Next: /kss-grill 074-x (optional first: /kss-review-decisions 074-x)`  <!-- from scripts/next.mjs -->\n')
+  assert.equal(r.next, '/kss-grill 074-x (optional first: /kss-review-decisions 074-x)')
+  assert.equal(parseReadme('**Next:** Next: /kss-spec 074-x <!-- x -->\n').next, '/kss-spec 074-x')
+})
+
 test('a handoff names the phase to run and the one to come back to', () => {
   const a = askOf({ phase: 'plan', ask: { id: 'plan-1', phase: 'plan', kind: 'handoff', title: 'Spec first', run: { phase: 'spec', args: '012-x' }, then: { phase: 'plan', args: '012-x' } } }, 'plan')
   assert.deepEqual([a?.run, a?.then], [{ phase: 'spec', args: '012-x' }, { phase: 'plan', args: '012-x' }])
