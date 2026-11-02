@@ -1,7 +1,7 @@
 // Where a ticket's subagent writes its transcript, and what it says (DESIGN.md §24.4).
 // Both formats are internal and undocumented: every access is defensive, a bad line is skipped.
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -156,7 +156,25 @@ export function readActivity(path: string | null): TicketActivity {
 
 type Candidate = { path: string; mtime: number }
 
+/**
+ * One listing serves every ticket of a poll: the Execute view asks for each of its tickets in turn,
+ * and a session's project directory holds hundreds of entries to stat.
+ */
+const LISTING_MS = 1000
+const listings = new Map<string, { at: number; all: Candidate[] }>()
+
 function jsonl(dir: string, depth: number, since: number, out: Candidate[]) {
+  const key = `${depth}:${dir}`
+  let hit = listings.get(key)
+  if (!hit || Date.now() - hit.at > LISTING_MS) {
+    hit = { at: Date.now(), all: [] }
+    scan(dir, depth, hit.all)
+    listings.set(key, hit)
+  }
+  for (const c of hit.all) if (c.mtime >= since) out.push(c)
+}
+
+function scan(dir: string, depth: number, out: Candidate[]) {
   let names: string[]
   try {
     names = readdirSync(dir)
@@ -172,18 +190,32 @@ function jsonl(dir: string, depth: number, since: number, out: Candidate[]) {
       continue
     }
     if (s.isDirectory()) {
-      if (depth > 0) jsonl(p, depth - 1, since, out)
-    } else if (n.endsWith('.jsonl') && s.mtimeMs >= since) {
+      if (depth > 0) scan(p, depth - 1, out)
+    } else if (n.endsWith('.jsonl')) {
       out.push({ path: p, mtime: s.mtimeMs })
     }
   }
 }
 
+/** A full head never changes (transcripts are append-only): kept, since every ticket of every poll asks again. */
+const heads = new Map<string, string>()
+
+/** The first `n` bytes only — a session's transcripts add up to tens of megabytes, read on the main process. */
 const head = (p: string, n = 64 * 1024) => {
+  const hit = heads.get(p)
+  if (hit !== undefined) return hit
+  let fd: number | null = null
   try {
-    return readFileSync(p, 'utf8').slice(0, n)
+    fd = openSync(p, 'r')
+    const buf = Buffer.alloc(n)
+    const len = readSync(fd, buf, 0, n, 0)
+    const text = buf.toString('utf8', 0, len)
+    if (len === n) heads.set(p, text)
+    return text
   } catch {
     return ''
+  } finally {
+    if (fd !== null) closeSync(fd)
   }
 }
 
