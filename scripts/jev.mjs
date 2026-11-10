@@ -64,6 +64,18 @@ export const DEFAULTS = {
       },
     },
   },
+  // kss-review's local saturation (local-review.mjs, DESIGN.md §15.2): the PR's reviewer CLI run
+  // on the branch, pass after pass, until a pass finds nothing new — before any fix ticket.
+  // `cli: 'auto'` takes the newest `codex` among PATH and the desktop app's bundled one.
+  review_local: {
+    enabled: true,
+    cli: 'auto',
+    model: 'gpt-6.1-sol',
+    reasoning_effort: 'medium',
+    parallel: 2,
+    max_passes: 6,
+    pass_timeout_min: 30,
+  },
   jev: {
     enabled: false,
     api_key: '',
