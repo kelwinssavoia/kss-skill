@@ -18,6 +18,8 @@ only what you actually fixed or answered. You never merge — that is the human'
 Read, in this order:
 
 - `.kss/config.md` — `review_autopilot`, `base_branch`, `features_root`, `execution`.
+- `review_local` in the layered config (`.kss/config.json` ← `.kss/config.local.json`) — the local
+  saturation of step 1b: `enabled`, `cli`, `model`, `reasoning_effort`, `parallel`, `max_passes`.
 - `~/.kss/preferences.md` — `conversation_language` for everything printed in this session.
 - `<features_root>/NNN-slug/README.md` — the index and the PR url.
 - `<features_root>/NNN-slug/06-execution.md` and `05-tickets/graph.md` — which ticket owns which
@@ -100,8 +102,31 @@ this phase keeps up to date afterwards.
 
 1. **Collect.** From the cursor in `.kss/current`, gather every new review comment, review body,
    and CI conclusion — **CI failures are findings too**. Number them `RV-NN`, continuing from the
-   last round, each with file, line, author and text. Nothing new → print
-   `No new findings since <cursor>.` and go to the summary (or re-arm the watcher).
+   last round, each with file, line, author and text. Nothing new on the PR still goes to step
+   1b; only when 1b adds nothing either, print `No new findings since <cursor>.` and go to the
+   summary (or re-arm the watcher).
+1b. **Saturate locally — before any fix ticket.** A PR reviewer that re-reviews on every push
+   posts a handful of findings per pass, a different handful each time; fixing each handful is a
+   fix-and-push cycle per handful (Upcharge PRs #418/#421: six rounds, 32 findings). So ask the
+   same reviewer locally, on this HEAD, again and again, telling it what it already said, until a
+   pass adds nothing — and only then triage. The code must be committed: HEAD is what is reviewed.
+   1. Write this round's step-1 findings, one line each (`RV-NN — file:line — text`), to
+      `notes/review-<n>-collected.md`.
+   2. Run `node .kss/scripts/local-review.mjs start --feature <features_root>/NNN-slug --round <n>
+      --base <base_branch> --exclude <features_root>/NNN-slug/notes/review-<n>-collected.md
+      --pending <fix tickets written but not integrated yet, comma-separated paths>`.
+   3. In the **foreground**, run `node .kss/scripts/local-review.mjs wait --feature
+      <features_root>/NNN-slug --round <n>` as many times as it answers `pending` (one call waits up
+      to 9 minutes; a pass takes about ten). Set `progress` to the pass number in app mode.
+   4. Its answer: `saturated` — a pass found nothing new, the list is complete: go on. `cap` —
+      `max_passes` ran and the last still found something: go on, and say in the summary that the
+      list may not be complete. `skipped` or `error` — say why in one line and go on with the PR's
+      findings alone.
+   5. Each `L-NN` of the answer becomes an `RV-NN` (From `local-review`, Where `file:line`, text the
+      title and the scenario) and goes through steps 2–7 like any PR finding. It has no thread:
+      step 8 replies only on PR threads; a local finding's resolution lives in `07-review.md`.
+   Write **no fix ticket before this step ends** — one complete batch per round is the point.
+   `notes/review-<n>-local/` (prompts, raw passes, `findings.md`) is committed with the round.
 2. **Map.** Spawn one `explorer` (read-only) to map each finding back to the ticket and the
    FRs it came from, and — given `node .kss/scripts/lessons.mjs list --md` — to name its **bug
    class** (DESIGN.md §27): an existing `BC-NN`, or a new one proposed as title, signature (what
@@ -179,10 +204,15 @@ this phase keeps up to date afterwards.
    and print that line as the last line of the turn. The board and kss-desktop show it as the next
    step; when execute ends, its Next returns to `review` by itself.
    The round ends there; steps 8–10 run in the next round, once the fix tickets are integrated.
-8. **Reply and resolve.** After integrating, reply on each thread with the resolving commit or
+8. **Reply and resolve.** A round after integrated fixes runs **step 1b first, on the new HEAD**:
+   the fixes are new code, and the reviewer will read them as soon as they are pushed. When it
+   finds something to `fix`, that is this round's triage (steps 2–7) and steps 8–10 wait for those
+   tickets — nothing is replied or pushed in between. When it adds nothing to fix, go on. After
+   integrating, reply on each thread with the resolving commit or
    the approved text. **Resolve only the threads that were fixed or answered**; dispute threads
    stay open until the reviewer agrees, and `defer` threads are left open by design.
-9. **Push** only to the **PR branch**, never to `base_branch`.
+9. **Push** only to the **PR branch**, never to `base_branch`, and only a HEAD whose step 1b
+   added nothing to fix — the PR reviewer's pass is then a confirmation, not the discovery.
 10. **Record the round** in `07-review.md` — its Bug class column, the siblings, the mechanisms
    and the Lessons line — and go to the summary.
 
@@ -224,7 +254,9 @@ A PR reviewer that re-reviews on every push (Codex) is what answers each round.
 2. **A round with fix tickets** ends as step 7 says — tickets written and committed, Next set to the
    loop back to execute — and the turn ends there: the app starts execute, and after it this phase
    again with `--loop`.
-3. **A round after integrated fixes** runs steps 8–10 — reply, resolve, push — and then **waits**.
+3. **A round after integrated fixes** runs step 1b on the new HEAD first; with something to fix it
+   ends as step 7 says (back to execute), otherwise it runs steps 8–10 — reply, resolve, push — and
+   then **waits**.
    So does a round with nothing to fix and nothing new.
 4. **Wait** for the reviewer's next pass, in the **foreground** — never a background monitor or a
    background command: an ended turn reads as a stopped phase, and the app would start you again.
@@ -355,6 +387,8 @@ with `Watching PR <url> — next check in <n>m.`
 - Every confirmed bug (`fix`) is filed in `.kss/lessons.json` under a bug class, and its fix ticket
   covers every sibling of that class in the feature — never only the line the reviewer pointed at.
 - An explorer maps findings to tickets and FRs — you do not read diffs.
+- Every round saturates locally (step 1b) before writing a fix ticket, and every push carries a
+  HEAD whose local saturation found nothing to fix. The wait runs in the foreground.
 - The triage table is printed and confirmed in exactly one turn.
 - A finding contradicting a decision is disputed or overridden, never silently fixed.
 - Fix tickets are numbered after the last ticket, grouped by file, executed via `kss-execute`

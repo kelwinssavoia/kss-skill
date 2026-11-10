@@ -1013,6 +1013,35 @@ board and the statusline show `watching`.
 
 ---
 
+### 15.2 Local saturation — find everything before fixing anything
+
+**Why.** A PR reviewer that re-reviews on every push (Codex) posts a handful of findings per pass,
+and a different handful each time — on a 20k-line feature it cannot list everything in one pass,
+whatever its instructions say. Fixing each handful is a fix-and-push-and-wait cycle per handful:
+Upcharge PRs #418 and #421 took six rounds and 32 findings that way, most of them on code that had
+been there since the first push. Asked locally on the same HEAD, told each time what it already
+said, the same reviewer listed PR #421's remaining twelve in five passes; passes six and seven
+found nothing.
+
+**What.** Every round, after collecting the PR's findings and before triage, `kss-review` runs
+`local-review.mjs`: `parallel` read-only reviewer runs per pass (`codex exec -s read-only`, a strict
+output schema), the pass's findings merged into the round's list (same file and nearby line, or
+alike titles, are one), and the next pass told the whole list as do-not-re-raise — together with
+the feature's decisions, earlier rounds and the fix tickets not executed yet. It stops when a pass
+adds nothing (`saturated`), at `max_passes` (`cap`), or when every run of a pass failed (`error`).
+Local findings become `RV-` ids like any other and go through the same triage, lessons and
+converge-or-replan; only then are fix tickets written, one batch for the round.
+
+A round after integrated fixes saturates again on the new HEAD before it replies or pushes, so
+every push carries a HEAD the local reviewer found nothing to fix in, and the PR reviewer's pass
+becomes a confirmation rather than the discovery.
+
+**Config.** `review_local` in `.kss/config.json` (`config.local.json` per machine): `enabled`,
+`cli` (`auto` = the newest `codex` among PATH and the desktop app's bundled CLI — a stale one on
+PATH rejects current models), `model`, `reasoning_effort`, `parallel`, `max_passes`,
+`pass_timeout_min`. `KSS_CODEX_CLI` overrides the CLI. No CLI, or `enabled: false`: the step says
+so and the round goes on with the PR's findings alone.
+
 ## 16. `kss-docs-tech` / `kss-docs-product` (optional)
 
 Configured by `docs_root` and `docs_index`.
