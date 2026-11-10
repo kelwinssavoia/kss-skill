@@ -65,15 +65,22 @@ test('prompt: lists every known finding and every pending fix ticket as do-not-r
 
 // ---------------------------------------------------------------- dedupe
 
-test('same finding: same file and nearby line, or same file and most title words shared', () => {
-  assert.ok(sameFinding(f('a.ts', 10, 'x'), f('a.ts', 22, 'y')))
-  assert.ok(!sameFinding(f('a.ts', 10, 'x'), f('a.ts', 80, 'y')))
+test('same finding: same file and nearby line with a related title, or same file and most title words shared', () => {
+  assert.ok(sameFinding(f('a.ts', 10, 'Guard FindBatches rpc'), f('a.ts', 22, 'FindBatches lacks the guard')))
+  assert.ok(!sameFinding(f('a.ts', 10, 'Guard FindBatches rpc'), f('a.ts', 80, 'Snapshot detail read')))
   assert.ok(sameFinding(f('a.ts', 10, 'Authenticate FindBatches before exposing debits'), f('./a.ts', 300, 'Authenticate the FindBatches RPC before exposing coverage debits')))
   assert.ok(!sameFinding(f('a.ts', 10, 'x'), f('b.ts', 10, 'x')))
 })
 
+test('same finding: two different bugs on the same line stay two (smoke run, 2026-11-10)', () => {
+  const a = f('app.mjs', 4, 'Missing merchant ID exposes the combined balance of all merchants', 'P1')
+  const b = f('app.mjs', 4, "Request-controlled merchant ID permits access to another merchant's balance", 'P1')
+  assert.ok(!sameFinding(a, b))
+  assert.equal(mergeFindings([], [a, b], 1).added.length, 2)
+})
+
 test('same finding: absolute paths and a leading ./ compare equal to the repo path', () => {
-  assert.ok(sameFinding(f('/Users/me/wt/apps/x.ts', 5, 'a'), f('apps/x.ts', 6, 'b'), '/Users/me/wt'))
+  assert.ok(sameFinding(f('/Users/me/wt/apps/x.ts', 5, 'Guard the export'), f('apps/x.ts', 6, 'Export lacks the guard'), '/Users/me/wt'))
 })
 
 test('merge: only findings unlike every known one are added, ids continue', () => {
