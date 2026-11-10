@@ -113,16 +113,22 @@ export function normFile(file, root) {
   return p.replace(/^\.\//, '')
 }
 
-/** Two findings are one when they sit in the same file, close together or named alike. */
+/**
+ * Two findings are one when they sit in the same file and are named alike — closely (≥ 0.5 of
+ * their title words), or loosely (≥ 0.2) when also within 15 lines. Nearness alone is not enough:
+ * two different bugs often share a line, and a lost finding costs a review round, a duplicate only
+ * a line in the triage table.
+ */
 export function sameFinding(a, b, root) {
   if (normFile(a.file, root) !== normFile(b.file, root)) return false
-  if (Math.abs((a.line ?? 0) - (b.line ?? 0)) <= 15) return true
   const x = words(a.title)
   const y = words(b.title)
   if (!x.size || !y.size) return false
   let inter = 0
   for (const w of x) if (y.has(w)) inter++
-  return inter / (x.size + y.size - inter) >= 0.5
+  const sim = inter / (x.size + y.size - inter)
+  const near = Math.abs((a.line ?? 0) - (b.line ?? 0)) <= 15
+  return sim >= 0.5 || (near && sim >= 0.2)
 }
 
 const idNum = (id) => Number(String(id).replace(/^L-/, '')) || 0
