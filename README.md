@@ -315,8 +315,11 @@ integrates, logs. Never writes the feature's code or reads a diff itself.
 - **Next:** `/kss-review NNN-slug` (M/L) once the PR is open.
 
 ### `kss-review` — `/kss-review NNN-<slug> [--watch]`
-Works a PR review round: collects findings since the cursor, triages, fixes/disputes/answers/
-defers, replies, resolves. Never merges.
+Works a PR review round: collects findings since the cursor, **saturates locally** — the PR's
+reviewer CLI (`codex exec`, read-only) run pass after pass on HEAD, told what it already found,
+until a pass adds nothing (`review_local` in `.kss/config.json`) — then triages everything in one
+batch, fixes/disputes/answers/defers, replies, resolves. A push carries only a HEAD the local
+reviewer found nothing to fix in. Never merges.
 - **Reads/writes:** reads `README.md`, PR threads/CI via `gh`, `06-execution.md`, `graph.md`;
   writes `07-review.md`, fix tickets executed via `kss-execute`, thread replies/resolutions,
   `.kss/current.review`.
