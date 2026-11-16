@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {recordTeamEvent} from './team-event.mjs'
 // dispatch.mjs — cross-harness execution: run one ticket in the *other* harness's CLI.
 //
 //   node .kss/scripts/dispatch.mjs pick    '<json>'   which harness gets this ticket, per the split
@@ -391,8 +392,9 @@ async function main() {
     const available = Object.fromEntries(HARNESSES.map((h) => [h, h === local || onPath((cross.cli[h] || {}).bin)]))
     const c = choose({ local, split: cross.split, counts, tier: input.tier, allowedTiers: cross.tiers, available })
     const foreign = c.harness !== local
-    if (dir && input.ticket) appendDispatch(dir, { event: 'pick', ticket: input.ticket, tier: input.tier, harness: c.harness, local, reason: c.reason })
     const pair = pairFor(c.harness, input.tier, tiers)
+    if (dir && input.ticket) appendDispatch(dir, { event: 'pick', ticket: input.ticket, tier: input.tier, harness: c.harness, local, reason: c.reason, model: pair?.model ?? null, effort: pair?.effort ?? null })
+    if(process.env.KSS_TEAM_MODE==='1'&&input.ticket)recordTeamEvent(cwd,{type:'task.progress',phase:'execute',taskId:String(input.ticket),status:'assigned',harness:c.harness,model:pair?.model??null,effort:pair?.effort??null,agent:input.agent??null})
     out({ harness: c.harness, foreign, reason: c.reason, model: pair ? pair.model : null, effort: pair ? pair.effort : null, shares: c.shares || shares(cross.split), counts, unavailable: HARNESSES.filter((h) => !available[h]) }, foreign ? 0 : 3)
   }
 
@@ -412,6 +414,7 @@ async function main() {
   }
   if (!onPath(built.argv[0])) out({ error: `${built.argv[0]} is not on PATH` }, 2)
 
+  if(process.env.KSS_TEAM_MODE==='1'&&ticket)recordTeamEvent(cwd,{type:'task.started',phase:'execute',taskId:String(ticket),status:'running',harness,model:built.pair.model,effort:built.pair.effort,agent:input.agent??null})
   const r = await runChild(built.argv, { cwd: worktree, input: brief, timeoutMs: cross.timeout_ms })
   let parsed
   if (harness === 'claude-code') parsed = parseClaude(r.stdout)
@@ -430,6 +433,7 @@ async function main() {
     }
   }
   const ok = r.status === 0 && !r.timedOut && parsed.ok !== false
+  if(process.env.KSS_TEAM_MODE==='1'&&ticket)recordTeamEvent(cwd,{type:ok?'task.progress':'task.failed',phase:'execute',taskId:String(ticket),status:ok?'review':'failed',harness,model:parsed.model||built.pair.model,effort:built.pair.effort,agent:input.agent??null})
   const tokens = parsed.usage || { fresh_in: 0, cache_write: 0, cache_read: 0, out: 0 }
   tokens.cumulative = tokens.fresh_in + tokens.cache_write + tokens.cache_read + tokens.out
   tokens.ctx_end = 0

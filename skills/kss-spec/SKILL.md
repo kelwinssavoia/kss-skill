@@ -46,6 +46,13 @@ phase may well run in the other one (DESIGN.md §19).
 
 ## App mode
 
+In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
+`references/team-mode.md`. The host coordinates transitions and Notion publication;
+conversation messages are natural replies to the current question.
+
+In Team mode, propose and document the test seams as part of the complete implementation proposal. A routine seam choice does not require a separate confirmation turn; unresolved business or material architecture decisions still do.
+
+
 With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
 `.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
 the terminal), and publish every turn that waits for the person with
@@ -182,6 +189,11 @@ this phase keeps up to date afterwards.
   — or edit `.kss/current` directly so it holds `feature` and `phase`. This phase spawns nothing.
 
 ## Summary
+
+**KSS Team:** finish the same artifacts, README and app state, then send a short natural
+message with what you learned or what you need from the person. The fixed terminal
+summary below is for runs outside KSS Team; the host handles the next command.
+
 
 **App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
 

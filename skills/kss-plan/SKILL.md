@@ -43,6 +43,13 @@ phase may well run in the other one (DESIGN.md §19).
 
 ## App mode
 
+In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
+`references/team-mode.md`. The host coordinates transitions and Notion publication;
+conversation messages are natural replies to the current question.
+
+In Team mode, consolidate routine dependency and technical confirmations into the single complete plan approval. Show the dependencies, licences and consequences explicitly; a material risk or cost decision still requires the person. Emit the approved-plan event only after their explicit approval.
+
+
 With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read
 `.kss/references/app-mode.md` once (missing: say `Run kss-init again for app mode` and go on as in
 the terminal), and publish every turn that waits for the person with
@@ -212,6 +219,11 @@ this phase keeps up to date afterwards.
   that object, never a bare number; clear it with `null` when the fan-out is done.
 
 ## Summary
+
+**KSS Team:** finish the same artifacts, README and app state, then send a short natural
+message with what you learned or what you need from the person. The fixed terminal
+summary below is for runs outside KSS Team; the host handles the next command.
+
 
 **App mode:** first `node .kss/scripts/ask.mjs clear` and `current.mjs set '{"progress":null}'`.
 

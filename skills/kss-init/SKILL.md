@@ -27,6 +27,11 @@ harness is fully usable from the other, because the parts that differ live in
 
 ## App mode
 
+In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
+`references/team-mode.md`. The host coordinates transitions and Notion publication;
+conversation messages are natural replies to the current question.
+
+
 With `--app` in the arguments (kss-desktop runs this skill, DESIGN.md §26), strip it, read
 `<PLUGIN>/references/app-mode.md` once (Precondition 3 finds `<PLUGIN>`; the project copy does not
 exist yet), and publish every turn that waits for the person with
@@ -270,6 +275,11 @@ hooks — and either way Codex asks to trust them once before it runs them.
 when a feature starts.
 
 ## Summary
+
+**KSS Team:** finish the same artifacts, README and app state, then send a short natural
+message with what you learned or what you need from the person. The fixed terminal
+summary below is for runs outside KSS Team; the host handles the next command.
+
 
 App mode: first `node .kss/scripts/ask.mjs clear`. Then print exactly:
 

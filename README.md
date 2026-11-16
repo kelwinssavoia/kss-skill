@@ -557,3 +557,9 @@ kss-skill/
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+## KSS Team
+
+The conversational desktop host runs phases in persistent Claude Code sessions. See
+[team-mode](references/team-mode.md) for natural replies, automatic transitions and durable
+phase/task events consumed by its chat and Notion boards. Terminal-only workflows are unchanged.

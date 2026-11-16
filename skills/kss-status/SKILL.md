@@ -67,6 +67,11 @@ Nothing. This skill only prints.
 
 ## Summary
 
+**KSS Team:** finish the same artifacts, README and app state, then send a short natural
+message with what you learned or what you need from the person. The fixed terminal
+summary below is for runs outside KSS Team; the host handles the next command.
+
+
 **Phase board** — the order is fixed; mark each phase `done`, `→ current`, `skipped (track <size>)`
 or blank, using the README blocks that exist. A phase is `skipped` when
 `node .kss/scripts/next.mjs <features_root>/NNN-slug --check <phase>` prints `off-track`, or

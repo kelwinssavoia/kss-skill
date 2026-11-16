@@ -1,5 +1,9 @@
 # App mode (DESIGN.md §26)
 
+When `KSS_TEAM_MODE=1` or the host is KSS Team, also read the plugin reference
+`references/team-mode.md` before the procedure. It defines conversational replies, durable events
+and host-coordinated transitions. Apply it together with the answer-file protocol below.
+
 kss-desktop starts every phase with `--app` among its arguments. `--app` is a flag, never part of a
 request, a slug or a ticket id — strip it before reading the arguments. Without it, nothing here
 applies and the phase talks to the terminal as it always did.
