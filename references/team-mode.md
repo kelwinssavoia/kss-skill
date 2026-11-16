@@ -82,8 +82,8 @@ Call `team-mcp.mjs call_mcp_tool` with the exact source, tool and JSON-string ar
 from discovery. Continue pagination. The host handles OAuth and real write approvals;
 credentials are environment-only. Read a linked card or PR before making claims about it.
 
-After an explicit plan approval emit `decision.recorded` with `phase: "plan"` and
-`approved: true`. This allows the host to continue the approved implementation after the
+After explicit implementation-proposal approval emit `decision.recorded` with
+`phase: "plan"` (or `"tickets"` on a track without a plan) and `approved: true`. This allows the host to continue the approved implementation after the
 ticket breakdown, without asking the same approval again. Revisions keep approval pending.
 
 Operational `.kss/team-events.jsonl` assignment metadata is exempt from harness-neutral feature documentation: the phase/specification artifacts remain harness-neutral; operational telemetry records the actual executor.
