@@ -57,6 +57,33 @@ After a clear decision has actually been saved, emit `decision.recorded` with it
 For an explanation, emit only the reply and keep the decision open. Choose the next point after
 recording the person's answer; a new discovery alone is material to discuss later.
 
+## Partial answers and resumed installations
+
+The request JSON's `protocolPath` is the installed reference for this execution. Read that exact
+absolute path; an old installation path in a resumed transcript is historical. The request also provides `eventScript`, the current journal writer. Use that exact script
+(or `KSS_TEAM_EVENT_SCRIPT` from the host environment) so an older local helper cannot reject the
+conversation protocol. The notice repeats
+the path so the current protocol remains available even when `.kss/references` is older.
+
+Ask one independent decision at a time. If a published question already combines independent
+criteria and the person answers one, save that partial answer and ask only what remains. Publish
+the remaining question with `ask.mjs post`, then emit `discussion.refined` with `phase`, `askId`
+and `askAt` of the original question, `nextAskId` and `nextAskAt` of the remaining question, and
+`partial` containing the saved answer. This refines the same discussion without claiming the
+whole decision is complete. Emit a correlated `conversation.reply` explaining the recorded part
+and the one remaining doubt. After the remaining answer, combine it with the saved part, write
+the decision artifact, emit `decision.recorded` for the current remaining ask, and clear it.
+
+When resuming an older session whose backend already contains the remaining question, reconcile
+it with `questionAtMessage` and `currentQuestion`: emit the refinement for the known parent and
+existing child instead of asking the first criterion again. `discussionParts` contains partial
+answers already recorded by the host. Interpret replies against that progress, including when a
+queued message still references the original combined question. A request to continue moves the
+conversation forward; it does not select an alternative to a new unanswered business question.
+
+`workflowPaused` separates a paused job from the conversation: answer questions and preserve
+choices while it is true, keeping implementation paused until the person resumes the work.
+
 ## Delegation and meaningful approvals
 
 These Team-only rules replace the administrative confirmation turns and matching prohibitions
