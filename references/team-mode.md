@@ -30,6 +30,33 @@ A published approval, blocker or dependency remains a real pause; finishing a ph
 a plan. Present the complete plan for approval before tickets/implementation. An explicit request
 to pause suspends autonomous progression until the person asks to resume.
 
+## One conversational thread at a time
+
+Treat the host's `currentQuestion` as the point the person is discussing. `backendQuestion` may be
+newer; keep it as queued material until the host presents it. An explanation request is still about
+the current point. Answer that question, use examples or code if helpful, and let the person decide.
+When `questionAtMessage` refers to an older question, register that decision against its original
+question and preserve any newer pending question. A later executor result does not change the
+referent of a person's reply.
+
+Use the Team journal for human-facing text:
+`conversation.reply` with `phase`, `message` and `replyTo: <messageId>` answers the actual person.
+For `[kss-team-file]`, read the referenced JSON from the session worktree first: it contains
+the full message, `messageId`, original question and current discussion. The short notice is a
+transport reference, not the person’s reply. `[kss-team]` remains the inline equivalent. When
+`nativeAnswerId` is present, read its existing app answer file before recording the decision.
+The message is a natural response to the current point. Publish the next decision once through
+`ask.mjs post`; its text and options belong in that card, rather than being repeated in the reply.
+A short, proactive summary can omit `replyTo`; the host waits for the current discussion to finish
+before presenting it. Put detailed reports in phase documents and present the relevant evidence.
+The terminal's final output remains an execution log; the host uses conversational events and
+published questions for the chat and huddle.
+
+After a clear decision has actually been saved, emit `decision.recorded` with its `askId` and
+`askAt` from the question, then clear that ask. This tells the host which discussion ended.
+For an explanation, emit only the reply and keep the decision open. Choose the next point after
+recording the person's answer; a new discovery alone is material to discuss later.
+
 ## Delegation and meaningful approvals
 
 These Team-only rules replace the administrative confirmation turns and matching prohibitions
@@ -57,7 +84,7 @@ and ask for implementation approval once. Never equate silence or phase completi
 
 Use `node <PLUGIN>/scripts/team-event.mjs '<json>'` from the session worktree.
 Use the plugin copy so an older project's local `.kss/scripts` cannot hide the Team protocol. Events are JSON
-objects with `type`, `phase`, and a human-readable `message`. Supported types: `phase.started`,
+objects with `type`, `phase`, and a human-readable `message`. Supported types: `conversation.reply`, `phase.started`,
 `phase.completed`, `phase.blocked`, `decision.recorded`, `artifact.published`, `task.started`,
 `task.progress`, `task.completed`, `task.blocked`, `task.failed`.
 

@@ -2,10 +2,11 @@
 import {mkdirSync,appendFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-export const teamEventTypes=['phase.started','phase.completed','phase.blocked','decision.recorded','artifact.published','task.started','task.progress','task.completed','task.blocked','task.failed'];
+export const teamEventTypes=['conversation.reply','phase.started','phase.completed','phase.blocked','decision.recorded','artifact.published','task.started','task.progress','task.completed','task.blocked','task.failed'];
 export function recordTeamEvent(cwd,value){
  if(!value||!teamEventTypes.includes(value.type)||typeof value.phase!=='string'||!value.phase.trim())throw new Error('An event requires a supported type and phase.');
  if(value.type.startsWith('task.')&&(typeof value.taskId!=='string'||!value.taskId.trim()))throw new Error('A task event requires taskId.');
+ if(value.type==='conversation.reply'&&(typeof value.message!=='string'||!value.message.trim()||(value.replyTo!==undefined&&(typeof value.replyTo!=='string'||!value.replyTo.trim()))))throw new Error('A conversation reply requires a message and a valid replyTo when supplied.');
  const event={...value,id:randomUUID(),at:new Date().toISOString(),channelId:process.env.KSS_TEAM_CHANNEL??null};
  const line=JSON.stringify(event);if(Buffer.byteLength(line)>64000)throw new Error('Put large reports in an artifact and reference its path.');
  mkdirSync(join(cwd,'.kss'),{recursive:true});appendFileSync(join(cwd,'.kss/team-events.jsonl'),line+'\n',{mode:0o600});return event;
