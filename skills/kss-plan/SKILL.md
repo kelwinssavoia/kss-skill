@@ -45,7 +45,8 @@ phase may well run in the other one (DESIGN.md §19).
 
 In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
 `references/team-mode.md`. The host coordinates transitions and Notion publication;
-conversation messages are natural replies to the current question.
+conversation messages are natural replies to the current question. Human-facing answers use
+`conversation.reply` in that reference; the final terminal text is an execution log.
 
 In Team mode, consolidate routine dependency and technical confirmations into the single complete plan approval. Show the dependencies, licences and consequences explicitly; a material risk or cost decision still requires the person. Emit the approved-plan event only after their explicit approval.
 
@@ -220,8 +221,9 @@ this phase keeps up to date afterwards.
 
 ## Summary
 
-**KSS Team:** finish the same artifacts, README and app state, then send a short natural
-message with what you learned or what you need from the person. The fixed terminal
+**KSS Team:** finish the same artifacts, README and app state, then emit one concise
+`conversation.reply` event per `references/team-mode.md`, with `replyTo` when answering a person,
+about what you learned or need from them. The fixed terminal
 summary below is for runs outside KSS Team; the host handles the next command.
 
 

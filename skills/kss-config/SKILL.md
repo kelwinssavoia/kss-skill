@@ -158,8 +158,9 @@ Nothing else. Not `.kss/config.md`, not a feature folder, not `~/.kss/preference
 
 ## Summary
 
-**KSS Team:** finish the same artifacts, README and app state, then send a short natural
-message with what you learned or what you need from the person. The fixed terminal
+**KSS Team:** finish the same artifacts, README and app state, then emit one concise
+`conversation.reply` event per `references/team-mode.md`, with `replyTo` when answering a person,
+about what you learned or need from them. The fixed terminal
 summary below is for runs outside KSS Team; the host handles the next command.
 
 

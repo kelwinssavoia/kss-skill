@@ -31,7 +31,8 @@ environment catalog) — never widen it, never add hints to the plan from what y
 
 In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
 `references/team-mode.md`. The host coordinates transitions and Notion publication;
-conversation messages are natural replies to the current question.
+conversation messages are natural replies to the current question. Human-facing answers use
+`conversation.reply` in that reference; the final terminal text is an execution log.
 
 
 With `--app` in the arguments (kss-desktop runs this phase, DESIGN.md §26), strip it, read

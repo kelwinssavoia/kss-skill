@@ -29,7 +29,8 @@ harness is fully usable from the other, because the parts that differ live in
 
 In KSS Team (`KSS_TEAM_MODE=1`), first read the plugin
 `references/team-mode.md`. The host coordinates transitions and Notion publication;
-conversation messages are natural replies to the current question.
+conversation messages are natural replies to the current question. Human-facing answers use
+`conversation.reply` in that reference; the final terminal text is an execution log.
 
 
 With `--app` in the arguments (kss-desktop runs this skill, DESIGN.md §26), strip it, read
@@ -276,8 +277,9 @@ when a feature starts.
 
 ## Summary
 
-**KSS Team:** finish the same artifacts, README and app state, then send a short natural
-message with what you learned or what you need from the person. The fixed terminal
+**KSS Team:** finish the same artifacts, README and app state, then emit one concise
+`conversation.reply` event per `references/team-mode.md`, with `replyTo` when answering a person,
+about what you learned or need from them. The fixed terminal
 summary below is for runs outside KSS Team; the host handles the next command.
 
 
